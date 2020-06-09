@@ -577,7 +577,7 @@ bool updates_model::draw_firmware_section(const char * window_name, update_profi
         else
         {
             ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-            ImGui::Text("%s", static_cast<const char *>(textual_icons::check_square_o));
+            ImGui::Text(textual_icons::check_square_o); // Test warning treated as error
             ImGui::SameLine();
             ImGui::Text("%s", "Up to date.");
         }
