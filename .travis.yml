@@ -31,7 +31,7 @@ matrix:
       language: cpp
       env: VS15=true
       script:
-        - cmake .. -G "Visual Studio 14 2015 Win64" -DBUILD_EXAMPLES=false -DBUILD_CSHARP_BINDINGS=true -DDOTNET_VERSION_LIBRARY="4.5" -DDOTNET_VERSION_EXAMPLES="4.5" -DCHECK_FOR_UPDATES=true
+        - cmake .. -G "Visual Studio 14 2015 Win64" -DBUILD_EXAMPLES=false -DBUILD_CSHARP_BINDINGS=true -DDOTNET_VERSION_LIBRARY="4.5" -DDOTNET_VERSION_EXAMPLES="4.5" -DCHECK_FOR_UPDATES=true -DCMAKE_CXX_FLAGS_DEBUG=${DCMAKE_CXX_FLAGS_DEBUG} -Wno-error=format-security
         - cmake --build . --config $LRS_BUILD_CONFIG -- -m
         - ls $LRS_BUILD_CONFIG
 
