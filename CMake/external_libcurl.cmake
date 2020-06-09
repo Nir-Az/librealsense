@@ -33,7 +33,8 @@ if(CHECK_FOR_UPDATES)
     set(CURL_RELEASE_TARGET_NAME "libcurl")
     add_library(curl INTERFACE)
     add_definitions(-DCURL_STATICLIB) # Mandatory for building libcurl as static lib
-
+    
+    message(STATUS "CMAKE_CXX_FLAGS_DEBUG=" ${CMAKE_CXX_FLAGS_DEBUG})
     target_include_directories(curl INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/libcurl/libcurl_install/include>)
     
     # libcurl require ws2_32.lib for windows only

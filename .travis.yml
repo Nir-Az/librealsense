@@ -56,7 +56,7 @@ matrix:
       script:
         - cd ../scripts && ./pr_check.sh && cd ../build
         - cmake .. -DBUILD_UNIT_TESTS=true -DBUILD_EXAMPLES=true -DBUILD_WITH_TM2=true -DBUILD_SHARED_LIBS=false -DCHECK_FOR_UPDATES=true -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG} -Wno-error=format-security
-        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4 -Werror=format-security
+        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4
         - python3 ../unit-tests/run-unit-tests.py --verbose .
 
     - name: "Linux - python & nodejs"
