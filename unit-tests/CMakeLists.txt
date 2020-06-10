@@ -22,6 +22,66 @@ else()
     message(WARNING "Python 3 was not found; Unit tests will be limited!")
 endif()
 
+
+
+
+if(CHECK_FOR_UPDATES) # SW Update Unit Tests Start
+    message(STATUS "\nBuilding SW-Update unit tests\n")
+    include(../common/CMakeLists.txt)
+    
+    set (SW_UPDATE_UNIT_TESTS_SOURCES
+        sw-update/sw-update-common.h
+        sw-update/sw-update-tests.cpp
+    )
+    
+    set (SW_UPDATE_SOURCES
+        ${SW_UPDATE_FILES})
+        
+    set( ELPP_FILES
+        ../third-party/easyloggingpp/src/easylogging++.cc
+        ../third-party/easyloggingpp/src/easylogging++.h)
+        
+    set (SW_UPDATE_DEPENDENCIES
+        ${ELPP_FILES}
+        ../third-party/json.hpp
+        )
+        
+    include_directories( ../../third-party/easyloggingpp/src )
+    
+    add_executable(sw-update-unit-tests 
+    ${SW_UPDATE_UNIT_TESTS_SOURCES}
+    ${SW_UPDATE_SOURCES}
+    ${SW_UPDATE_DEPENDENCIES})
+    
+    source_group("Tested files" FILES
+                ${SW_UPDATE_SOURCES})
+                
+    source_group("Dependencies files" FILES
+                ${SW_UPDATE_DEPENDENCIES})
+    
+    
+    set_property(TARGET sw-update-unit-tests PROPERTY CXX_STANDARD 11)
+    add_dependencies(sw-update-unit-tests libcurl)
+    add_definitions(-DCURL_STATICLIB) # Should be removed after PR #6457 (Add online SW-Update capability ) merge
+    
+    #Include easylogging
+    target_include_directories(sw-update-unit-tests PRIVATE  ../third-party)
+    target_include_directories(sw-update-unit-tests PRIVATE  ../third-party/easyloggingpp/src)
+    
+    # libcurl dependency on windows
+    if (WIN32)
+    target_link_libraries(sw-update-unit-tests ws2_32.lib)
+    endif()
+    
+    target_link_libraries(sw-update-unit-tests ${DEPENDENCIES} curl)
+    set_target_properties (sw-update-unit-tests PROPERTIES
+        FOLDER "Unit-Tests")
+else()
+    message(STATUS "\nCHECK_FOR_UPDATES flag is off building without SW-Update unit tests\n")
+endif()  # SW Update Unit Tests End
+
+
+
 set (unit_tests_sources
     unit-tests-live.cpp
     unit-tests-post-processing.cpp
@@ -32,7 +92,6 @@ set (unit_tests_sources
     catch.h
     approx.h
 )
-
 add_executable(live-test ${unit_tests_sources})
 set_property(TARGET live-test PROPERTY CXX_STANDARD 11)
 target_link_libraries(live-test ${DEPENDENCIES} Threads::Threads)
