@@ -139,7 +139,7 @@ namespace rs2
 
             if (CURLE_OK != res)
             {
-                LOG_ERROR("Download error from URL: " + url + "error info: " + std::string(curl_easy_strerror(res)));
+                LOG_ERROR("Download error from URL: " + url + ", error info: " + std::string(curl_easy_strerror(res)));
                 return false;
             }
             return true;
@@ -162,7 +162,7 @@ namespace rs2
 
             if (CURLE_OK != res)
             {
-                LOG_ERROR("Download error from URL: " + url + "error info: " + std::string(curl_easy_strerror(res)));            return false;
+                LOG_ERROR("Download error from URL: " + url + ", error info: " + std::string(curl_easy_strerror(res)));            return false;
             }
             return true;
         }
@@ -191,7 +191,7 @@ namespace rs2
 
                 if (CURLE_OK != res)
                 {
-                    LOG_ERROR("Download error from URL: " + url + "error info: " + std::string(curl_easy_strerror(res)));            return false;
+                    LOG_ERROR("Download error from URL: " + url + ", error info: " + std::string(curl_easy_strerror(res)));            return false;
                     return false;
                 }
             }

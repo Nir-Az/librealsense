@@ -3,10 +3,7 @@
 
 #pragma once
 #include <map>
-#include <regex>
-
 #include <librealsense2/rs.hpp>
-
 #include "versions-db-manager.h"
 
 namespace rs2
