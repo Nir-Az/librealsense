@@ -46,7 +46,8 @@ if(CHECK_FOR_UPDATES) # SW Update Unit Tests Start
         ../third-party/json.hpp
         )
         
-    include_directories( ../../third-party/easyloggingpp/src )
+    include_directories( ../third-party/easyloggingpp/src )
+    include_directories( ../common/sw-update )
     
     add_executable(sw-update-unit-tests 
     ${SW_UPDATE_UNIT_TESTS_SOURCES}

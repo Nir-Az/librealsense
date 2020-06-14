@@ -3,8 +3,7 @@
 #include <functional>
 #include <regex>
 #include "sw-update-common.h"
-#include "..\common\sw-update\http-downloader.h"
-#include "..\common\sw-update\versions-db-manager.h"
+#include "versions-db-manager.h"
 
 
 using namespace rs2::http;
