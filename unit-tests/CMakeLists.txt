@@ -49,7 +49,7 @@ if(CHECK_FOR_UPDATES) # SW Update Unit Tests Start
     include_directories( ../third-party/easyloggingpp/src )
     include_directories( ../common/sw-update )
     
-    add_executable(sw-update-unit-tests 
+    add_executable(test-sw-update 
     ${SW_UPDATE_UNIT_TESTS_SOURCES}
     ${SW_UPDATE_SOURCES}
     ${SW_UPDATE_DEPENDENCIES})
@@ -61,21 +61,15 @@ if(CHECK_FOR_UPDATES) # SW Update Unit Tests Start
                 ${SW_UPDATE_DEPENDENCIES})
     
     
-    set_property(TARGET sw-update-unit-tests PROPERTY CXX_STANDARD 11)
-    add_dependencies(sw-update-unit-tests libcurl)
-    add_definitions(-DCURL_STATICLIB) # Should be removed after PR #6457 (Add online SW-Update capability ) merge
+    set_property(TARGET test-sw-update PROPERTY CXX_STANDARD 11)
+    add_dependencies(test-sw-update libcurl)
     
     #Include easylogging
-    target_include_directories(sw-update-unit-tests PRIVATE  ../third-party)
-    target_include_directories(sw-update-unit-tests PRIVATE  ../third-party/easyloggingpp/src)
+    target_include_directories(test-sw-update PRIVATE  ../third-party)
+    target_include_directories(test-sw-update PRIVATE  ../third-party/easyloggingpp/src)
     
-    # libcurl dependency on windows
-    if (WIN32)
-    target_link_libraries(sw-update-unit-tests ws2_32.lib)
-    endif()
-    
-    target_link_libraries(sw-update-unit-tests ${DEPENDENCIES} curl)
-    set_target_properties (sw-update-unit-tests PROPERTIES
+    target_link_libraries(test-sw-update ${DEPENDENCIES} curl)
+    set_target_properties (test-sw-update PROPERTIES
         FOLDER "Unit-Tests")
 else()
     message(STATUS "\nCHECK_FOR_UPDATES flag is off building without SW-Update unit tests\n")

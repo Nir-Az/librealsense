@@ -35,8 +35,6 @@ std::function<callback_result(uint64_t dl_current_bytes, uint64_t dl_total_bytes
 //////////////////////////////////////////////////////////////
 TEST_CASE("SW update test [version operator >]")
 {
-
-    /////////////////////// Test operator >  /////////////////////
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") > versions_db_manager::version("0.2.3.4"));
     REQUIRE(versions_db_manager::version("1.2.3.4") > versions_db_manager::version("1.1.3.4"));
@@ -49,8 +47,9 @@ TEST_CASE("SW update test [version operator >]")
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") > versions_db_manager::version("1.2.4.4")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") > versions_db_manager::version("1.2.3.5")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") > versions_db_manager::version("1.2.3.4")));
-
-    /////////////////////// Test operator <  /////////////////////
+}
+TEST_CASE("SW update test [version operator <]")
+{
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") < versions_db_manager::version("2.2.3.4"));
     REQUIRE(versions_db_manager::version("1.2.3.4") < versions_db_manager::version("1.3.3.4"));
@@ -64,8 +63,9 @@ TEST_CASE("SW update test [version operator >]")
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") < versions_db_manager::version("1.2.3.3")));
 
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") < versions_db_manager::version("1.2.3.4")));
-
-    /////////////////////// Test operator ==  /////////////////////
+}
+TEST_CASE("SW update test [version operator ==]")
+{
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") == versions_db_manager::version("1.2.3.4"));
     REQUIRE(versions_db_manager::version("0.0.0.10") == versions_db_manager::version("0.0.0.10"));
@@ -75,8 +75,9 @@ TEST_CASE("SW update test [version operator >]")
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") == versions_db_manager::version("1.1.3.4")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") == versions_db_manager::version("1.2.2.4")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") == versions_db_manager::version("1.2.3.3")));
-
-    /////////////////////// Test operator !=  /////////////////////
+}
+TEST_CASE("SW update test [version operator !=]")
+{
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") != versions_db_manager::version("0.2.3.4"));
     REQUIRE(versions_db_manager::version("1.2.3.4") != versions_db_manager::version("1.1.3.4"));
@@ -86,8 +87,10 @@ TEST_CASE("SW update test [version operator >]")
     // Verify failure
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") != versions_db_manager::version("1.2.3.4")));
     REQUIRE(false == (versions_db_manager::version("0.0.0.10") != versions_db_manager::version("0.0.0.10")));
+}
 
-    /////////////////////// Test operator >=  /////////////////////
+TEST_CASE("SW update test [version operator >=]")
+{
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") >= versions_db_manager::version("1.2.3.4"));
 
@@ -101,7 +104,10 @@ TEST_CASE("SW update test [version operator >]")
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") >= versions_db_manager::version("1.3.3.4")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") >= versions_db_manager::version("1.2.4.4")));
     REQUIRE(false == (versions_db_manager::version("1.2.3.4") >= versions_db_manager::version("1.2.3.5")));
+}
 
+TEST_CASE("SW update test [version operator <=]")
+{
     /////////////////////// Test operator <=  /////////////////////
     // Verify success
     REQUIRE(versions_db_manager::version("1.2.3.4") <= versions_db_manager::version("1.2.3.4"));
