@@ -3257,7 +3257,7 @@ namespace rs2
 
         auto name = get_device_name(dev);
 
-        check_for_device_updates(viewer.ctx, viewer.updates);
+        check_for_device_updates(viewer.ctx, viewer.updates, viewer.not_model);
 
         if ((bool)config_file::instance().get(configurations::update::recommend_updates))
         {
@@ -4424,19 +4424,20 @@ namespace rs2
             error_message = e.what();
         }
     }
-    void device_model::check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates)
+    void device_model::check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates , std::shared_ptr<notifications_model> not_model)
     {
         std::weak_ptr<updates_model> updates_model_protected(updates);
-        std::thread check_for_device_updates_thread([ctx, updates_model_protected, this]()
+        std::weak_ptr<notifications_model> notification_model_protected(not_model);
+        std::thread check_for_device_updates_thread([ctx, updates_model_protected, notification_model_protected, this]()
         {
             try
             {
-
                 auto server_url = config_file::instance().get(configurations::update::sw_updates_url);
                 sw_update::dev_updates_profile updates_profile(dev, server_url);
 
-                bool sw_update_required = updates_profile.retrieve_updates(versions_db_manager::LIBREALSENSE);
-                bool fw_update_required = updates_profile.retrieve_updates(versions_db_manager::FIRMWARE);
+                bool sw_recommended_version_available(false), fw_recommended_version_available(false);
+                bool sw_update_required = updates_profile.retrieve_updates(versions_db_manager::LIBREALSENSE , sw_recommended_version_available);
+                bool fw_update_required = updates_profile.retrieve_updates(versions_db_manager::FIRMWARE , fw_recommended_version_available);
 
                 _updates_profile = updates_profile.get_update_profile();
                 updates_model::update_profile_model updates_profile_model(_updates_profile, ctx, this);
@@ -4449,7 +4450,25 @@ namespace rs2
                     }
                 }
                 else
-                {   // For updating current device profile if exists (Could update firmware version)
+                {  
+                    if (sw_recommended_version_available || fw_recommended_version_available)
+                    {
+                        if (auto nm = notification_model_protected.lock())
+                        {
+                            auto n = std::make_shared< updates_alert_model >();
+                            auto name = get_device_name(dev);
+                            n->delay_id = "update_alert." + name.second;
+                            n->enable_complex_dismiss = true; // allow advanced dismiss menu
+
+                            if (!n->is_delayed())
+                            {
+                                nm->add_notification( n );
+                                related_notifications.push_back(n);
+                            }
+                        }
+                    }
+
+                    // For updating current device profile if exists (Could update firmware version)
                     if (auto viewer_updates = updates_model_protected.lock())
                     {
                         viewer_updates->update_profile(updates_profile_model);

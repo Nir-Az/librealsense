@@ -186,6 +186,16 @@ namespace rs2
         int get_max_lifetime_ms() const override { return 40000; }
     };
 
+    struct updates_alert_model : public notification_model
+    {
+        updates_alert_model();
+
+        void set_color_scheme(float t) const override;
+        void draw_content(ux_window& win, int x, int y, float t, std::string& error_message) override;
+        int calc_height() override { return 130; }
+        int get_max_lifetime_ms() const override { return 10000; }
+    };
+
 
     struct notifications_model
     {

@@ -1010,4 +1010,59 @@ namespace rs2
         std::string str = to_string() << "notifications." << delay_id << ".next";
         config_file::instance().set(str.c_str(), (long long)(rawtime + days * 60 * 60 * 24));
     }
-}
+	
+	    updates_alert_model::updates_alert_model()
+        : notification_model()
+    {
+        enable_expand = false;
+        enable_dismiss = true;
+        pinned = true;
+        message = "Newer recommended version available,\n"
+                  "We strongly suggest you to upgrade\n";
+    }
+
+    void updates_alert_model::set_color_scheme( float t ) const
+    {
+        notification_model::set_color_scheme( t );
+        ImGui::PopStyleColor( 1 );
+        auto c = alpha( sensor_bg, 1 - t );
+        ImGui::PushStyleColor( ImGuiCol_WindowBg, c );
+    }
+
+    void updates_alert_model::draw_content(
+        ux_window & win, int x, int y, float t, std::string & error_message )
+    {
+        ImGui::SetCursorScreenPos( { float( x + 9 ), float( y + 4 ) } );
+
+        ImVec4 shadow{ 1.f, 1.f, 1.f, 0.1f };
+        ImGui::GetWindowDrawList()->AddRectFilled( { float( x ), float( y ) },
+                                                   { float( x + width ), float( y + 25 ) },
+                                                   ImColor( shadow ) );
+
+        ImGui::Text( "Updates available" );
+
+        ImGui::SetCursorScreenPos( { float( x + 5 ), float( y + 27 ) } );
+
+        ImGui::PushStyleColor( ImGuiCol_Text, light_grey );
+        draw_text( get_title().c_str(), x, y, height - 50 );
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorScreenPos( { float( x + 5 ), float( y + height - 25 ) } );
+
+        auto sat = 1.f
+                 + sin( duration_cast< milliseconds >( system_clock::now() - created_time ).count()
+                        / 700.f )
+                       * 0.1f;
+        ImGui::PushStyleColor( ImGuiCol_Button, saturate( sensor_header_light_blue, sat ) );
+        ImGui::PushStyleColor( ImGuiCol_ButtonHovered, saturate( sensor_header_light_blue, 1.5f ) );
+        std::string button_name( "Open updates window" );
+
+        const auto bar_width = width - 115;
+        if( ImGui::Button( button_name.c_str(), { float( bar_width ), 20.f } ) )
+        {
+            // Todo raise indication for updates
+            dismiss( false );
+        }
+        ImGui::PopStyleColor( 2 );
+    }
+    }

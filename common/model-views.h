@@ -773,7 +773,7 @@ namespace rs2
         void begin_update(std::vector<uint8_t> data,
             viewer_model& viewer, std::string& error_message);
         void begin_update_unsigned(viewer_model& viewer, std::string& error_message);
-        void check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates);
+        void check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates, std::shared_ptr<notifications_model> not_model);
 
 
         std::shared_ptr< atomic_objects_in_frame > get_detected_objects() const { return _detected_objects; }
