@@ -4442,6 +4442,7 @@ namespace rs2
                 _updates_profile = updates_profile.get_update_profile();
                 updates_model::update_profile_model updates_profile_model(_updates_profile, ctx, this);
 
+                // If Essential update, add update profile
                 if (sw_update_required || fw_update_required)
                 {
                     if (auto viewer_updates = updates_model_protected.lock())
@@ -4450,28 +4451,36 @@ namespace rs2
                     }
                 }
                 else
-                {  
-                    if (sw_recommended_version_available || fw_recommended_version_available)
+                {  // On recommended update, pop up a notification to let the user choose if to open
+                   // the updates window
+                    if( sw_recommended_version_available || fw_recommended_version_available )
                     {
-                        if (auto nm = notification_model_protected.lock())
+                        if( auto nm = notification_model_protected.lock() )
                         {
-                            auto n = std::make_shared< updates_alert_model >();
-                            auto name = get_device_name(dev);
-                            n->delay_id = "update_alert." + name.second;
-                            n->enable_complex_dismiss = true; // allow advanced dismiss menu
-
-                            if (!n->is_delayed())
+                            if( auto viewer_updates = updates_model_protected.lock() )
                             {
-                                nm->add_notification( n );
-                                related_notifications.push_back(n);
+                                if( ! viewer_updates->is_popup_opened() )
+                                {
+                                    updates_profile_model.displayed = false;
+                                    viewer_updates->add_profile( updates_profile_model );
+
+                                    auto n = std::make_shared< updates_alert_model >(
+                                        viewer_updates,
+                                        _updates_profile );
+
+                                    nm->add_notification( n );
+                                    related_notifications.push_back( n );
+                                }
+                                else
+                                {
+                                    // For updating current device profile if exists (Could update firmware version)
+                                    if (auto viewer_updates = updates_model_protected.lock())
+                                    {
+                                        viewer_updates->update_profile(updates_profile_model);
+                                    }
+                                }
                             }
                         }
-                    }
-
-                    // For updating current device profile if exists (Could update firmware version)
-                    if (auto viewer_updates = updates_model_protected.lock())
-                    {
-                        viewer_updates->update_profile(updates_profile_model);
                     }
                 }
             }

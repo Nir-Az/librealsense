@@ -1011,14 +1011,17 @@ namespace rs2
         config_file::instance().set(str.c_str(), (long long)(rawtime + days * 60 * 60 * 24));
     }
 	
-	    updates_alert_model::updates_alert_model()
-        : notification_model()
+	    updates_alert_model::updates_alert_model(  std::shared_ptr< updates_model > updates,
+                                                    sw_update::dev_updates_profile::update_profile update_profile)
+        : notification_model() , _updates( updates ) , _update_profile(update_profile)
     {
         enable_expand = false;
         enable_dismiss = true;
         pinned = true;
-        message = "Newer recommended version available,\n"
-                  "We strongly suggest you to upgrade\n";
+        severity = RS2_LOG_SEVERITY_INFO;
+        message = "New updates available.\n"
+                  "We strongly recommend you to upgrade \n"
+                  "your software\n";
     }
 
     void updates_alert_model::set_color_scheme( float t ) const
@@ -1053,6 +1056,8 @@ namespace rs2
                  + sin( duration_cast< milliseconds >( system_clock::now() - created_time ).count()
                         / 700.f )
                        * 0.1f;
+
+        auto test = saturate(sensor_header_light_blue, sat);
         ImGui::PushStyleColor( ImGuiCol_Button, saturate( sensor_header_light_blue, sat ) );
         ImGui::PushStyleColor( ImGuiCol_ButtonHovered, saturate( sensor_header_light_blue, 1.5f ) );
         std::string button_name( "Open updates window" );
@@ -1060,8 +1065,11 @@ namespace rs2
         const auto bar_width = width - 115;
         if( ImGui::Button( button_name.c_str(), { float( bar_width ), 20.f } ) )
         {
-            // Todo raise indication for updates
-            dismiss( false );
+            if (auto updates = _updates.lock())
+            {
+                updates->set_display_status(_update_profile, true);
+                dismiss( false );
+            }
         }
         ImGui::PopStyleColor( 2 );
     }

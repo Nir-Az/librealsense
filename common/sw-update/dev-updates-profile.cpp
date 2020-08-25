@@ -76,6 +76,9 @@ namespace rs2
             bool query_ok = up_handler.query_versions(dev_name, part, policy, required_version);
             if (query_ok)
             {
+                up_handler.get_version_download_link(part, required_version, result.download_link);
+                up_handler.get_version_release_notes(part, required_version, result.release_page);
+                up_handler.get_version_description(part, required_version, result.description);
                 result.ver = required_version;
 
                 std::stringstream ss;

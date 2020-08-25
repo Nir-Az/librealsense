@@ -19,7 +19,12 @@ void updates_model::draw(ux_window& window, std::string& error_message)
     static std::vector<update_profile_model> updates_copy;
     {
         std::lock_guard<std::mutex> lock(_lock);
-        updates_copy = _updates;
+        updates_copy.clear();
+        for (auto update : _updates)
+        {
+            if (update.displayed)
+                updates_copy.push_back(update);
+        }
     }
 
     // Prepare camera icon
