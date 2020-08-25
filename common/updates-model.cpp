@@ -42,7 +42,7 @@ void updates_model::draw(ux_window& window, std::string& error_message)
     const auto window_name = "Updates Window";
      
     //Main window pop up only if essential updates exists
-    if (!popup_opened && updates_copy.size() && !ignore)
+    if (updates_copy.size() && !ignore)
     {
         ImGui::OpenPopup(window_name);
         popup_opened = true;
