@@ -299,6 +299,38 @@ int main(int argc, const char** argv) try
     std::mutex m;
 
 #ifdef BUILD_EASYLOGGINGPP
+#ifdef BUILD_SHARED_LIBS
+    // Configure the logger
+    el::Configurations conf;
+    conf.set(el::Level::Global, el::ConfigurationType::Format, "[%level] %msg");
+    conf.set(el::Level::Info, el::ConfigurationType::Format, "%msg");
+    conf.set(el::Level::Debug, el::ConfigurationType::Enabled, "false");
+    el::Loggers::reconfigureLogger("librealsense", conf);
+    // Create a dispatch sink which will get any messages logged to EasyLogging, which will then
+    // post the messages on the viewer's notification window.
+    class viewer_model_dispatcher : public el::LogDispatchCallback
+    {
+    public:
+        std::weak_ptr<notifications_model> notifications;  // only the default ctor is available to us...!
+    protected:
+        void handle(const el::LogDispatchData* data) noexcept override
+        {
+            // TODO align LRS and Easyloging severity levels. W/A for easylogging on Linux
+            if (data->logMessage()->level() > el::Level::Debug)
+            {
+                if (auto not_model = notifications.lock())
+                    not_model->add_log(
+                        data->logMessage()->logger()->logBuilder()->build(
+                            data->logMessage(),
+                            data->dispatchAction() == el::base::DispatchAction::NormalLog));
+            }
+        }
+    };
+    el::Helpers::installLogDispatchCallback< viewer_model_dispatcher >("viewer_model_dispatcher");
+    auto dispatcher = el::Helpers::logDispatchCallback< viewer_model_dispatcher >("viewer_model_dispatcher");
+    dispatcher->notifications = viewer_model.not_model;
+    el::Helpers::uninstallLogDispatchCallback< el::base::DefaultLogDispatchCallback >("DefaultLogDispatchCallback");
+#endif
     std::weak_ptr<notifications_model> notifications = viewer_model.not_model;
     rs2::log_to_callback( RS2_LOG_SEVERITY_INFO,
         [notifications]( rs2_log_severity severity, rs2::log_message const& msg )
@@ -365,7 +397,6 @@ int main(int argc, const char** argv) try
     {
         auto device_changed = refresh_devices(m, ctx, devices_connection_changes, connected_devs,
             device_names, *device_models, viewer_model, error_message);
-
         auto output_height = viewer_model.get_output_height();
 
         rect viewer_rect = { viewer_model.panel_width,
