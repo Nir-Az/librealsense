@@ -227,6 +227,18 @@ namespace librealsense
 #undef CASE
     }
 
+    const char* get_string(rs2_digital_gain value)
+    {
+#define CASE(X) STRCASE(DIGITAL_GAIN, X)
+        switch (value)
+        {
+            CASE(LOW_GAIN)
+            CASE(HIGH_GAIN)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
     const char* get_string( rs2_cah_trigger value )
     {
 #define CASE(X) STRCASE(CAH_TRIGGER, X)
@@ -432,6 +444,7 @@ namespace librealsense
             CASE(SEQUENCE_SIZE)
             CASE(SEQUENCE_ID)
             CASE(HUMIDITY_TEMPERATURE)
+            CASE(DIGITAL_GAIN)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE

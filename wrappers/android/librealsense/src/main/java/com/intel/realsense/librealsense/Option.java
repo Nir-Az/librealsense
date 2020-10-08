@@ -81,7 +81,8 @@ public enum Option {
     SEQUENCE_NAME(77),
     SEQUENCE_SIZE(78),
     SEQUENCE_ID(79),
-    HUMIDITY_TEMPERATURE(80);
+    HUMIDITY_TEMPERATURE(80),
+    DIGITAL_GAIN(81);
     private final int mValue;
 
     private Option(int value) { mValue = value; }

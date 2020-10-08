@@ -4941,6 +4941,7 @@ const option = {
   OPTION_SEQUENCE_SIZE: RS2.RS2_OPTION_SEQUENCE_SIZE,
   OPTION_SEQUENCE_ID: RS2.RS2_OPTION_SEQUENCE_ID,
   OPTION_HUMIDITY_TEMPERATURE: RS2.RS2_OPTION_HUMIDITY_TEMPERATURE,
+  OPTION_DIGITAL_GAIN: RS2.RS2_OPTION_DIGITAL_GAIN,
   /**
    * Number of enumeration values. Not a valid input: intended to be used in for-loops.
    * @type {Integer}
@@ -5091,6 +5092,8 @@ const option = {
         return this.option_thermal_compensation;
       case this.OPTION_HUMIDITY_TEMPERATURE:
         return this.option_humidity_temperature;
+      case this.OPTION_DIGITAL_GAIN:
+        return this.option_digital_gain;
       default:
         throw new TypeError(
             'option.optionToString(option) expects a valid value as the 1st argument');

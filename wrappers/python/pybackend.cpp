@@ -180,6 +180,7 @@ PYBIND11_MODULE(NAME, m) {
         .value("sequence_size", RS2_OPTION_SEQUENCE_SIZE)
         .value("sequence_id", RS2_OPTION_SEQUENCE_ID)
         .value("humidity_temperature", RS2_OPTION_HUMIDITY_TEMPERATURE)
+        .value("digital_gain", RS2_OPTION_DIGITAL_GAIN)
         .value("count", RS2_OPTION_COUNT);
 
     py::enum_<platform::power_state> power_state(m, "power_state");
