@@ -22,7 +22,7 @@ namespace rs2
 
             struct update_description
             {
-                versions_db_manager::version ver;
+                sw_update::version ver;
                 std::string name;
                 std::string release_page;
                 std::string download_link;
@@ -34,11 +34,11 @@ namespace rs2
                 std::string device_name;
                 std::string serial_number;
 
-                versions_db_manager::version software_version;
-                versions_db_manager::version firmware_version;
+                sw_update::version software_version;
+                sw_update::version firmware_version;
 
-                std::map<versions_db_manager::version, update_description> software_versions;
-                std::map<versions_db_manager::version, update_description> firmware_versions;
+                std::map<sw_update::version, update_description> software_versions;
+                std::map<sw_update::version, update_description> firmware_versions;
 
                 device dev;
                 bool dev_active;
@@ -51,7 +51,7 @@ namespace rs2
 
             ~dev_updates_profile() {};
 
-            bool retrieve_updates(versions_db_manager::component_part_type comp);
+            bool retrieve_updates(versions_db_manager::component_part_type comp, std::pair<sw_update::version, dev_updates_profile::update_description>& recommended_version);
             update_profile & get_update_profile() { return _update_profile; };
 
         private:

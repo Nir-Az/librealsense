@@ -25,7 +25,7 @@
 
 #include <imgui_internal.h>
 
-#ifdef INTERNAL_FW
+#if defined(INTERNAL_FW) && defined(CHECK_FOR_UPDATES)
 #include "common/fw/D4XX_FW_Image.h"
 #include "common/fw/SR3XX_FW_Image.h"
 #include "common/fw/L5XX_FW_Image.h"
@@ -118,7 +118,7 @@ void add_playback_device(context& ctx, device_models_list& device_models,
                             {
                                 if (sub->streaming)
                                 {
-                                    sub->stop(viewer_model);
+                                    sub->stop(viewer_model.not_model);
                                 }
                             }
                         }
@@ -735,7 +735,7 @@ int main(int argc, const char** argv) try
         for (auto&& sub : device_model->subdevices)
         {
             if (sub->streaming)
-                sub->stop(viewer_model);
+                sub->stop(viewer_model.not_model);
         }
 
     return EXIT_SUCCESS;

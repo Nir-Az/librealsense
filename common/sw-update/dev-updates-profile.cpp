@@ -18,8 +18,8 @@ namespace rs2
             std::string serial = (dev.supports(RS2_CAMERA_INFO_SERIAL_NUMBER)) ? dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER) : "Unknown";
             std::string firmware_ver = (dev.supports(RS2_CAMERA_INFO_FIRMWARE_VERSION)) ? dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION) : "0.0.0";
 
-            _update_profile.software_version = versions_db_manager::version(RS2_API_FULL_VERSION_STR);
-            _update_profile.firmware_version = versions_db_manager::version(firmware_ver);
+            _update_profile.software_version = sw_update::version(RS2_API_FULL_VERSION_STR);
+            _update_profile.firmware_version = sw_update::version(firmware_ver);
 
             _update_profile.dev = dev;
 
@@ -27,16 +27,16 @@ namespace rs2
             _update_profile.serial_number = serial;
         }
 
-        bool dev_updates_profile::retrieve_updates(versions_db_manager::component_part_type comp)
+        bool dev_updates_profile::retrieve_updates(versions_db_manager::component_part_type comp, std::pair<sw_update::version, dev_updates_profile::update_description> &recommended_version)
         {
             bool update_required(false);
 
             if (_update_profile.device_name.find("Recovery") == std::string::npos)
             {
-                std::map<versions_db_manager::version, update_description> &versions_vec((comp == versions_db_manager::FIRMWARE) ?
+                std::map<version, update_description> &versions_vec((comp == versions_db_manager::FIRMWARE) ?
                     _update_profile.firmware_versions : _update_profile.software_versions);
 
-                versions_db_manager::version &current_version((comp == versions_db_manager::FIRMWARE) ? _update_profile.firmware_version : _update_profile.software_version);
+                version &current_version((comp == versions_db_manager::FIRMWARE) ? _update_profile.firmware_version : _update_profile.software_version);
                 {
                     update_description experimental_update;
                     if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::EXPERIMENTAL, comp, experimental_update))
@@ -47,6 +47,10 @@ namespace rs2
                     if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::RECOMMENDED, comp, recommened_update))
                     {
                         versions_vec[recommened_update.ver] = recommened_update;
+                        if (current_version < recommened_update.ver)
+                        {
+                            recommended_version = *versions_vec.find(recommened_update.ver);
+                        }
                     }
                     update_description required_update;
                     if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::ESSENTIAL, comp, required_update))
@@ -69,7 +73,7 @@ namespace rs2
         {
             if (_keep_trying)
             {
-                versions_db_manager::version required_version;
+                sw_update::version required_version;
                 auto query_status = up_handler.query_versions(dev_name, part, policy, required_version);
                 if (query_status == versions_db_manager::VERSION_FOUND)
                 {

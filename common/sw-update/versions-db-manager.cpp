@@ -87,7 +87,7 @@ namespace rs2
             auto res = std::find_if(_server_versions_vec.begin(), _server_versions_vec.end(),
                 [version, component_str, platform](std::unordered_map<std::string, std::string> version_map)
             {
-                return (versions_db_manager::version(version_map["version"]) == version && component_str == version_map["component"] && (platform == version_map["platform"] || version_map["platform"] == "*"));
+                return (sw_update::version(version_map["version"]) == version && component_str == version_map["component"] && (platform == version_map["platform"] || version_map["platform"] == "*"));
             });
 
             if (res != _server_versions_vec.end())
@@ -181,20 +181,22 @@ namespace rs2
                     server_data_retrieved = true;
                 }
             }
+#ifdef CHECK_FOR_UPDATES
             else
             {
                 // read from local file
-                std::ifstream file(_dev_info_url);
-                if (file.good())
-                {
-                    server_data_retrieved = true;
-                    ver_data << file.rdbuf();
-                }
-                else
-                {
-                    LOG_ERROR("Cannot open file: " + _dev_info_url);
-                }
+                 std::ifstream file(_dev_info_url);
+                 if (file.good())
+                 {
+                     server_data_retrieved = true;
+                     ver_data << file.rdbuf();
+                 }
+                 else
+                 {
+                     LOG_ERROR("Cannot open file: " + _dev_info_url);
+                 }
             }
+#endif
             return server_data_retrieved;
         }
 

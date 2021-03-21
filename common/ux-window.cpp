@@ -48,6 +48,7 @@ namespace rs2
     {
         config_file::instance().set_default(configurations::update::allow_rc_firmware, false);
         config_file::instance().set_default(configurations::update::recommend_calibration, true);
+
         config_file::instance().set_default(configurations::update::recommend_updates, true);
         config_file::instance().set_default(configurations::update::sw_updates_url, server_versions_db_url);
         config_file::instance().set_default(configurations::update::sw_updates_official_server, true);

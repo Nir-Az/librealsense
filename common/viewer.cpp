@@ -2499,18 +2499,21 @@ namespace rs2
                     temp_cfg.set(configurations::viewer::settings_tab, tab);
                 }
                 ImGui::PopStyleColor(2);
+#ifdef CHECK_FOR_UPDATES 
                 ImGui::SameLine();
 
                 ImGui::PushStyleColor(ImGuiCol_Text, tab != 3 ? light_grey : light_blue);
                 ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, tab != 3 ? light_grey : light_blue);
+
                 if (ImGui::Button("Updates", { 120, 30 }))
                 {
                     tab = 3;
                     config_file::instance().set(configurations::viewer::settings_tab, tab);
                     temp_cfg.set(configurations::viewer::settings_tab, tab);
                 }
-                ImGui::PopStyleColor(2);
 
+                ImGui::PopStyleColor(2);
+#endif
                 ImGui::PopFont();
                 ImGui::PopStyleColor(2); // button color
 
@@ -2811,7 +2814,7 @@ namespace rs2
                         }
                     }
                 }
-
+#ifdef CHECK_FOR_UPDATES 
                 if (tab == 3)
                 {
                     bool recommend_fw_updates = temp_cfg.get(configurations::update::recommend_updates);
@@ -2825,6 +2828,7 @@ namespace rs2
                         ImGui::SetTooltip("%s", "When firmware of the device is below the version bundled with this software release\nsuggest firmware update");
                     }
                     ImGui::Separator();
+
                     ImGui::Text("%s", "SW/FW Updates From Server:");
                     if (ImGui::IsItemHovered())
                     {
@@ -2866,7 +2870,7 @@ namespace rs2
                         }
                     }
                 }
-
+#endif
                 ImGui::Separator();
 
                 ImGui::GetWindowDrawList()->AddRectFilled({ (float)x0, (float)(y0 + h - 60) },
@@ -3281,7 +3285,7 @@ namespace rs2
         std::shared_ptr<texture_buffer> texture, points points)
     {
         if (!modal_notification_on)
-            updates->draw(*this, window, error_message);
+            updates->draw(not_model, window, error_message);
 
         static bool first = true;
         if (first)

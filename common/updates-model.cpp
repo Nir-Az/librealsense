@@ -13,7 +13,7 @@ using namespace rs2;
 using namespace sw_update;
 using namespace http;
 
-void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& error_message)
+void updates_model::draw(std::shared_ptr<notifications_model> not_model, ux_window& window, std::string& error_message)
 {
     // Protect resources
     static std::vector<update_profile_model> updates_copy;
@@ -139,7 +139,7 @@ void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& e
             // ===========================================================================
             // Draw Firmware update Pane
             // ===========================================================================
-            fw_update_needed = draw_firmware_section(viewer, window_name, update, positions, window, error_message);
+            fw_update_needed = draw_firmware_section(not_model, window_name, update, positions, window, error_message);
 
         }
         else 
@@ -362,7 +362,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             ImGui::PopStyleColor();
         }
 
-        if (selected_software_update.ver != versions_db_manager::version(0))
+        if ( selected_software_update.ver )
         {
             sw_text_pos.y += 25;
             ImGui::SetCursorScreenPos(sw_text_pos);
@@ -458,7 +458,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             ImGui::PopTextWrapPos();
         }
 
-        if (selected_software_update.ver != versions_db_manager::version(0))
+        if ( selected_software_update.ver )
         {
             ImGui::SetCursorScreenPos({ pos.orig_pos.x + pos.w - 150, pos.mid_y - 45 });
             ImGui::PushStyleColor(ImGuiCol_Text, white);
@@ -493,7 +493,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
     }
     return essential_sw_update_needed;
 }
-bool updates_model::draw_firmware_section(viewer_model& viewer, const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window, std::string& error_message)
+bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> not_model, const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window, std::string& error_message)
 {
     bool essential_fw_update_needed(false);
     bool recommended_fw_update_needed(false);
@@ -617,7 +617,7 @@ bool updates_model::draw_firmware_section(viewer_model& viewer, const char * win
             ImGui::PopStyleColor();
         }
 
-        if (selected_firmware_update.ver != versions_db_manager::version(0))
+        if ( selected_firmware_update.ver )
         {
             fw_text_pos.y += 25;
             ImGui::SetCursorScreenPos(fw_text_pos);
@@ -762,7 +762,7 @@ bool updates_model::draw_firmware_section(viewer_model& viewer, const char * win
             {
                 _fw_update_state = fw_update_states::started;
 
-                _update_manager = std::make_shared<firmware_update_manager>(viewer,
+                _update_manager = std::make_shared<firmware_update_manager>(not_model,
                     *selected_profile.dev_model, selected_profile.profile.dev, selected_profile.ctx, _fw_image, true
                     );
                 auto invoke = [](std::function<void()> action) { action(); };
