@@ -2499,7 +2499,6 @@ namespace rs2
                     temp_cfg.set(configurations::viewer::settings_tab, tab);
                 }
                 ImGui::PopStyleColor(2);
-#ifdef CHECK_FOR_UPDATES 
                 ImGui::SameLine();
 
                 ImGui::PushStyleColor(ImGuiCol_Text, tab != 3 ? light_grey : light_blue);
@@ -2513,7 +2512,6 @@ namespace rs2
                 }
 
                 ImGui::PopStyleColor(2);
-#endif
                 ImGui::PopFont();
                 ImGui::PopStyleColor(2); // button color
 
@@ -2814,7 +2812,7 @@ namespace rs2
                         }
                     }
                 }
-#ifdef CHECK_FOR_UPDATES 
+
                 if (tab == 3)
                 {
                     bool recommend_fw_updates = temp_cfg.get(configurations::update::recommend_updates);
@@ -2827,6 +2825,7 @@ namespace rs2
                     {
                         ImGui::SetTooltip("%s", "When firmware of the device is below the version bundled with this software release\nsuggest firmware update");
                     }
+#ifdef CHECK_FOR_UPDATES 
                     ImGui::Separator();
 
                     ImGui::Text("%s", "SW/FW Updates From Server:");
@@ -2869,8 +2868,9 @@ namespace rs2
                             temp_cfg.set(configurations::update::sw_updates_official_server, false);
                         }
                     }
-                }
 #endif
+                }
+
                 ImGui::Separator();
 
                 ImGui::GetWindowDrawList()->AddRectFilled({ (float)x0, (float)(y0 + h - 60) },

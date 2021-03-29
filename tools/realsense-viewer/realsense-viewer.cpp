@@ -25,7 +25,7 @@
 
 #include <imgui_internal.h>
 
-#if defined(INTERNAL_FW) && defined(CHECK_FOR_UPDATES)
+#ifdef INTERNAL_FW
 #include "common/fw/D4XX_FW_Image.h"
 #include "common/fw/SR3XX_FW_Image.h"
 #include "common/fw/L5XX_FW_Image.h"

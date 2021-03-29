@@ -3697,63 +3697,60 @@ namespace rs2
         // Inhibit for DQT
         if( _allow_remove )
         {
-            for( auto && sub : dev.query_sensors() )
+            if( dev.supports( RS2_CAMERA_INFO_FIRMWARE_VERSION )
+                && dev.supports( RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION )
+                && dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE ) )
             {
-                if( sub.supports( RS2_CAMERA_INFO_FIRMWARE_VERSION )
-                    && sub.supports( RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION )
-                    && sub.supports( RS2_CAMERA_INFO_PRODUCT_LINE ) )
+                std::string fw = dev.get_info( RS2_CAMERA_INFO_FIRMWARE_VERSION );
+                std::string recommended
+                    = dev.get_info( RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION );
+
+                int product_line
+                    = parse_product_line( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) );
+
+                bool allow_rc_firmware = config_file::instance().get_or_default(
+                    configurations::update::allow_rc_firmware,
+                    false );
+                bool is_rc = ( product_line == RS2_PRODUCT_LINE_D400 ) && allow_rc_firmware;
+                std::string available = get_available_firmware_version( product_line );
+
+                std::shared_ptr< firmware_update_manager > manager = nullptr;
+
+                if( is_upgradeable( fw, available ) )
                 {
-                    std::string fw = sub.get_info( RS2_CAMERA_INFO_FIRMWARE_VERSION );
-                    std::string recommended
-                        = sub.get_info( RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION );
+                    recommended = available;
 
-                    int product_line
-                        = parse_product_line( sub.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) );
+                    static auto table = create_default_fw_table();
 
-                    bool allow_rc_firmware = config_file::instance().get_or_default(
-                        configurations::update::allow_rc_firmware,
-                        false );
-                    bool is_rc = ( product_line == RS2_PRODUCT_LINE_D400 ) && allow_rc_firmware;
-                    std::string available = get_available_firmware_version( product_line );
+                    manager = std::make_shared< firmware_update_manager >( not_model,
+                                                                           *this,
+                                                                           dev,
+                                                                           ctx,
+                                                                           table[product_line],
+                                                                           true );
+                }
 
-                    std::shared_ptr< firmware_update_manager > manager = nullptr;
+                if( is_upgradeable( fw, recommended ) )
+                {
+                    auto dev_name = get_device_name( dev );
+                    std::stringstream msg;
+                    msg << dev_name.first << " (S/N " << dev_name.second << ")\n"
+                        << "Current Version: " << fw << "\n";
 
-                    if( is_upgradeable( fw, available ) )
+                    if( is_rc )
+                        msg << "Release Candidate: " << recommended << " Pre-Release";
+                    else
+                        msg << "Recommended Version: " << recommended;
+
+                    auto n = std::make_shared< fw_update_notification_model >( msg.str(),
+                                                                               manager,
+                                                                               false );
+                    n->delay_id = "dfu." + dev_name.second;
+                    n->enable_complex_dismiss = true;
+                    if( ! n->is_delayed() )
                     {
-                        recommended = available;
-
-                        static auto table = create_default_fw_table();
-
-                        manager = std::make_shared< firmware_update_manager >( not_model,
-                                                                               *this,
-                                                                               dev,
-                                                                               ctx,
-                                                                               table[product_line],
-                                                                               true );
-                    }
-
-                    if( is_upgradeable( fw, recommended ) )
-                    {
-                        auto dev_name = get_device_name( dev );
-                        std::stringstream msg;
-                        msg << dev_name.first << " (S/N " << dev_name.second << ")\n"
-                            << "Current Version: " << fw << "\n";
-
-                        if( is_rc )
-                            msg << "Release Candidate: " << recommended << " Pre-Release";
-                        else
-                            msg << "Recommended Version: " << recommended;
-
-                        auto n = std::make_shared< fw_update_notification_model >( msg.str(),
-                                                                                   manager,
-                                                                                   false );
-                        n->delay_id = "dfu." + dev_name.second;
-                        n->enable_complex_dismiss = true;
-                        if( ! n->is_delayed() )
-                        {
-                            not_model->add_notification( n );
-                            related_notifications.push_back( n );
-                        }
+                        not_model->add_notification( n );
+                        related_notifications.push_back( n );
                     }
                 }
             }
