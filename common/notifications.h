@@ -36,6 +36,13 @@ namespace rs2
     {
         notification_model();
         notification_model(const notification_data& n);
+
+        template <class dst_type>
+        bool is()
+        {
+            return dynamic_cast<const dst_type*>(this) != nullptr;
+        }
+
         double get_age_in_ms(bool total = false) const;
         bool interacted() const;
         std::function<void()> draw(ux_window& win, int w, int y, 

@@ -5308,29 +5308,23 @@ namespace rs2
                     }
 
 
-                    if( ( (bool)config_file::instance().get( configurations::update::recommend_updates ) )
-                        && dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
-                        && is_recommended_fw_available( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) )
+                    if( dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
+                        && ( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) )
                     {
-                        if (ImGui::Selectable("Install Recommended Firmware ", false, updateFwFlags))
+                        if (ImGui::Selectable("Check For Updates ", false, updateFwFlags))
                         {
-                            auto sensors = dev.query_sensors();
-                            auto product_line_str = "";
-                            if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE))
-                                product_line_str = dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
-                            if (sensors.size() && sensors.front().supports(RS2_CAMERA_INFO_PRODUCT_LINE))
-                                product_line_str = sensors.front().get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
-                            int product_line = parse_product_line(product_line_str);
-
-                            auto table = create_default_fw_table();
-
-                            begin_update(table[product_line], viewer, error_message);
+                            for (auto&& n : related_notifications)
+                            {
+                                if (n->is<fw_update_notification_model>() || n->is<sw_recommended_update_alert_model>())
+                                    n->dismiss(false);
+                            }
+                            check_for_device_updates(viewer);
                         }
                     }
 
                     if (ImGui::IsItemHovered())
                     {
-                        std::string tooltip = to_string() <<"Install default recommended firmware for this device" << (is_streaming ? " (Disabled while streaming)" : "");
+                        std::string tooltip = to_string() << "Check for SW / FW updates";
                         ImGui::SetTooltip("%s", tooltip.c_str());
                     }
                 }

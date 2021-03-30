@@ -1021,6 +1021,7 @@ namespace rs2
         enable_expand = false;
         enable_dismiss = true;
         pinned = true;
+        forced = true;
         severity = RS2_LOG_SEVERITY_INFO;
         message = "Current SW version: " + _current_version +"\n" +
             "Recommended SW version: " + _recommended_version;
