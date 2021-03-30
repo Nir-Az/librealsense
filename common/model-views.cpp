@@ -5311,14 +5311,15 @@ namespace rs2
                     if( dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
                         && ( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) )
                     {
-                        if (ImGui::Selectable("Check For Updates ", false, updateFwFlags))
+                        if( ImGui::Selectable( "Check For Updates", false, updateFwFlags ) )
                         {
-                            for (auto&& n : related_notifications)
+                            for( auto && n : related_notifications )
                             {
-                                if (n->is<fw_update_notification_model>() || n->is<sw_recommended_update_alert_model>())
-                                    n->dismiss(false);
+                                if( n->is< fw_update_notification_model >()
+                                    || n->is< sw_recommended_update_alert_model >() )
+                                    n->dismiss( false );
                             }
-                            check_for_device_updates(viewer);
+                            check_for_device_updates( viewer );
                         }
                     }
 
