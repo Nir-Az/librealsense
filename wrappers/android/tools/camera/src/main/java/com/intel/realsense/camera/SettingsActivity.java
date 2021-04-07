@@ -16,6 +16,7 @@ import android.util.Pair;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.ExpandableListView;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -55,9 +56,14 @@ public class SettingsActivity extends AppCompatActivity {
     private static final int INDEX_FW_LOG = 6;
     private static final int INDEX_CREATE_FLASH_BACKUP = 7;
 
+
     private Device _device;
 
     private boolean areAdvancedFeaturesEnabled = false; // advanced features (fw logs, terminal etc.)
+    ExpandableListView expandableListView;
+    InfoExpandableListAdapter expandableListAdapter;
+    List<String> expandableListTitle;
+    HashMap<String, List<String>> expandableListDetail;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,14 +117,21 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void loadInfosList() {
-        final ListView listview = findViewById(R.id.info_list_view);
         String appVersion = "Camera App Version: " + BuildConfig.VERSION_NAME;
         String lrsVersion = "LibRealSense Version: " + RsContext.getVersion();
 
-        final String[] info = { lrsVersion, appVersion};
-        final ArrayAdapter adapter = new ArrayAdapter<>(this, R.layout.files_list_view, info);
-        listview.setAdapter(adapter);
-        adapter.notifyDataSetChanged();
+        expandableListDetail = new HashMap<String, List<String>>();
+
+        List<String> info = new ArrayList<String>();
+        info.add(appVersion);
+        info.add(lrsVersion);
+
+        expandableListDetail.put("Info", info);
+
+        expandableListView = findViewById(R.id.info_ex_list_view);
+        expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
+        expandableListAdapter = new InfoExpandableListAdapter(this, expandableListTitle, expandableListDetail);
+        expandableListView.setAdapter(expandableListAdapter);
     }
 
     private void loadSettingsList(final Device device){
