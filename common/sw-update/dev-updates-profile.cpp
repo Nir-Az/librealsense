@@ -10,7 +10,7 @@ namespace rs2
     {
         using namespace http;
 
-        dev_updates_profile::dev_updates_profile(const device& dev, const std::string &url, const bool use_url_as_local_path, user_callback_func_type download_callback)
+        dev_updates_profile::dev_updates_profile(const device& dev, const std::string& url, const bool use_url_as_local_path, user_callback_func_type download_callback)
             : _versions_db(url, use_url_as_local_path, download_callback), _keep_trying(true)
         {
 
@@ -27,55 +27,54 @@ namespace rs2
             _update_profile.serial_number = serial;
         }
 
-        bool dev_updates_profile::retrieve_updates(versions_db_manager::component_part_type comp, std::pair<sw_update::version, dev_updates_profile::update_description> &recommended_version)
+        bool dev_updates_profile::retrieve_updates(component_part_type comp)
         {
-            bool update_required(false);
+            bool update_available(false);
 
             if (_update_profile.device_name.find("Recovery") == std::string::npos)
             {
-                std::map<version, update_description> &versions_vec((comp == versions_db_manager::FIRMWARE) ?
+                std::map<version, update_info>& versions_vec((comp == FIRMWARE) ?
                     _update_profile.firmware_versions : _update_profile.software_versions);
 
-                version &current_version((comp == versions_db_manager::FIRMWARE) ? _update_profile.firmware_version : _update_profile.software_version);
+                version& current_version((comp == FIRMWARE) ? _update_profile.firmware_version : _update_profile.software_version);
                 {
-                    update_description experimental_update;
-                    if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::EXPERIMENTAL, comp, experimental_update))
+                    update_info experimental_update;
+                    if (try_parse_update(_versions_db, _update_profile.device_name, EXPERIMENTAL, comp, experimental_update))
                     {
                         versions_vec[experimental_update.ver] = experimental_update;
+                        update_available = update_available || current_version < experimental_update.ver;
                     }
-                    update_description recommened_update;
-                    if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::RECOMMENDED, comp, recommened_update))
+
+                    update_info recommened_update;
+                    if (try_parse_update(_versions_db, _update_profile.device_name, RECOMMENDED, comp, recommened_update))
                     {
                         versions_vec[recommened_update.ver] = recommened_update;
-                        if (current_version < recommened_update.ver)
-                        {
-                            recommended_version = *versions_vec.find(recommened_update.ver);
-                        }
+                        update_available = update_available || current_version < recommened_update.ver;
                     }
-                    update_description required_update;
-                    if (try_parse_update(_versions_db, _update_profile.device_name, versions_db_manager::ESSENTIAL, comp, required_update))
+
+                    update_info required_update;
+                    if (try_parse_update(_versions_db, _update_profile.device_name, ESSENTIAL, comp, required_update))
                     {
                         versions_vec[required_update.ver] = required_update;
-                        // Ignore version zero as an indication of Recovery mode.
-                        update_required = update_required || (current_version < required_update.ver);
+                        update_available = update_available || (current_version < required_update.ver);
                     }
                 }
             }
 
-            return update_required;
+            return update_available;
         }
 
         bool dev_updates_profile::try_parse_update(versions_db_manager& up_handler,
             const std::string& dev_name,
-            versions_db_manager::update_policy_type policy,
-            versions_db_manager::component_part_type part,
-            dev_updates_profile::update_description& result)
+            update_policy_type policy,
+            component_part_type part,
+            dev_updates_profile::update_info& result)
         {
             if (_keep_trying)
             {
                 sw_update::version required_version;
                 auto query_status = up_handler.query_versions(dev_name, part, policy, required_version);
-                if (query_status == versions_db_manager::VERSION_FOUND)
+                if (query_status == VERSION_FOUND)
                 {
                     up_handler.get_version_download_link(part, required_version, result.download_link);
                     up_handler.get_version_release_notes(part, required_version, result.release_page);
@@ -84,14 +83,47 @@ namespace rs2
 
                     std::stringstream ss;
                     ss << std::string(result.ver) << " (" << up_handler.to_string(policy) << ")";
-                    result.name = ss.str();
+                    result.name_for_display = ss.str();
+                    result.policy = policy;
                     return true;
                 }
-                else if (query_status == versions_db_manager::DB_LOAD_FAILURE)
+                else if (query_status == DB_LOAD_FAILURE)
                 {
                     _keep_trying = false;
                 }
 
+            }
+            return false;
+        }
+
+        bool dev_updates_profile::update_profile::get_sw_update(update_policy_type policy, update_info& info) const
+        {
+            auto found = std::find_if(
+                software_versions.begin(),
+                software_versions.end(),
+                [policy](std::pair< sw_update::version, update_info > ver_info) {
+                    return ver_info.second.policy == policy;
+                });
+            if (found != software_versions.end())
+            {
+                info = found->second;
+                return true;
+            }
+            return false;
+        }
+
+        bool dev_updates_profile::update_profile::get_fw_update(update_policy_type policy, update_info& info) const
+        {
+            auto found = std::find_if(
+                firmware_versions.begin(),
+                firmware_versions.end(),
+                [policy](std::pair< sw_update::version, update_info > ver_info) {
+                    return ver_info.second.policy == policy;
+                });
+            if (found != firmware_versions.end())
+            {
+                info = found->second;
+                return true;
             }
             return false;
         }

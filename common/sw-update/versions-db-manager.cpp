@@ -38,7 +38,7 @@ namespace rs2
             "";
 #endif
 
-        versions_db_manager::query_status_type versions_db_manager::query_versions(const std::string &device_name, component_part_type component, const update_policy_type policy, version& out_version)
+        query_status_type versions_db_manager::query_versions(const std::string &device_name, component_part_type component, const update_policy_type policy, version& out_version)
         {
             // Load server versions info on first access
             if (!init())

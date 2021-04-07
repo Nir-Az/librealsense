@@ -241,15 +241,15 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
     {
         // Prepare sorted array of SW updates profiles
         // Assumption - essential updates version <= other policies versions
-        std::vector<dev_updates_profile::update_description> software_updates;
+        std::vector<dev_updates_profile::update_info> software_updates;
         for (auto&& swu : selected_profile.profile.software_versions)
             software_updates.push_back(swu.second);
-        std::sort(software_updates.begin(), software_updates.end(), [](dev_updates_profile::update_description& a, dev_updates_profile::update_description& b) {
+        std::sort(software_updates.begin(), software_updates.end(), [](dev_updates_profile::update_info& a, dev_updates_profile::update_info& b) {
             return a.ver < b.ver;
         });
         if (static_cast<int>(software_updates.size()) <= selected_software_update_index) selected_software_update_index = 0;
 
-        dev_updates_profile::update_description selected_software_update;
+        dev_updates_profile::update_info selected_software_update;
         if (software_updates.size() != 0)
         {
             bool essential_found(false);
@@ -258,13 +258,13 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             {
                 if (!essential_found)
                 {
-                    essential_found = essential_found || sw_update.name.find("ESSENTIAL") != std::string::npos;
+                    essential_found = essential_found || sw_update.name_for_display.find("ESSENTIAL") != std::string::npos;
                     essential_sw_update_needed = essential_sw_update_needed || essential_found && (selected_profile.profile.software_version < sw_update.ver);
                 }
 
                 if (!recommended_found)
                 {
-                    recommended_found = recommended_found || sw_update.name.find("RECOMMENDED") != std::string::npos;
+                    recommended_found = recommended_found || sw_update.name_for_display.find("RECOMMENDED") != std::string::npos;
                     recommended_sw_update_needed = recommended_sw_update_needed || recommended_found && (selected_profile.profile.software_version < sw_update.ver);
                 }
             }
@@ -272,8 +272,8 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             // If essential update found on DB but not needed - Remove it
             if (essential_found && !essential_sw_update_needed)
             {
-                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_description& u) {
-                    return (u.name.find("ESSENTIAL") != std::string::npos);
+                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_info& u) {
+                    return (u.name_for_display.find("ESSENTIAL") != std::string::npos);
                 });
                 if (it != software_updates.end())
                     software_updates.erase(it);
@@ -282,8 +282,8 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             // If recommended update found on DB but not needed - Remove it
             if (recommended_found && !recommended_sw_update_needed)
             {
-                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_description& u) {
-                    return (u.name.find("RECOMMENDED") != std::string::npos);
+                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_info& u) {
+                    return (u.name_for_display.find("RECOMMENDED") != std::string::npos);
                 });
                 if (it != software_updates.end())
                     software_updates.erase(it);
@@ -379,7 +379,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
                 std::vector<const char*> swu_labels;
                 for (auto&& swu : software_updates)
                 {
-                    swu_labels.push_back(swu.name.c_str());
+                    swu_labels.push_back(swu.name_for_display.c_str());
                 }
                 ImGui::PushStyleColor(ImGuiCol_BorderShadow, dark_grey);
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, sensor_bg);
@@ -500,15 +500,15 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
 
     // Prepare sorted array of FW updates profiles
     // Assumption - essential updates version <= other policies versions
-    std::vector<dev_updates_profile::update_description> firmware_updates;
+    std::vector<dev_updates_profile::update_info> firmware_updates;
     for (auto&& swu : selected_profile.profile.firmware_versions)
         firmware_updates.push_back(swu.second);
-    std::sort(firmware_updates.begin(), firmware_updates.end(), [](dev_updates_profile::update_description& a, dev_updates_profile::update_description& b) {
+    std::sort(firmware_updates.begin(), firmware_updates.end(), [](dev_updates_profile::update_info& a, dev_updates_profile::update_info& b) {
         return a.ver < b.ver;
     });
     if (static_cast<int>(firmware_updates.size()) <= selected_firmware_update_index) selected_firmware_update_index = 0;
 
-    dev_updates_profile::update_description selected_firmware_update;
+    dev_updates_profile::update_info selected_firmware_update;
 
     if (firmware_updates.size() != 0)
     {
@@ -519,13 +519,13 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
         {
             if (!essential_found)
             {
-                essential_found = essential_found || fw_update.name.find("ESSENTIAL") != std::string::npos;
+                essential_found = essential_found || fw_update.name_for_display.find("ESSENTIAL") != std::string::npos;
                 essential_fw_update_needed = essential_fw_update_needed || essential_found && (selected_profile.profile.firmware_version < fw_update.ver);
             }
 
             if (!recommended_found)
             {
-                recommended_found = recommended_found || fw_update.name.find("RECOMMENDED") != std::string::npos;
+                recommended_found = recommended_found || fw_update.name_for_display.find("RECOMMENDED") != std::string::npos;
                 recommended_fw_update_needed = recommended_fw_update_needed || recommended_found && (selected_profile.profile.firmware_version < fw_update.ver);
             }
         }
@@ -533,8 +533,8 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
         // If essential update found on DB but not needed - Remove it
         if (essential_found && !essential_fw_update_needed)
         {
-            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_description& u) {
-                return (u.name.find("ESSENTIAL") != std::string::npos);
+            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_info& u) {
+                return (u.name_for_display.find("ESSENTIAL") != std::string::npos);
             });
             if (it != firmware_updates.end())
                 firmware_updates.erase(it);
@@ -543,8 +543,8 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
         // If recommended update found on DB but not needed - Remove it
         if (recommended_found && !recommended_fw_update_needed)
         {
-            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_description& u) {
-                return (u.name.find("RECOMMENDED") != std::string::npos);
+            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_info& u) {
+                return (u.name_for_display.find("RECOMMENDED") != std::string::npos);
             });
             if (it != firmware_updates.end())
                 firmware_updates.erase(it);
@@ -634,7 +634,7 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
                 std::vector<const char*> fwu_labels;
                 for (auto&& fwu : firmware_updates)
                 {
-                    fwu_labels.push_back(fwu.name.c_str());
+                    fwu_labels.push_back(fwu.name_for_display.c_str());
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_BorderShadow, dark_grey);

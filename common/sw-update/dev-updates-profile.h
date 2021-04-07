@@ -20,13 +20,14 @@ namespace rs2
         {
         public:
 
-            struct update_description
+            struct update_info
             {
                 sw_update::version ver;
-                std::string name;
+                std::string name_for_display;
                 std::string release_page;
                 std::string download_link;
                 std::string description;
+                update_policy_type policy;
             };
 
             struct update_profile
@@ -37,13 +38,16 @@ namespace rs2
                 sw_update::version software_version;
                 sw_update::version firmware_version;
 
-                std::map<sw_update::version, update_description> software_versions;
-                std::map<sw_update::version, update_description> firmware_versions;
+                std::map<sw_update::version, update_info> software_versions;
+                std::map<sw_update::version, update_info> firmware_versions;
 
                 device dev;
                 bool dev_active;
 
                 update_profile() :dev_active(true){};
+
+                bool get_sw_update(update_policy_type policy, update_info& info) const;
+                bool get_fw_update(update_policy_type policy, update_info& info) const;
 
             };
 
@@ -51,15 +55,15 @@ namespace rs2
 
             ~dev_updates_profile() {};
 
-            bool retrieve_updates(versions_db_manager::component_part_type comp, std::pair<sw_update::version, dev_updates_profile::update_description>& recommended_version);
+            bool retrieve_updates(component_part_type comp);
             update_profile & get_update_profile() { return _update_profile; };
 
         private:
             bool try_parse_update(versions_db_manager& up_handler,
                 const std::string& dev_name,
-                versions_db_manager::update_policy_type policy,
-                versions_db_manager::component_part_type part,
-                update_description& result);
+                update_policy_type policy,
+                component_part_type part,
+                update_info& result);
 
 
             versions_db_manager _versions_db;

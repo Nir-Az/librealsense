@@ -15,6 +15,11 @@ namespace rs2
 
     namespace sw_update
     {
+        enum update_policy_type { EXPERIMENTAL, RECOMMENDED, ESSENTIAL };
+        enum component_part_type { LIBREALSENSE, VIEWER, DEPTH_QUALITY_TOOL, FIRMWARE };
+        enum update_source_type { FROM_FILE, FROM_SERVER };
+        enum query_status_type { VERSION_FOUND, NO_VERSION_FOUND, DB_LOAD_FAILURE };
+
         struct version
         {
             int mjor, mnor, patch, build;
@@ -89,11 +94,6 @@ namespace rs2
         {
         public:
            
-            enum update_policy_type { EXPERIMENTAL, RECOMMENDED, ESSENTIAL };
-            enum component_part_type { LIBREALSENSE, VIEWER, DEPTH_QUALITY_TOOL, FIRMWARE };
-            enum update_source_type { FROM_FILE, FROM_SERVER };
-            enum query_status_type { VERSION_FOUND, NO_VERSION_FOUND, DB_LOAD_FAILURE };
-
             explicit versions_db_manager(const std::string &url, const bool use_url_as_local_path = false, http::user_callback_func_type download_callback = http::user_callback_func_type())
                 : _dev_info_url(url), _local_source_file(use_url_as_local_path), _server_versions_vec(), _server_versions_loaded(false), _download_cb_func(download_callback) {};
 
