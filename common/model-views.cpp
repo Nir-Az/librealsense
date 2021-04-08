@@ -4799,7 +4799,6 @@ namespace rs2
 
             auto n = std::make_shared<fw_update_notification_model>(
                 "Manual Update requested", manager, true);
-            n->forced = true;
             viewer.not_model->add_notification(n);
 
             for (auto&& n : related_notifications)
@@ -4850,7 +4849,6 @@ namespace rs2
             auto n = std::make_shared<fw_update_notification_model>(
                 "Manual Update requested", manager, true);
             viewer.not_model->add_notification(n);
-            n->forced = true;
 
             for (auto&& n : related_notifications)
                 n->dismiss(false);
