@@ -100,7 +100,7 @@ namespace rs2
         }
 
 
-        std::string versions_db_manager::to_string(const component_part_type& component) const
+        std::string to_string(const component_part_type& component)
         {
             switch (component)
             {
@@ -116,7 +116,7 @@ namespace rs2
             return "";
         }
 
-        std::string versions_db_manager::to_string(const update_policy_type& policy) const
+        std::string to_string(const update_policy_type& policy)
         {
 
             switch (policy)
@@ -132,7 +132,7 @@ namespace rs2
             return "";
         }
 
-        bool versions_db_manager::from_string(std::string component_str, component_part_type& component_val) const
+        bool from_string(std::string component_str, component_part_type& component_val)
         {
             static std::unordered_map<std::string, component_part_type> map =
             { {"LIBREALSENSE",LIBREALSENSE},
@@ -150,7 +150,7 @@ namespace rs2
             LOG_ERROR("Unknown component type: " + component_str);
             return false;
         }
-        bool versions_db_manager::from_string(std::string policy_str, update_policy_type& policy_val) const
+        bool from_string(std::string policy_str, update_policy_type& policy_val)
         {
             static std::unordered_map<std::string, update_policy_type> map =
             { {"EXPERIMENTAL",EXPERIMENTAL},

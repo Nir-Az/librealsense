@@ -4912,7 +4912,7 @@ namespace rs2
                             this);
 
                         // For essential policy we don't need the update info, if essential update exist we take the whole update profile for full updates display
-                        dev_updates_profile::update_info dummy_update_info;
+                        dev_updates_profile::version_info dummy_update_info;
                         if (update_profile->get_sw_update(sw_update::ESSENTIAL, dummy_update_info) || update_profile->get_fw_update(sw_update::ESSENTIAL, dummy_update_info))
                         {
                             if (auto viewer_updates = updates_model_protected.lock())
@@ -4927,7 +4927,7 @@ namespace rs2
                             {
                                 if (auto nm = notification_model_protected.lock())
                                 {
-                                    dev_updates_profile::update_info recommended_sw_update_info;
+                                    dev_updates_profile::version_info recommended_sw_update_info;
                                     update_profile->get_sw_update(sw_update::RECOMMENDED, recommended_sw_update_info);
                                     auto n = std::make_shared< sw_recommended_update_alert_model >(
                                         RS2_API_FULL_VERSION_STR,
@@ -4955,7 +4955,7 @@ namespace rs2
 
                                     // Try to download the recommended FW binary file
                                     int download_retries = 3;
-                                    dev_updates_profile::update_info recommended_fw_update_info;
+                                    dev_updates_profile::version_info recommended_fw_update_info;
                                     update_profile->get_fw_update(sw_update::RECOMMENDED, recommended_fw_update_info);
     
                                     while (download_retries > 0)

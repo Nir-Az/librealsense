@@ -241,15 +241,15 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
     {
         // Prepare sorted array of SW updates profiles
         // Assumption - essential updates version <= other policies versions
-        std::vector<dev_updates_profile::update_info> software_updates;
+        std::vector<dev_updates_profile::version_info> software_updates;
         for (auto&& swu : selected_profile.profile.software_versions)
             software_updates.push_back(swu.second);
-        std::sort(software_updates.begin(), software_updates.end(), [](dev_updates_profile::update_info& a, dev_updates_profile::update_info& b) {
+        std::sort(software_updates.begin(), software_updates.end(), [](dev_updates_profile::version_info& a, dev_updates_profile::version_info& b) {
             return a.ver < b.ver;
         });
         if (static_cast<int>(software_updates.size()) <= selected_software_update_index) selected_software_update_index = 0;
 
-        dev_updates_profile::update_info selected_software_update;
+        dev_updates_profile::version_info selected_software_update;
         if (software_updates.size() != 0)
         {
             bool essential_found(false);
@@ -272,7 +272,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             // If essential update found on DB but not needed - Remove it
             if (essential_found && !essential_sw_update_needed)
             {
-                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_info& u) {
+                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::version_info& u) {
                     return (u.name_for_display.find("ESSENTIAL") != std::string::npos);
                 });
                 if (it != software_updates.end())
@@ -282,7 +282,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
             // If recommended update found on DB but not needed - Remove it
             if (recommended_found && !recommended_sw_update_needed)
             {
-                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::update_info& u) {
+                auto it = std::find_if(software_updates.begin(), software_updates.end(), [&](dev_updates_profile::version_info& u) {
                     return (u.name_for_display.find("RECOMMENDED") != std::string::npos);
                 });
                 if (it != software_updates.end())
@@ -500,15 +500,15 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
 
     // Prepare sorted array of FW updates profiles
     // Assumption - essential updates version <= other policies versions
-    std::vector<dev_updates_profile::update_info> firmware_updates;
+    std::vector<dev_updates_profile::version_info> firmware_updates;
     for (auto&& swu : selected_profile.profile.firmware_versions)
         firmware_updates.push_back(swu.second);
-    std::sort(firmware_updates.begin(), firmware_updates.end(), [](dev_updates_profile::update_info& a, dev_updates_profile::update_info& b) {
+    std::sort(firmware_updates.begin(), firmware_updates.end(), [](dev_updates_profile::version_info& a, dev_updates_profile::version_info& b) {
         return a.ver < b.ver;
     });
     if (static_cast<int>(firmware_updates.size()) <= selected_firmware_update_index) selected_firmware_update_index = 0;
 
-    dev_updates_profile::update_info selected_firmware_update;
+    dev_updates_profile::version_info selected_firmware_update;
 
     if (firmware_updates.size() != 0)
     {
@@ -533,7 +533,7 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
         // If essential update found on DB but not needed - Remove it
         if (essential_found && !essential_fw_update_needed)
         {
-            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_info& u) {
+            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::version_info& u) {
                 return (u.name_for_display.find("ESSENTIAL") != std::string::npos);
             });
             if (it != firmware_updates.end())
@@ -543,7 +543,7 @@ bool updates_model::draw_firmware_section(std::shared_ptr<notifications_model> n
         // If recommended update found on DB but not needed - Remove it
         if (recommended_found && !recommended_fw_update_needed)
         {
-            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::update_info& u) {
+            auto it = std::find_if(firmware_updates.begin(), firmware_updates.end(), [&](dev_updates_profile::version_info& u) {
                 return (u.name_for_display.find("RECOMMENDED") != std::string::npos);
             });
             if (it != firmware_updates.end())

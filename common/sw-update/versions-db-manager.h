@@ -20,6 +20,12 @@ namespace rs2
         enum update_source_type { FROM_FILE, FROM_SERVER };
         enum query_status_type { VERSION_FOUND, NO_VERSION_FOUND, DB_LOAD_FAILURE };
 
+
+        std::string to_string(const component_part_type& component) ;
+        std::string to_string(const update_policy_type& policy) ;
+        bool from_string(std::string component_str, component_part_type& component_val) ;
+        bool from_string(std::string policy_str, update_policy_type& policy_val) ;
+
         struct version
         {
             int mjor, mnor, patch, build;
@@ -103,11 +109,6 @@ namespace rs2
             bool get_version_download_link(const component_part_type component, const version& version, std::string& dl_link) { return get_version_data_common(component, version, "link", dl_link); };
             bool get_version_release_notes(const component_part_type component, const version& version, std::string& version_release_notes_link) { return get_version_data_common(component, version, "release_notes_link", version_release_notes_link); };
             bool get_version_description(const component_part_type component, const version& version, std::string& version_description) { return get_version_data_common(component, version, "description", version_description); };
-
-            std::string to_string(const component_part_type& component) const;
-            std::string to_string(const update_policy_type& policy) const;
-            bool from_string(std::string component_str, component_part_type& component_val) const;
-            bool from_string(std::string policy_str, update_policy_type& policy_val) const;
 
         private:
             struct server_version_type

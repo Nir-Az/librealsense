@@ -20,7 +20,7 @@ namespace rs2
         {
         public:
 
-            struct update_info
+            struct version_info
             {
                 sw_update::version ver;
                 std::string name_for_display;
@@ -38,16 +38,17 @@ namespace rs2
                 sw_update::version software_version;
                 sw_update::version firmware_version;
 
-                std::map<sw_update::version, update_info> software_versions;
-                std::map<sw_update::version, update_info> firmware_versions;
+                typedef std::map< const sw_update::version, version_info > version_to_info;
+                version_to_info software_versions;
+                version_to_info firmware_versions;
 
                 device dev;
                 bool dev_active;
 
                 update_profile() :dev_active(true){};
 
-                bool get_sw_update(update_policy_type policy, update_info& info) const;
-                bool get_fw_update(update_policy_type policy, update_info& info) const;
+                bool get_sw_update(update_policy_type policy, version_info& info) const;
+                bool get_fw_update(update_policy_type policy, version_info& info) const;
 
             };
 
@@ -63,7 +64,7 @@ namespace rs2
                 const std::string& dev_name,
                 update_policy_type policy,
                 component_part_type part,
-                update_info& result);
+                version_info& result);
 
 
             versions_db_manager _versions_db;

@@ -29,30 +29,38 @@ namespace rs2
 
         bool dev_updates_profile::retrieve_updates(component_part_type comp)
         {
+            // throw on unsupported components (Not implemented yet)
+            if (comp != LIBREALSENSE && comp != FIRMWARE)
+            {
+                std::string error_str("update component: " + sw_update::to_string(comp) + " not supported");
+                throw std::runtime_error(error_str);
+            }
+
             bool update_available(false);
 
+            // We expect to get here in recovery mode (on firmware update flow) and therefore do not want to throw...
             if (_update_profile.device_name.find("Recovery") == std::string::npos)
             {
-                std::map<version, update_info>& versions_vec((comp == FIRMWARE) ?
+                auto &versions_vec((comp == FIRMWARE) ?
                     _update_profile.firmware_versions : _update_profile.software_versions);
 
                 version& current_version((comp == FIRMWARE) ? _update_profile.firmware_version : _update_profile.software_version);
                 {
-                    update_info experimental_update;
+                    version_info experimental_update;
                     if (try_parse_update(_versions_db, _update_profile.device_name, EXPERIMENTAL, comp, experimental_update))
                     {
                         versions_vec[experimental_update.ver] = experimental_update;
                         update_available = update_available || current_version < experimental_update.ver;
                     }
 
-                    update_info recommened_update;
+                    version_info recommened_update;
                     if (try_parse_update(_versions_db, _update_profile.device_name, RECOMMENDED, comp, recommened_update))
                     {
                         versions_vec[recommened_update.ver] = recommened_update;
                         update_available = update_available || current_version < recommened_update.ver;
                     }
 
-                    update_info required_update;
+                    version_info required_update;
                     if (try_parse_update(_versions_db, _update_profile.device_name, ESSENTIAL, comp, required_update))
                     {
                         versions_vec[required_update.ver] = required_update;
@@ -68,7 +76,7 @@ namespace rs2
             const std::string& dev_name,
             update_policy_type policy,
             component_part_type part,
-            dev_updates_profile::update_info& result)
+            dev_updates_profile::version_info& result)
         {
             if (_keep_trying)
             {
@@ -82,7 +90,7 @@ namespace rs2
                     result.ver = required_version;
 
                     std::stringstream ss;
-                    ss << std::string(result.ver) << " (" << up_handler.to_string(policy) << ")";
+                    ss << std::string(result.ver) << " (" << sw_update::to_string(policy) << ")";
                     result.name_for_display = ss.str();
                     result.policy = policy;
                     return true;
@@ -96,15 +104,15 @@ namespace rs2
             return false;
         }
 
-        bool dev_updates_profile::update_profile::get_sw_update(update_policy_type policy, update_info& info) const
+        bool dev_updates_profile::update_profile::get_sw_update( update_policy_type policy,
+                                                                 version_info & info ) const
         {
-            auto found = std::find_if(
-                software_versions.begin(),
-                software_versions.end(),
-                [policy](std::pair< sw_update::version, update_info > ver_info) {
-                    return ver_info.second.policy == policy;
-                });
-            if (found != software_versions.end())
+            auto found = std::find_if( software_versions.begin(),
+                                       software_versions.end(),
+                                       [policy]( const version_to_info::value_type & ver_info ) {
+                                           return ver_info.second.policy == policy;
+                                       } );
+            if( found != software_versions.end() )
             {
                 info = found->second;
                 return true;
@@ -112,15 +120,15 @@ namespace rs2
             return false;
         }
 
-        bool dev_updates_profile::update_profile::get_fw_update(update_policy_type policy, update_info& info) const
+        bool dev_updates_profile::update_profile::get_fw_update( update_policy_type policy,
+                                                                 version_info & info ) const
         {
-            auto found = std::find_if(
-                firmware_versions.begin(),
-                firmware_versions.end(),
-                [policy](std::pair< sw_update::version, update_info > ver_info) {
-                    return ver_info.second.policy == policy;
-                });
-            if (found != firmware_versions.end())
+            auto found = std::find_if( firmware_versions.begin(),
+                                       firmware_versions.end(),
+                                       [policy]( const version_to_info::value_type & ver_info ) {
+                                           return ver_info.second.policy == policy;
+                                       } );
+            if( found != firmware_versions.end() )
             {
                 info = found->second;
                 return true;
