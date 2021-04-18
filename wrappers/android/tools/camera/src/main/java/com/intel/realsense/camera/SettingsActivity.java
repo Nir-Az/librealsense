@@ -33,6 +33,7 @@ import com.intel.realsense.librealsense.Updatable;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -60,10 +61,6 @@ public class SettingsActivity extends AppCompatActivity {
     private Device _device;
 
     private boolean areAdvancedFeaturesEnabled = false; // advanced features (fw logs, terminal etc.)
-    ExpandableListView expandableListView;
-    InfoExpandableListAdapter expandableListAdapter;
-    List<String> expandableListTitle;
-    HashMap<String, List<String>> expandableListDetail;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -120,7 +117,7 @@ public class SettingsActivity extends AppCompatActivity {
         String appVersion = "Camera App Version: " + BuildConfig.VERSION_NAME;
         String lrsVersion = "LibRealSense Version: " + RsContext.getVersion();
 
-        expandableListDetail = new HashMap<String, List<String>>();
+        HashMap<String, List<String>> expandableListDetail = new HashMap<String, List<String>>();
 
         List<String> info = new ArrayList<String>();
         info.add(appVersion);
@@ -128,16 +125,16 @@ public class SettingsActivity extends AppCompatActivity {
 
         expandableListDetail.put("Info", info);
 
-        expandableListView = findViewById(R.id.info_ex_list_view);
-        expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
-        expandableListAdapter = new InfoExpandableListAdapter(this, expandableListTitle, expandableListDetail);
+        ExpandableListView expandableListView = findViewById(R.id.info_ex_list_view);
+        List<String> expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
+        SettingsExListAdapter expandableListAdapter = new SettingsExListAdapter(this, expandableListTitle, expandableListDetail);
         expandableListView.setAdapter(expandableListAdapter);
     }
 
     private void loadSettingsList(final Device device){
-        final ListView listview = findViewById(R.id.settings_list_view);
 
         final Map<Integer,String> settingsMap = new TreeMap<>();
+
         settingsMap.put(INDEX_DEVICE_INFO,"Device info");
 
         if(device.supportsInfo(CameraInfo.ADVANCED_MODE)) {
@@ -170,17 +167,26 @@ public class SettingsActivity extends AppCompatActivity {
 
         final String[] settings = new String[settingsMap.values().size()];
         settingsMap.values().toArray(settings);
-        final ArrayAdapter adapter = new ArrayAdapter<>(this, R.layout.files_list_view, settings);
-        listview.setAdapter(adapter);
 
-        listview.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        // Create expandable list view
+        ExpandableListView expandableListView = findViewById(R.id.settings_ex_list_view);
+        HashMap<String, List<String>> expandableListDetail = new HashMap<String, List<String>>();
+        List<String> settings_group = Arrays.asList(settings);
+        expandableListDetail.put("Settings",settings_group);
+        List<String> expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
+
+        SettingsExListAdapter expandableListAdapter = new SettingsExListAdapter(this, expandableListTitle, expandableListDetail);
+
+        expandableListView.setAdapter(expandableListAdapter);
+
+        expandableListView.setOnChildClickListener(new ExpandableListView.OnChildClickListener() {
 
             @Override
-            public void onItemClick(AdapterView<?> parent, final View view,
-                                    int position, long id) {
+            public boolean  onChildClick(ExpandableListView parent, View v,
+                                     int groupPosition, int childPosition, long id) {
                 Object[] keys = settingsMap.keySet().toArray();
 
-                switch ((int)keys[position]){
+                switch ((int)keys[childPosition]){
                     case INDEX_DEVICE_INFO: {
                         Intent intent = new Intent(SettingsActivity.this, InfoActivity.class);
                         startActivity(intent);
@@ -225,6 +231,7 @@ public class SettingsActivity extends AppCompatActivity {
                     default:
                         break;
                 }
+                return true;
             }
         });
     }
