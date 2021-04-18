@@ -327,9 +327,20 @@ public class SettingsActivity extends AppCompatActivity {
         if(!device.supportsInfo(CameraInfo.PRODUCT_ID))
             throw new RuntimeException("try to config unknown device");
 
-        StreamProfileSelector[] lines = streamProfiles.toArray(new StreamProfileSelector[streamProfiles.size()]);
+        StreamProfileSelector[] streamProfilesArray = streamProfiles.toArray(new StreamProfileSelector[streamProfiles.size()]);
+        List<String> settings_group = new ArrayList<String>();
+        for (int i = 0; i < streamProfilesArray.length ; i++) {
+            settings_group.add(streamProfilesArray[i].getName());
+        }
+        // Create expandable list view
+        ExpandableListView streamListView = findViewById(R.id.configuration_ex_list_view);
+        HashMap<String, List<String>> expandableListDetail = new HashMap<String, List<String>>();
+
+        expandableListDetail.put("Configuration:(disable all for default)",settings_group);
+        List<String> expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
+
         final String pid = device.getInfo(CameraInfo.PRODUCT_ID);
-        final StreamProfileAdapter adapter = new StreamProfileAdapter(this, lines, new StreamProfileAdapter.Listener() {
+        final StreamProfileAdapter adapter = new StreamProfileAdapter(this, expandableListTitle, expandableListDetail, streamProfilesArray, new StreamProfileAdapter.Listener() {
             @Override
             public void onCheckedChanged(StreamProfileSelector holder) {
                 SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
@@ -341,7 +352,6 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
-        ListView streamListView = findViewById(R.id.configuration_list_view);
         streamListView.setAdapter(adapter);
         adapter.notifyDataSetChanged();
     }
