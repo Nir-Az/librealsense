@@ -458,14 +458,14 @@ namespace librealsense
 
         try {
             LOG_INFO("entering to update state, device disconnect is expected");
+
             command cmd(ivcam2::DFU);
             cmd.param1 = 1;
             _hw_monitor->send(cmd);
             std::vector<uint8_t> gvd_buff(HW_MONITOR_BUFFER_SIZE);
             for (auto i = 0; i < 50; i++)
             {
-
-                _hw_monitor->get_gvd(gvd_buff.size(), gvd_buff.data(), GVD);
+                is_valid();
                 this_thread::sleep_for(milliseconds(50));
             }
             throw std::runtime_error("Device still connected!");

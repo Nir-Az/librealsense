@@ -136,7 +136,7 @@ namespace librealsense
             return std::make_shared<rs500_device>(ctx, group, register_device_notifications);
         case L515_PID_PRE_PRQ:
         case L515_PID:
-            return std::make_shared<l515_device>(ctx, group, register_device_notifications);
+            return std::make_shared<l515_device>(ctx, group, true/*register_device_notifications*/ );
         case L535_PID:
             return std::make_shared<l535_device>(ctx, group, register_device_notifications);
        default:
