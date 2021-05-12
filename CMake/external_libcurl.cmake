@@ -11,7 +11,8 @@ if(CHECK_FOR_UPDATES)
     if (WIN32)
         set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_SCHANNEL=ON )
     else()
-        set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_OPENSSL=ON )
+        find_package(OpenSSL REQUIRED)
+        set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR})
     endif()
     
     ExternalProject_Add(
@@ -53,7 +54,6 @@ if(CHECK_FOR_UPDATES)
     if (WIN32)
         target_link_libraries(curl INTERFACE ws2_32.lib crypt32.lib)
     else()
-        find_package(OpenSSL REQUIRED)
         target_link_libraries(curl INTERFACE OpenSSL::SSL OpenSSL::Crypto)
     endif()
 
