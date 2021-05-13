@@ -12,7 +12,7 @@ if(CHECK_FOR_UPDATES)
         set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_SCHANNEL=ON )
     else()
         find_package(OpenSSL REQUIRED)
-        set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR})
+        set(CURL_FLAGS ${CURL_FLAGS} -DCMAKE_USE_OPENSSL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib)
     endif()
     
     ExternalProject_Add(
