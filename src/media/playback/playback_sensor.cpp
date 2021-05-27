@@ -162,7 +162,7 @@ void playback_sensor::stop(bool invoke_required)
 }
 void playback_sensor::stop()
 {
-    stop(true);
+    stop(false);
 }
 
 bool playback_sensor::is_streaming() const
