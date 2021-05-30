@@ -614,15 +614,22 @@ void playback_device::try_looping()
                 LOG_WARNING("Bad frame from reader, ignoring");
                 return true;
             }
+            auto it = m_active_sensors.find(frame->stream_id.sensor_index);
+            if (it == m_active_sensors.end())
+            {
+                LOG_DEBUG("stream " << frame->stream_id.sensor_index << " is not longer active, frame dropped!");
+                return true;
+            }
+
             //Dispatch frame to the relevant sensor (see handle_frame definition for more details)
-            m_active_sensors.at(frame->stream_id.sensor_index)->handle_frame(std::move(frame->frame), m_real_time,
-                [this, timestamp]() { return calc_sleep_time(timestamp); },
-                [this]() { return m_is_paused == true; },
-                [this, timestamp]()
-                {
-                    std::lock_guard<std::mutex> locker(m_last_published_timestamp_mutex);
-                    m_last_published_timestamp = timestamp;
-                });
+            it->second->handle_frame(std::move(frame->frame), m_real_time,
+            [this, timestamp]() { return calc_sleep_time(timestamp); },
+            [this]() { return m_is_paused == true; },
+            [this, timestamp]()
+            {
+                std::lock_guard<std::mutex> locker(m_last_published_timestamp_mutex);
+                m_last_published_timestamp = timestamp;
+            });
             return true;
         }
 
