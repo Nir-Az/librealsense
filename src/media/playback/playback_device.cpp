@@ -215,10 +215,14 @@ std::shared_ptr<matcher> playback_device::create_matcher(const frame_holder& fra
         }
     }
     
-    auto ts_matchers = std::make_shared<timestamp_composite_matcher>(sync_matchers);
-    auto i_matchers = std::make_shared<composite_identity_matcher>(non_sync_matchers);
+    std::vector<std::shared_ptr<matcher>> all_matchers;
 
-    std::vector<std::shared_ptr<matcher>> all_matchers = { ts_matchers, i_matchers };
+    if (!sync_matchers.empty())
+       all_matchers.push_back(std::make_shared<timestamp_composite_matcher>(sync_matchers));
+
+    if (!non_sync_matchers.empty())
+        all_matchers.insert(all_matchers.end(), non_sync_matchers.begin(), non_sync_matchers.end());
+
     return std::make_shared<composite_identity_matcher>(all_matchers);
 }
 
