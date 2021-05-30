@@ -59,7 +59,7 @@ def depth_frame_call_back( frame ):
     test.check_frame_drops( frame, previous_depth_frame_number )
     previous_depth_frame_number = frame.get_frame_number()
 
-def restart_profiles():
+def restart_profiles( force_fps = None , force_low_res = False):
     """
     You can't use the same profile twice, but we need the same profile several times. So this function resets the
     profiles with the given parameters to allow quick profile creation
@@ -67,11 +67,17 @@ def restart_profiles():
     global cp, dp, color_sensor, depth_sensor
     global color_format, color_fps, color_width, color_height
     global depth_format, depth_fps, depth_width, depth_height
+
+    if force_fps:
+        color_fps = depth_fps = force_fps
+
     cp = next( p for p in color_sensor.profiles if p.fps() == color_fps
                and p.stream_type() == rs.stream.color
                and p.format() == color_format
-               and p.as_video_stream_profile().width() == color_width
-               and p.as_video_stream_profile().height() == color_height )
+               and ((force_low_res and p.as_video_stream_profile().width() < color_width) or
+                    (not force_low_res and p.as_video_stream_profile().width() == color_width))
+               and ((force_low_res and p.as_video_stream_profile().height() < color_height) or
+                    (not force_low_res and p.as_video_stream_profile().height() == color_height)))
 
     dp = next( p for p in depth_sensor.profiles if p.fps() == depth_fps
                and p.stream_type() == rs.stream.depth
@@ -119,7 +125,7 @@ try:
     cfg = rs.config()
     cfg.enable_record_to_file( file_name )
     pipeline.start( cfg )
-    time.sleep(3)
+    time.sleep(5)
     pipeline.stop()
     # we create a new pipeline and use it to playback from the file we just recoded to
     pipeline = rs.pipeline()
@@ -153,7 +159,7 @@ try:
     color_sensor.open( cp )
     color_sensor.start( lambda f: None )
 
-    time.sleep(3)
+    time.sleep(5)
 
     recorder.pause()
     recorder = None
@@ -174,8 +180,7 @@ try:
     depth_sensor.start( depth_frame_call_back )
     color_sensor.open( cp )
     color_sensor.start( color_frame_call_back )
-
-    time.sleep(3)
+    time.sleep(5)
 
     # if record and playback worked we will receive frames, the callback functions will be called and got-frames
     # will be True. If the record and playback failed it will be false
@@ -206,14 +211,16 @@ try:
     depth_sensor = dev.first_depth_sensor()
     color_sensor = dev.first_color_sensor()
 
-    restart_profiles()
+    # When using a frames syncer we want to use same FPS on synced streams,
+    # we also want low resolution in order for the recorder to succeed recording all frames with no drops
+    restart_profiles( force_fps = 30 , force_low_res = True)
 
     depth_sensor.open( dp )
     depth_sensor.start( sync )
     color_sensor.open( cp )
     color_sensor.start( sync )
 
-    time.sleep(3)
+    time.sleep(5)
 
     recorder.pause()
     recorder = None
@@ -228,15 +235,24 @@ try:
     depth_sensor = playback.first_depth_sensor()
     color_sensor = playback.first_color_sensor()
 
-    restart_profiles()
+    restart_profiles( force_fps = 30 , force_low_res = True)
 
     depth_sensor.open( dp )
     depth_sensor.start( sync )
     color_sensor.open( cp )
     color_sensor.start( sync )
 
-    # if the record-playback worked we will get frames, otherwise the next line will timeout and throw
-    sync.wait_for_frames()
+    # if record-playback used a syncer we should get 2 frames in most framesets
+    sync_frames_cnt = 0
+    for count in range( depth_fps ):
+        frames = sync.wait_for_frames()
+        log.d("frames.size():",frames.size())
+        for frame in frames:
+            log.d(frame.profile.stream_type, frame.get_frame_number() ,frame.get_timestamp())
+        if frames.size() > 1:
+            sync_frames_cnt += 1
+    log.d(sync_frames_cnt, "synced framesets out of", depth_fps)
+    test.check( sync_frames_cnt > depth_fps / 2 ) # more than 50% of the frames are synced
 except Exception:
     test.unexpected_exception()
 finally: # we must remove all references to the file so the temporary folder can be deleted
