@@ -284,7 +284,7 @@ def check_frame_drops(frame, previous_frame_number, allowed_drops = 1):
     if previous_frame_number > 0:
         dropped_frames = frame_number - (previous_frame_number + 1)
         if dropped_frames > allowed_drops:
-            print( dropped_frames, "frame(s) starting from frame", previous_frame_number + 1, "were dropped" )
+            print("{} frame(s) starting from frame {} were dropped ({})".format(dropped_frames, previous_frame_number + 1, frame.get_profile().stream_type()))
             failed = True
         elif dropped_frames < 0:
             print( "Frames repeated or out of order. Got frame", frame_number, "after frame",
