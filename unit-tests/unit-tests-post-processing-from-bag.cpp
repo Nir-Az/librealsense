@@ -225,6 +225,12 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         }
     }
 
+    for (auto s : sensors)
+    {
+        s.stop();
+        s.close();
+    }
+
     return composite_frames;
 }
 
@@ -250,6 +256,12 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
     while (frames.size() < sensors.size())
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+
+    for (auto s : sensors)
+    {
+        s.stop();
+        s.close();
     }
 
     return frames;
@@ -293,7 +305,7 @@ void record_frames_all_res(processing_recordable_block& record_block, std::strin
     std::vector<rs2::sensor> sensors = dev.query_sensors();
     auto original_frames = get_composite_frames(sensors);
 
-    std::cout << "Recieved all recorded composite frames" << std::endl;
+    std::cout << "Received all recorded composite frames" << std::endl;
 
     std::vector<rs2::frame> processed_frames;
     std::vector<std::string> sensor_names;
@@ -314,7 +326,7 @@ void record_frames_all_res(processing_recordable_block& record_block, std::strin
     auto sctx = init_sw_device(sensor_names, processed_frames);
     rs2::recorder recorder(folder_name + file, sctx.sdev);
 
-    std::cout << "SW device initilized" << std::endl;
+    std::cout << "SW device initialized" << std::endl;
 
     for (int i = 0; i < processed_frames.size(); i++)
     {
@@ -322,11 +334,6 @@ void record_frames_all_res(processing_recordable_block& record_block, std::strin
     }
     std::cout << "All frames were recorded" << std::endl;
 
-    for (auto s : sensors)
-    {
-        s.stop();
-        s.close();
-    }
     std::cout << "Done" << std::endl;
 }
 
@@ -368,8 +375,8 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
     dev.set_real_time(false);
 
     std::vector<rs2::sensor> sensors = dev.query_sensors();
-    auto frames = get_composite_frames(sensors);
 
+    auto frames = get_composite_frames(sensors);
 
     auto ref_dev = ctx.load_device(folder_name + file);
     ref_dev.set_real_time(false);
@@ -395,18 +402,6 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
             std::setw(6) << std::chrono::duration_cast<std::chrono::microseconds>(done - started).count() << " us]" << std::endl;
 
         validate_ppf_results(fs_res, ref_frames[i]);
-    }
-
-    for (auto s : sensors)
-    {
-        s.stop();
-        s.close();
-    }
-
-    for (auto s : ref_sensors)
-    {
-        s.stop();
-        s.close();
     }
 }
 
