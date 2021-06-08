@@ -16,6 +16,36 @@
 
 # define SECTION_FROM_TEST_NAME space_to_underscore(Catch::getCurrentContext().getResultCapture()->getCurrentTestName()).c_str()
 
+std::string frame_to_string(const rs2::frame& f)
+{
+    std::ostringstream s;
+
+    if (!&f)
+    {
+        s << "[null]";
+    }
+    else
+    {
+        auto composite = f.as<rs2::frameset>();
+        if (composite)
+        {
+            s << "[";
+            composite.foreach_rs([&](const rs2::frame& f) {s << frame_to_string(f); });
+            s << "]";
+        }
+        else
+        {
+            auto profile = f.get_profile();
+            s << "[" << profile.stream_type();
+            s << "/" << profile.unique_id();
+            s << " #" << f.get_frame_number();
+            s << " @" << std::fixed << (double)f.get_timestamp();
+            s << "]";
+        }
+    }
+    return s.str();
+}
+
 typedef struct _sw_context
 {
 
@@ -194,7 +224,10 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         frames.push_back(data);
         if (frames.size() == 2)
         {
+            std::cout << "before frame_ready" << std::endl;
             source.frame_ready(source.allocate_composite_frame(frames));
+            std::cout << "after frame_ready" << std::endl;
+
             frames.clear();
         }
     });
@@ -215,18 +248,24 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         });
     }
 
-    while (composite_frames.size() < sensors.size())
+    while (composite_frames.size() < 16/*sensors.size()*/)
     {
         rs2::frameset composite_fs;
         if (postprocessed_frames.try_wait_for_frame(&composite_fs))
         {
+            std::cout << "composite before keep" << std::endl;
             composite_fs.keep();
+            std::cout << "composite after keep" << std::endl;
             composite_frames.push_back(composite_fs);
+            std::cout << "composite - after composite_frames.push_back" << std::endl;
+
         }
     }
 
+    int i = 0;
     for (auto s : sensors)
     {
+        std::cout << "stopping sensor " << i++ << std::endl;
         s.stop();
         s.close();
     }
@@ -249,16 +288,19 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
         s.start([&](rs2::frame f)
         {
             std::lock_guard<std::mutex> lock(frames_lock);
-            f.keep();
-            frames.push_back(f);
+            if (frames.size() < 16)
+            {
+                f.keep();
+                frames.push_back(f);
+            }
         });
     }
 
-    while (frames.size() < sensors.size())
+    while (frames.size() < 16/*sensors.size()*/)
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-
+    std::cout << ":frames.size() = sensors.size()" << std::endl;
     for (auto s : sensors)
     {
         s.stop();
@@ -372,30 +414,41 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
 
     std::string folder_name = get_folder_path(special_folder::temp_folder);
 
+    std::cout << "loading first device from file" << std::endl;
     auto dev = ctx.load_device(folder_name + "all_combinations_depth_color.bag");
     dev.set_real_time(false);
 
     std::vector<rs2::sensor> sensors = dev.query_sensors();
+    std::cout << "calling get_composite_frames" << std::endl;
 
     auto frames = get_composite_frames(sensors);
+
+    std::cout << "loading second device from file" << std::endl;
 
     auto ref_dev = ctx.load_device(folder_name + file);
     ref_dev.set_real_time(false);
 
     std::vector<rs2::sensor> ref_sensors = ref_dev.query_sensors();
+    std::cout << "calling get_frames" << std::endl;
+
     auto ref_frames = get_frames(ref_sensors);
     CAPTURE(ref_frames.size());
     CAPTURE(frames.size());
     REQUIRE(ref_frames.size() == frames.size());
-    std::cout << "---------------------------------------------------------------------------------------------\n";
-    std::cout << "Calculated time interval to process frame\n";
-    std::cout << "---------------------------------------------------------------------------------------------\n";
+    std::cout << "---------------------------------------------------------------------------------------------" << std::endl;
+    std::cout << "Calculated time interval to process frame" << std::endl;
+    std::cout << "---------------------------------------------------------------------------------------------" << std::endl;
     for (int i = 0; i < frames.size(); i++)
     {
+        CAPTURE(i);
+        REQUIRE(frames[i]);
+        std::cout << "i = " << i << " " << frame_to_string(frames[i]) << std::endl;
         auto d = frames[i].get_depth_frame().get_profile().as<rs2::video_stream_profile>();
         auto c = frames[i].get_color_frame().get_profile().as<rs2::video_stream_profile>();
         auto started = std::chrono::high_resolution_clock::now();
         auto fs_res = record_block.process(frames[i]);
+        std::cout << "fs_res i = " << i << " " << frame_to_string(fs_res) << std::endl;
+
         auto done = std::chrono::high_resolution_clock::now();
 
         std::cout << "DEPTH " << std::setw(4) << d.format() << " " << std::setw(10) << std::to_string(d.width()) + "x" + std::to_string(d.height()) << " | " <<
