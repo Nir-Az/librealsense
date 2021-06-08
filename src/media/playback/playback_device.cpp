@@ -62,6 +62,7 @@ std::map<uint32_t, std::shared_ptr<playback_sensor>> playback_device::create_pla
         {
             (*m_read_thread)->invoke([this, id, user_callback](dispatcher::cancellable_timer c)
             {
+                std::lock_guard<std::mutex> locker(_active_sensors_mutex);
                 auto it = m_active_sensors.find(id);
                 if (it == m_active_sensors.end())
                 {
@@ -82,6 +83,7 @@ std::map<uint32_t, std::shared_ptr<playback_sensor>> playback_device::create_pla
 
             auto action = [this, id]()
             {
+                std::lock_guard<std::mutex> locker(_active_sensors_mutex);
                 auto it = m_active_sensors.find(id);
                 if (it != m_active_sensors.end())
                 {
@@ -151,6 +153,7 @@ playback_device::~playback_device()
 {
     (*m_read_thread)->invoke([this](dispatcher::cancellable_timer c)
     {
+        std::lock_guard<std::mutex> locker(_active_sensors_mutex);
         for (auto&& sensor : m_active_sensors)
         {
             if (sensor.second != nullptr)
@@ -505,19 +508,38 @@ void playback_device::do_loop(T action)
         //On failure, exit thread
         if(action_succeeded == false)
         {
-            for (auto s : m_active_sensors)
-                s.second->flush_pending_frames();
+            std::vector<std::shared_ptr<playback_sensor>> playback_sensors_copy;
+            {
+                std::lock_guard<std::mutex> locker(_active_sensors_mutex);
+                {
+                    for (auto s : m_active_sensors)
+                    {
+                        playback_sensors_copy.push_back(s.second);
+                    }
+                }
+            }
+
+
+            for (auto& psc : playback_sensors_copy)
+            {
+                if (psc)
+                {
+                    psc->flush_pending_frames();
+                    psc->stop(false);
+                }
+            }
 
             //Go over the sensors and stop them
-            size_t active_sensors_count = m_active_sensors.size();
-            for (size_t i = 0; i<active_sensors_count; i++)
-            {
-                if (m_active_sensors.size() == 0)
-                    break;
+            //size_t active_sensors_count = m_active_sensors.size();
+            //for
+            //for (size_t i = 0; i<active_sensors_count; i++)
+            //{
+            //    if (m_active_sensors.size() == 0)
+            //        break;
 
-                //NOTE: calling stop will remove the sensor from m_active_sensors
-                m_active_sensors.begin()->second->stop(false);
-            }
+            //    //NOTE: calling stop will remove the sensor from m_active_sensors
+            //    m_active_sensors.begin()->second->stop(false);
+            //}
 
             m_last_published_timestamp = device_serializer::nanoseconds(0);
 
@@ -537,6 +559,7 @@ void playback_device::do_loop(T action)
 // Return should indicate whether any frames are available: if there are, we need to sleep before proceeding
 bool playback_device::prefetch_done()
 {
+    std::lock_guard<std::mutex> locker(_active_sensors_mutex);
     for (auto s : m_active_sensors)
     {
         if (s.second->streams_contains_one_frame_or_more())
@@ -614,22 +637,29 @@ void playback_device::try_looping()
                 LOG_WARNING("Bad frame from reader, ignoring");
                 return true;
             }
-            auto it = m_active_sensors.find(frame->stream_id.sensor_index);
-            if (it == m_active_sensors.end())
             {
-                LOG_DEBUG("stream " << frame->stream_id.sensor_index << " is not longer active, frame dropped!");
-                return true;
-            }
+                std::lock_guard< std::mutex > locker( _active_sensors_mutex );
+                auto it = m_active_sensors.find( frame->stream_id.sensor_index );
+                if( it == m_active_sensors.end() )
+                {
+                    LOG_DEBUG( "stream " << frame->stream_id.sensor_index
+                                         << " is not longer active, frame dropped!" );
+                    return true;
+                }
 
-            //Dispatch frame to the relevant sensor (see handle_frame definition for more details)
-            it->second->handle_frame(std::move(frame->frame), m_real_time,
-            [this, timestamp]() { return calc_sleep_time(timestamp); },
-            [this]() { return m_is_paused == true; },
-            [this, timestamp]()
-            {
-                std::lock_guard<std::mutex> locker(m_last_published_timestamp_mutex);
-                m_last_published_timestamp = timestamp;
-            });
+
+                // Dispatch frame to the relevant sensor (see handle_frame definition for more
+                // details)
+                it->second->handle_frame(
+                    std::move( frame->frame ),
+                    m_real_time,
+                    [this, timestamp]() { return calc_sleep_time( timestamp ); },
+                    [this]() { return m_is_paused == true; },
+                    [this, timestamp]() {
+                        std::lock_guard< std::mutex > locker( m_last_published_timestamp_mutex );
+                        m_last_published_timestamp = timestamp;
+                    } );
+            }
             return true;
         }
 

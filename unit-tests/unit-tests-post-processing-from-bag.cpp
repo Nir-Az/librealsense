@@ -249,6 +249,7 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
         s.start([&](rs2::frame f)
         {
             std::lock_guard<std::mutex> lock(frames_lock);
+            f.keep();
             frames.push_back(f);
         });
     }
