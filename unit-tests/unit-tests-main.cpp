@@ -5,9 +5,10 @@
 int main(int argc, char* const argv[])
 {
     command_line_params::instance(argc, argv);
-
+    //std::string in;
+    //std::cin >> in;
     std::vector<char*> new_argvs;
-
+    rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
     std::cout << "Running tests with the following parameters: ";
     for (auto i = 0; i < argc; i++)
     {
