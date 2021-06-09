@@ -40,6 +40,7 @@ std::string frame_to_string(const rs2::frame& f)
             s << "/" << profile.unique_id();
             s << " #" << f.get_frame_number();
             s << " @" << std::fixed << (double)f.get_timestamp();
+            s << " W: " << profile.as<rs2::video_stream_profile>().width() << " H: " << profile.as<rs2::video_stream_profile>().height();
             s << "]";
         }
     }
@@ -224,10 +225,7 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         frames.push_back(data);
         if (frames.size() == 2)
         {
-            std::cout << "before frame_ready" << std::endl;
             source.frame_ready(source.allocate_composite_frame(frames));
-            std::cout << "after frame_ready" << std::endl;
-
             frames.clear();
         }
     });
@@ -240,6 +238,7 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         s.open(s.get_stream_profiles());
     }
 
+    std::cout << "test starting sensors" << std::endl;
     for (auto s : sensors)
     {
         s.start([&](rs2::frame f)
@@ -248,24 +247,19 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
         });
     }
 
-    while (composite_frames.size() < 16/*sensors.size()*/)
+    while (composite_frames.size() < sensors.size())
     {
         rs2::frameset composite_fs;
         if (postprocessed_frames.try_wait_for_frame(&composite_fs))
         {
-            std::cout << "composite before keep" << std::endl;
             composite_fs.keep();
-            std::cout << "composite after keep" << std::endl;
             composite_frames.push_back(composite_fs);
-            std::cout << "composite - after composite_frames.push_back" << std::endl;
-
         }
     }
 
-    int i = 0;
+    std::cout << "test stopping sensors" << std::endl;
     for (auto s : sensors)
     {
-        std::cout << "stopping sensor " << i++ << std::endl;
         s.stop();
         s.close();
     }
@@ -288,19 +282,16 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
         s.start([&](rs2::frame f)
         {
             std::lock_guard<std::mutex> lock(frames_lock);
-            if (frames.size() < 16)
-            {
-                f.keep();
-                frames.push_back(f);
-            }
+            f.keep();
+            frames.push_back( f );
         });
     }
 
-    while (frames.size() < 16/*sensors.size()*/)
+    while (frames.size() < sensors.size())
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    std::cout << ":frames.size() = sensors.size()" << std::endl;
+
     for (auto s : sensors)
     {
         s.stop();
@@ -442,12 +433,13 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
     {
         CAPTURE(i);
         REQUIRE(frames[i]);
-        std::cout << "i = " << i << " " << frame_to_string(frames[i]) << std::endl;
+        //std::cout << "org frame i = " << i << " " << frame_to_string(frames[i]) << std::endl;
         auto d = frames[i].get_depth_frame().get_profile().as<rs2::video_stream_profile>();
         auto c = frames[i].get_color_frame().get_profile().as<rs2::video_stream_profile>();
         auto started = std::chrono::high_resolution_clock::now();
         auto fs_res = record_block.process(frames[i]);
-        std::cout << "fs_res i = " << i << " " << frame_to_string(fs_res) << std::endl;
+        //std::cout << "processed i = " << i << " " << frame_to_string(fs_res) << std::endl;
+        //std::cout << "reference i = " << i << " " << frame_to_string(ref_frames[i]) << std::endl;
 
         auto done = std::chrono::high_resolution_clock::now();
 
