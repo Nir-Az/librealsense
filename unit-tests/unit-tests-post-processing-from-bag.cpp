@@ -12,6 +12,7 @@
 #include <chrono>
 #include <ctime>
 #include <algorithm>
+#include <deque>
 #include <librealsense2/rsutil.h>
 
 # define SECTION_FROM_TEST_NAME space_to_underscore(Catch::getCurrentContext().getResultCapture()->getCurrentTestName()).c_str()
@@ -217,16 +218,35 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
 {
     std::vector<rs2::frameset> composite_frames;
 
-    std::vector<rs2::frame> frames;
+    std::deque<rs2::frame> color_frames;
+    std::deque<rs2::frame> depth_frames;
+    std::vector<rs2::frame> frame_pairs;
     std::mutex frame_processor_lock;
     rs2::processing_block frame_processor([&](rs2::frame data, rs2::frame_source& source)
     {
         std::lock_guard<std::mutex> lock(frame_processor_lock);
-        frames.push_back(data);
-        if (frames.size() == 2)
+        switch (data.get_profile().stream_type())
         {
-            source.frame_ready(source.allocate_composite_frame(frames));
-            frames.clear();
+        case RS2_STREAM_DEPTH:
+            depth_frames.push_back(data);
+            break;
+        case RS2_STREAM_COLOR:
+            color_frames.push_back(data);
+            break;
+        default:
+            FAIL("bag file should contain only color and depth frames, got " << data.get_profile().stream_name());
+            break;
+        }
+
+        // if we got a color and a depth frame, create a composite frame from it and dispatch it
+        if (!depth_frames.empty() && !color_frames.empty())
+        {
+            frame_pairs.push_back(depth_frames.front());
+            frame_pairs.push_back(color_frames.front());
+            source.frame_ready(source.allocate_composite_frame(frame_pairs));
+            frame_pairs.clear();
+            depth_frames.pop_front();
+            color_frames.pop_front();
         }
     });
 
@@ -282,15 +302,25 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
         s.start([&](rs2::frame f)
         {
             std::lock_guard<std::mutex> lock(frames_lock);
-            f.keep();
-            frames.push_back( f );
+            if (frames.size() < sensors.size())
+            {
+                f.keep();
+                std::cout << f.get_frame_number() << std::endl;
+                frames.push_back( f );
+            }
         });
     }
 
-    while (frames.size() < sensors.size())
+    while (true)
     {
+        {
+            std::lock_guard<std::mutex> lock(frames_lock);
+            if ( frames.size() >= sensors.size() )
+                break;
+        }
         std::this_thread::sleep_for(std::chrono::microseconds(100));
-    }
+    } 
+
 
     for (auto s : sensors)
     {
@@ -423,6 +453,8 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
     std::cout << "calling get_frames" << std::endl;
 
     auto ref_frames = get_frames(ref_sensors);
+    std::cout << "after get_frames" << std::endl;
+
     CAPTURE(ref_frames.size());
     CAPTURE(frames.size());
     REQUIRE(ref_frames.size() == frames.size());
@@ -433,7 +465,7 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
     {
         CAPTURE(i);
         REQUIRE(frames[i]);
-        //std::cout << "org frame i = " << i << " " << frame_to_string(frames[i]) << std::endl;
+        std::cout << "org frame i = " << i << " " << frame_to_string(frames[i]) << std::endl;
         auto df = frames[i].get_depth_frame();
         REQUIRE(df);
         auto d = df.get_profile().as<rs2::video_stream_profile>();

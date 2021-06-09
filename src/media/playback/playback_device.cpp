@@ -151,6 +151,7 @@ rs2_extrinsics playback_device::calc_extrinsic(const rs2_extrinsics& from, const
 
 playback_device::~playback_device()
 {
+    std::cout << "~playback_device()" << std::endl;
     (*m_read_thread)->invoke([this](dispatcher::cancellable_timer c)
     {
         std::lock_guard<std::mutex> locker(_active_sensors_mutex);
