@@ -434,10 +434,18 @@ void compare_processed_frames_vs_recorded_frames(processing_recordable_block& re
         CAPTURE(i);
         REQUIRE(frames[i]);
         //std::cout << "org frame i = " << i << " " << frame_to_string(frames[i]) << std::endl;
-        auto d = frames[i].get_depth_frame().get_profile().as<rs2::video_stream_profile>();
-        auto c = frames[i].get_color_frame().get_profile().as<rs2::video_stream_profile>();
+        auto df = frames[i].get_depth_frame();
+        REQUIRE(df);
+        auto d = df.get_profile().as<rs2::video_stream_profile>();
+
+        auto cf = frames[i].get_color_frame();
+        REQUIRE(cf);
+        auto c = cf.get_profile().as<rs2::video_stream_profile>();
+
+
         auto started = std::chrono::high_resolution_clock::now();
         auto fs_res = record_block.process(frames[i]);
+        REQUIRE(fs_res);
         //std::cout << "processed i = " << i << " " << frame_to_string(fs_res) << std::endl;
         //std::cout << "reference i = " << i << " " << frame_to_string(ref_frames[i]) << std::endl;
 
