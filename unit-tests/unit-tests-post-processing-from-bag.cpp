@@ -17,38 +17,6 @@
 
 # define SECTION_FROM_TEST_NAME space_to_underscore(Catch::getCurrentContext().getResultCapture()->getCurrentTestName()).c_str()
 
-std::string frame_to_string(const rs2::frame& f)
-{
-    std::ostringstream s;
-
-    if (!&f)
-    {
-        s << "[null]";
-    }
-    else
-    {
-        auto composite = f.as<rs2::frameset>();
-        if (composite)
-        {
-            s << "[";
-            composite.foreach_rs([&](const rs2::frame& f) {s << frame_to_string(f); });
-            s << "]";
-        }
-        else
-        {
-            auto profile = f.get_profile();
-            s << "[" << profile.stream_type();
-            s << "/" << profile.unique_id();
-            s << " #" << f.get_frame_number();
-            s << " @" << std::fixed << (double)f.get_timestamp();
-            s << " F: " << rs2_format_to_string(profile.format());
-            s << " W: " << profile.as<rs2::video_stream_profile>().width() << " H: " << profile.as<rs2::video_stream_profile>().height();
-            s << "]";
-        }
-    }
-    return s.str();
-}
-
 typedef struct _sw_context
 {
 
@@ -272,6 +240,10 @@ std::vector<rs2::frameset> get_composite_frames(std::vector<rs2::sensor> sensors
     for (auto s : sensors)
     {
         s.stop();
+    }
+
+    for (auto s : sensors)
+    {
         s.close();
     }
 
@@ -317,6 +289,10 @@ std::vector<rs2::frame> get_frames(std::vector<rs2::sensor> sensors)
     for (auto s : sensors)
     {
         s.stop();
+    }
+
+    for (auto s : sensors)
+    {
         s.close();
     }
 

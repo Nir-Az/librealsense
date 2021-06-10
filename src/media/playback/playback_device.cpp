@@ -151,23 +151,30 @@ rs2_extrinsics playback_device::calc_extrinsic(const rs2_extrinsics& from, const
 
 playback_device::~playback_device()
 {
+    std::cout << "~playback_device() - before invoke" << std::endl;
     (*m_read_thread)->invoke([this](dispatcher::cancellable_timer c)
     {
         std::lock_guard<std::mutex> locker(_active_sensors_mutex);
+        std::cout << "~playback_device() - m_active_sensors.size() = " << m_active_sensors.size() <<  std::endl;
         for (auto&& sensor : m_active_sensors)
         {
             if (sensor.second != nullptr)
             {
+                std::cout << "~playback_device() - before sensor.second->stop()" << std::endl;
                 sensor.second->stop();
             }
         }
     });
 
+    std::cout << "~playback_device() - before flush" << std::endl;
     if((*m_read_thread)->flush() == false)
     {
+        std::cout << "~playback_device() - flush assert" << std::endl;
+
         LOG_ERROR("Error - timeout waiting for flush, possible deadlock detected");
         assert(0); //Detect this immediately in debug
     }
+    std::cout << "~playback_device() - before stop" << std::endl;
 
     (*m_read_thread)->stop();
 }
