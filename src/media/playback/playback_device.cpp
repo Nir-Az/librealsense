@@ -517,7 +517,7 @@ void playback_device::do_loop(T action)
         }
 
         //On failure, exit thread
-        if(action_succeeded == false)
+        if(action_succeeded == false && m_is_started)
         {
             std::vector<std::shared_ptr<playback_sensor>> playback_sensors_copy;
             {
