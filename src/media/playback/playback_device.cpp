@@ -151,10 +151,6 @@ rs2_extrinsics playback_device::calc_extrinsic(const rs2_extrinsics& from, const
 
 playback_device::~playback_device()
 {
-    std::cout << "-------------------------------" << std::endl;
-
-    std::cout << "~playback_device() start" << std::endl;
-    std::cout << "~playback_device() - (*m_read_thread)->invoke" << std::endl;
     (*m_read_thread)->invoke([this](dispatcher::cancellable_timer c)
     {
         std::lock_guard<std::mutex> locker(_active_sensors_mutex);
@@ -162,25 +158,18 @@ playback_device::~playback_device()
         {
             if (sensor.second != nullptr)
             {
-                std::cout << "~playback_device() - sensor.second->stop() " << sensor.first << std::endl;
                 sensor.second->stop();
             }
         }
     });
-    std::cout << "~playback_device() - (*m_read_thread)->flush" << std::endl;
 
     if((*m_read_thread)->flush() == false)
     {
         LOG_ERROR("Error - timeout waiting for flush, possible deadlock detected");
-        std::cout << "assert(0)" << std::endl;
         assert(0); //Detect this immediately in debug
     }
-    std::cout << "~playback_device() - (*m_read_thread)->stop" << std::endl;
 
     (*m_read_thread)->stop();
-    std::cout << "~playback_device() end" << std::endl;
-    std::cout << "-------------------------------" << std::endl;
-
 }
 
 std::shared_ptr<context> playback_device::get_context() const

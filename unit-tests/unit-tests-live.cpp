@@ -5037,8 +5037,8 @@ TEST_CASE("C API Compilation", "[live]") {
 }
 
 
-// syncing by frame number has known issues
-TEST_CASE("Syncer try wait for frames", "[live][software-device][mayfail]") {
+// added [!mayfail] , syncing by frame number has known issues
+TEST_CASE("Syncer try wait for frames", "[live][software-device][!mayfail]") {
     rs2::context ctx;
     if (make_context(SECTION_FROM_TEST_NAME, &ctx))
     {
