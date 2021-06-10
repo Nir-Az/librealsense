@@ -103,31 +103,23 @@ bool dispatcher::flush()
 {
     if ( _was_stopped )
     {
-        std::cout << "dispatcher::flush() - _was_stopped = true" << std::endl;
         return true;
     }
 
-    std::cout << "1" << std::endl;
     std::mutex m;
     std::condition_variable cv;
     bool invoked = false;
-    std::cout << "2" << std::endl;
     invoke([&](cancellable_timer t)
     {
-            std::cout << "3" << std::endl;
-
         {
             std::lock_guard<std::mutex> locker(m);
-            std::cout << "dispatcher flushed invoked = true" << std::endl;
             invoked = true;
         }
         cv.notify_one();
     });
-    std::cout << "4" << std::endl;
 
     std::unique_lock<std::mutex> locker(m);
     cv.wait_for(locker, std::chrono::seconds(10), [&]() { return invoked || _was_stopped; });
-    std::cout << "5" << std::endl;
 
     return invoked;
 }
