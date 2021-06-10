@@ -96,13 +96,8 @@ bool dispatcher::flush()
     std::mutex m;
     std::condition_variable cv;
     bool invoked = false;
-    auto wait_sucess = std::make_shared<std::atomic_bool>(true);
-    invoke([&, wait_sucess](cancellable_timer t)
+    invoke([&](cancellable_timer t)
     {
-        ///TODO: use _queue to flush, and implement properly
-        if (_was_stopped || !(*wait_sucess))
-            return;
-
         {
             std::lock_guard<std::mutex> locker(m);
             invoked = true;
@@ -110,6 +105,6 @@ bool dispatcher::flush()
         cv.notify_one();
     });
     std::unique_lock<std::mutex> locker(m);
-    *wait_sucess = cv.wait_for(locker, std::chrono::seconds(10), [&]() { return invoked || _was_stopped; });
-    return *wait_sucess;
+    cv.wait_for(locker, std::chrono::seconds(10), [&]() { return invoked || _was_stopped; });
+    return invoked;
 }
