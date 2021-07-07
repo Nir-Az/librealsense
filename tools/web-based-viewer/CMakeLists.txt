@@ -4,7 +4,8 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 project(RealsenseToolsRealSenseWebViewer)
-
+set(EmscriptenRoot , "C:/Work/Tools/emscripten/emsdk/upstream/emscripten")
+set(CMAKE_TOOLCHAIN_FILE , EmscriptenRoot + "/cmake/Modules/Platform/Emscripten.cmake")
 add_executable(rs-web-based-viewer rs-dummy.cpp)
 set_target_properties (rs-web-based-viewer PROPERTIES
     FOLDER Tools
