@@ -5,6 +5,12 @@ project(librealsense2 LANGUAGES CXX C)
 include(CMake/lrs_options.cmake)
 include(CMake/connectivity_check.cmake)
 
+if (EMSCRIPTEN)
+    MESSAGE(STATUS "EMSCRIPTEN is On!!")
+else()
+    MESSAGE(STATUS "EMSCRIPTEN is Off!!")
+endif()
+
 #Deprecation message, should be removed in future releases
 if(${FORCE_LIBUVC} OR ${FORCE_WINUSB_UVC} OR ${ANDROID_USB_HOST_UVC})
     MESSAGE(DEPRECATION "FORCE_LIBUVC, FORCE_WINUSB_UVC and ANDROID_USB_HOST_UVC are deprecated, use FORCE_RSUSB_BACKEND instead")
@@ -43,7 +49,7 @@ os_set_flags()
 # macro definition located at "CMake/global_config.cmake"
 global_set_flags()
 
-if(BUILD_SHARED_LIBS)
+if(!EMSCRIPTEN AND BUILD_SHARED_LIBS)
     add_library(${LRS_TARGET} SHARED "")
 else()
     add_library(${LRS_TARGET} STATIC "")

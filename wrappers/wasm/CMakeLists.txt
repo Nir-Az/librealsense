@@ -3,12 +3,16 @@
 #  minimum required cmake version: 3.1.0
 cmake_minimum_required(VERSION 3.1.0)
 
+#set(EmscriptenRoot "C:/Work/Tools/emscripten/emsdk/upstream/emscripten")
+#message(STATUS "DEBUG - found emscripten at ${EmscriptenRoot} - temporary hard coded path")
+#set(CMAKE_TOOLCHAIN_FILE "${EmscriptenRoot}/cmake/Modules/Platform/Emscripten.cmake")
+
 project(RealsenseToolsRealSenseWebViewer)
-set(EmscriptenRoot , "C:/Work/Tools/emscripten/emsdk/upstream/emscripten")
-set(CMAKE_TOOLCHAIN_FILE , EmscriptenRoot + "/cmake/Modules/Platform/Emscripten.cmake")
+
+SET(CMAKE_EXECUTABLE_SUFFIX ".js")
 add_executable(rs-web-based-viewer rs-dummy.cpp)
 set_target_properties (rs-web-based-viewer PROPERTIES
-    FOLDER Tools
+    FOLDER Wrappers
 )
 
 install(

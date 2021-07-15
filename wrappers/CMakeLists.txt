@@ -65,3 +65,8 @@ endif()
 if(BUILD_OPENNI2_BINDINGS)
 	add_subdirectory(openni2)
 endif()
+
+if (BUILD_AS_WEB_ASSEMBLY AND (WIN32 OR UNIX))
+    message( STATUS "Adding WebAssembly project" )
+    add_subdirectory(wasm)
+endif()
