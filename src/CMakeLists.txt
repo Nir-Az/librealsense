@@ -17,7 +17,7 @@ include(${_rel_path}/fw-update/CMakeLists.txt)
 
 message(STATUS "using ${BACKEND}")
 
-if((UNIX AND !EMSCRIPTEN) OR (ANDROID_NDK_TOOLCHAIN_INCLUDED AND (${BACKEND} STREQUAL RS2_USE_V4L2_BACKEND)))
+if((UNIX AND NOT EMSCRIPTEN) OR (ANDROID_NDK_TOOLCHAIN_INCLUDED AND (${BACKEND} STREQUAL RS2_USE_V4L2_BACKEND)))
     message(STATUS "DEBUG - libusb is On!")
     include(${_rel_path}/libusb/CMakeLists.txt)
 endif()
