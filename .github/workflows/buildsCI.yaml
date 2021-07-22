@@ -66,7 +66,6 @@ jobs:
        cd build/${{env.LRS_RUN_CONFIG}}
        ls
        ./live-test.exe -d yes -i [software-device]  
-       exit 1
        
     - name: Upload RS log artifact
       uses: actions/upload-artifact@v2
@@ -208,17 +207,13 @@ jobs:
         ./unit-tests/live-test -d yes -i [software-device]
         for i in ./records/single_cam/*; do ./unit-tests/live-test -d yes -i ~[multicam] from "$i"; done
         for i in ./records/multi_cam/*; do ./unit-tests/live-test -d yes -i [multicam] from "$i"; done
-        pwd
-        ls
-        cd "unit-tests"
-        ls
         
 
     - name: Upload RS log artifact
       uses: actions/upload-artifact@v2
       with: 
         name: Log file - Linux_testing_cpp
-        path: build/unit-tests/*.log
+        path: build/*.log
         
         
     - name: Provide correct exit status for job 
