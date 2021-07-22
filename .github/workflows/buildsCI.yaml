@@ -66,6 +66,7 @@ jobs:
        cd build/${{env.LRS_RUN_CONFIG}}
        ls
        ./live-test.exe -d yes -i [software-device]  
+       exit 1
        
     - name: Upload RS log artifact
       uses: actions/upload-artifact@v2
@@ -212,7 +213,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with: 
         name: Log file - Linux_testing_cpp
-        path: build/${{env.LRS_RUN_CONFIG}}/*.log
+        path: build/unit-tests/*.log
         
         
     - name: Provide correct exit status for job 
