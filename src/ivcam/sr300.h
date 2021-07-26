@@ -349,7 +349,7 @@ namespace librealsense
             synthetic_sensor& depth_sensor = get_depth_sensor();
             return dynamic_cast<uvc_sensor&>(*depth_sensor.get_raw_sensor());
         }
-
+         
         sr3xx_camera(std::shared_ptr<context> ctx,
             const platform::uvc_device_info& depth,
             const platform::usb_device_info& hwm_device,
