@@ -1,7 +1,7 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2023 Intel Corporation. All Rights Reserved.
 
-# test:device D400* !D457
+# test:device D400*
 # Currently, we exclude D457 as it's failing
 # test:donotrun:!nightly
 # test:timeout 300

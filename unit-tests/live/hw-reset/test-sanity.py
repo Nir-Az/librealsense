@@ -2,7 +2,7 @@
 # Copyright(c) 2023 Intel Corporation. All Rights Reserved.
 
 
-# test:device each(D400*) !D457  # D457 device is known for HW reset issues..
+# test:device each(D400*)  # D457 device is known for HW reset issues..
 
 import pyrealsense2 as rs
 from rspy import test, log
