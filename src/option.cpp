@@ -2,7 +2,7 @@
 // Copyright(c) 2015 Intel Corporation. All Rights Reserved.
 
 #include "option.h"
-#include "sensor.h"
+//#include "sensor.h"
 
 #include <rsutils/string/from.h>
 #include <rsutils/json.h>
