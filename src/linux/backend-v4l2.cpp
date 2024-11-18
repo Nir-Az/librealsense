@@ -1843,7 +1843,10 @@ namespace librealsense
             if(xioctl(_fd, UVCIOC_CTRL_QUERY, &q) < 0)
             {
                 if (errno == EIO || errno == EAGAIN || errno == EBUSY)
+                {
+                    LOG_DEBUG( rsutils::string::from() << "set_xu received recoverable error: " << errno << " opcode: " << data[0] << " " << data[3]  );
                     return false;
+                }
 
                 throw linux_backend_exception("set_xu(...). xioctl(UVCIOC_CTRL_QUERY) failed");
             }
@@ -1858,7 +1861,10 @@ namespace librealsense
             if(xioctl(_fd, UVCIOC_CTRL_QUERY, &q) < 0)
             {
                 if (errno == EIO || errno == EAGAIN || errno == EBUSY)
+                {
+                    LOG_DEBUG( rsutils::string::from() << "get_xu received recoverable error: " << errno << " opcode: " << data[0] << " " << data[3] );
                     return false;
+                }
 
                 throw linux_backend_exception("get_xu(...). xioctl(UVCIOC_CTRL_QUERY) failed");
             }
