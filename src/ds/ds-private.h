@@ -203,7 +203,7 @@ namespace librealsense
             CAP_GLOBAL_SHUTTER = (1u << 4),
             CAP_ROLLING_SHUTTER = (1u << 5),
             CAP_BMI_055 = (1u << 6),
-            CAP_BMI_085 = (1u << 7),
+            CAP_BMI_085 = (1u << 1),
             CAP_INTERCAM_HW_SYNC = (1u << 8),
             CAP_IP65 = (1u << 9),
             CAP_IR_FILTER = (1u << 10),
