@@ -15,10 +15,14 @@ namespace librealsense
         {
             auto a = reinterpret_cast<decltype(split_a(SOURCE()))*>(dest[0]);
             auto b = reinterpret_cast<decltype(split_b(SOURCE()))*>(dest[1]);
-            for (int i = 0; i < count; ++i)
+            for (int i = 0; i < count; i+=2)
             {
-                *a++ = split_a(*source);
-                *b++ = split_b(*source++);
+                // TODO: do this only for D457
+                a[i] = split_a(source[i+1]);
+                b[i] = split_b(source[i]);
+
+                a[i + 1] = split_a(source[i]);
+                b[i + 1] = split_b(source[i + 1]);
             }
         }
     }
