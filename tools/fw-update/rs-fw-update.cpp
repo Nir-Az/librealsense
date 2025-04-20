@@ -139,7 +139,7 @@ void list_devices( rs2::context ctx )
     }
 }
 
-int write_fw_to_mipi_device( const rs2::device & dev, const std::vector< uint8_t > & fw_image )
+bool write_fw_to_mipi_device( rs2::device & dev, const std::vector< uint8_t > & fw_image )
 {
     // Write firmware to appropriate file descriptor
     std::cout << std::endl << "Update can take up to 2 minutes" << std::endl;
@@ -186,6 +186,8 @@ int write_fw_to_mipi_device( const rs2::device & dev, const std::vector< uint8_t
         return EXIT_FAILURE;
     }
     std::cout << std::endl << "Firmware update done" << std::endl;
+    dev.hardware_reset();
+    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
 
     return EXIT_SUCCESS;
 }
@@ -502,7 +504,7 @@ try
             else
             {
                 auto upd = d.as<rs2::updatable>();
-                // checking compatibility bewtween firmware and device
+                // checking compatibility between firmware and device
                 if( !upd.check_firmware_compatibility( fw_image ) )
                 {
                     std::stringstream ss;
@@ -551,7 +553,7 @@ try
     std::unique_lock<std::mutex> lk(mutex);
     cv.wait_for(lk, std::chrono::seconds(WAIT_FOR_DEVICE_TIMEOUT), [&] { return !done || new_device; });
 
-    if (done && new_device)
+    if (done)
     {
         auto devs = ctx.query_devices();
         for (auto&& d : devs)
