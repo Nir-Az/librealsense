@@ -480,6 +480,8 @@ try
                 return write_fw_to_mipi_device( d, fw_image );
             }
 
+            new_device = rs2::device();  // otherwise the wait will exit right away
+
             if( unsigned_arg.isSet() )
             {
                 std::cout << std::endl << "Firmware update started. Please don't disconnect device!" << std::endl << std::endl;
@@ -494,7 +496,7 @@ try
                 }
                 else
                     d.as<rs2::updatable>().update_unsigned( fw_image, [&]( const float progress ) {} );
-
+                done = true;
                 std::cout << std::endl << std::endl << "Firmware update done" << std::endl;
             }
             else
@@ -527,9 +529,7 @@ try
                     }
                 }
 
-                new_device = rs2::device();  // otherwise the wait will exit right away
                 update( new_fw_update_device, fw_image );
-
                 done = true;
                 break;
             }
@@ -551,7 +551,7 @@ try
     std::unique_lock<std::mutex> lk(mutex);
     cv.wait_for(lk, std::chrono::seconds(WAIT_FOR_DEVICE_TIMEOUT), [&] { return !done || new_device; });
 
-    if (done)
+    if (done && new_device)
     {
         auto devs = ctx.query_devices();
         for (auto&& d : devs)
