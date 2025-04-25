@@ -251,6 +251,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
         for retry in range(3):
             try:
                 devices = _context.query_devices()
+                log.d("devices", len(devices))
                 break
             except RuntimeError as e:
                 log.d( 'FAILED to query devices:', e )
@@ -260,6 +261,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
                 else:
                     time.sleep( 1 )
         for dev in devices:
+            log.d("dev", dev)
             # The FW update ID is always available, it seems, and is the ASIC serial number
             # whereas the Serial Number is the OPTIC serial number and is only available in
             # non-recovery devices. So we use the former...
