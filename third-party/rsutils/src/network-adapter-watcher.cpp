@@ -5,6 +5,9 @@
 #include <rsutils/shared-ptr-singleton.h>
 #include <rsutils/signal.h>
 #include <rsutils/easylogging/easyloggingpp.h>
+#include <thread>
+#include <cstring>
+
 
 #if ! defined( __APPLE__ ) && ! defined( __ANDROID__ )
 #ifdef _WIN32

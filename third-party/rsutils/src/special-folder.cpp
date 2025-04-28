@@ -3,6 +3,8 @@
 
 #include <rsutils/os/special-folder.h>
 #include <rsutils/easylogging/easyloggingpp.h>
+#include <locale.h>
+#include <stdexcept>
 
 #ifdef _WIN32
 

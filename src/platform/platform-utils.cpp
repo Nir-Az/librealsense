@@ -7,6 +7,8 @@
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
 
+#include <algorithm>
+
 
 namespace librealsense {
 namespace platform {
