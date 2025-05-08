@@ -37,7 +37,7 @@ def measure_fps(sensor, profile, seconds_to_count_frames = 10):
             first_frame_received = True
         else:
             if current_frame_number > prev_frame_number + 1:
-                log.w( f'Frame drop detected. Current frame number {current_frame_number} previous was {prev_frame_number}' )
+                log.w( f'Frame drop detected. Current frame number {current_frame_number} previous was {prev_frame_number} frame exposure was {frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)}' )
         if steady_state:
             frames_received += 1
         prev_frame_number = current_frame_number
