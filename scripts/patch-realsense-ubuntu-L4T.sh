@@ -112,7 +112,7 @@ if [ "6.0" != "$PATCHES_REV" ]; then
 		mkdir ${l4t_gh_dir}
 		pushd ${l4t_gh_dir}
 		git init
-		git remote add origin git://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
+		git remote add origin https://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
 		# Use NVIDIA script instead to synchronize source tree and peripherals
 		#git clone git://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
 		popd
