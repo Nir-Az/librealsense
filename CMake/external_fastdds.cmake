@@ -66,9 +66,17 @@ function(get_fastdds)
 
     add_definitions(-DBUILD_WITH_DDS)
 
-    install(TARGETS dds 
-    EXPORT realsense2Targets 
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(TARGETS fastcdr fastrtps
+    EXPORT realsense2Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+    
+    
+    install(TARGETS dds
+    EXPORT realsense2Targets
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
     message(CHECK_PASS "Done")
 endfunction()
 
