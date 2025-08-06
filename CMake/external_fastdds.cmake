@@ -1,9 +1,39 @@
 cmake_minimum_required(VERSION 3.16.3)  # same as in FastDDS (U20)
 include(FetchContent)
 
+# Option to use system FastDDS instead of building from source
+option(USE_SYSTEM_FASTDDS "Use system-installed FastDDS instead of building from source" OFF)
+# Option to install FastDDS headers when building from source (useful for packaging)
+option(INSTALL_FASTDDS_HEADERS "Install FastDDS headers when building from source" ON)
+
 # We use a function to enforce a scoped variables creation only for FastDDS build (i.e turn off BUILD_SHARED_LIBS which is used on LRS build as well)
 function(get_fastdds)
 
+    if(USE_SYSTEM_FASTDDS)
+        # Try to find system FastDDS packages
+        find_package(fastrtps QUIET)
+        find_package(fastcdr QUIET)
+        
+        if(fastrtps_FOUND AND fastcdr_FOUND)
+            message(STATUS "Using system FastDDS libraries")
+            
+            # Create interface library that links to system packages
+            add_library(dds INTERFACE)
+            target_link_libraries(dds INTERFACE fastrtps fastcdr)
+            
+            add_definitions(-DBUILD_WITH_DDS)
+            
+            # Install only the interface library
+            install(TARGETS dds EXPORT realsense2Targets)
+            
+            message(CHECK_PASS "Using system FastDDS")
+            return()
+        else()
+            message(WARNING "System FastDDS not found, falling back to building from source")
+        endif()
+    endif()
+
+    # Original FetchContent approach for building from source
     # Mark new options from FetchContent as advanced options
     mark_as_advanced(FETCHCONTENT_QUIET)
     mark_as_advanced(FETCHCONTENT_BASE_DIR)
@@ -42,8 +72,9 @@ function(get_fastdds)
 
     # Set special values for FastDDS sub directory
     set(BUILD_SHARED_LIBS OFF)
-    set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/fastdds/fastdds_install) 
-    set(CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)  
+    # CHANGED: Don't set a local install prefix - use the main project's install prefix
+    # set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/fastdds/fastdds_install) 
+    # set(CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)  
 
     # Get fastdds
     FetchContent_MakeAvailable(fastdds)
@@ -58,30 +89,63 @@ function(get_fastdds)
 
     list(POP_BACK CMAKE_MESSAGE_INDENT) # Unindent outputs
 
+    # CHANGED: Create an interface library that uses hardcoded library names for installation
+    # This approach avoids target dependency issues by referencing static library files directly
     add_library(dds INTERFACE)
-    target_link_libraries( dds INTERFACE fastcdr fastrtps )
+    
+    # During build time, link to the actual targets
+    target_link_libraries(dds INTERFACE fastcdr fastrtps foonathan_memory)
+    
+    # Set include directories for build and install
+    target_include_directories(dds INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/third-party/fastdds/include>
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/third-party/fastdds/thirdparty/fastcdr/include>
+        $<INSTALL_INTERFACE:include>
+    )
+    
+    # For installation, we'll use a different approach with custom properties
+    # Store the library information for the install configuration
+    set_target_properties(dds PROPERTIES
+        FASTDDS_FASTCDR_LIB "libfastcdr.a"
+        FASTDDS_FASTRTPS_LIB "libfastrtps.a"
+        FASTDDS_FOONATHAN_LIB "libfoonathan_memory.a"
+    )
     
     disable_third_party_warnings(fastcdr)  
     disable_third_party_warnings(fastrtps)  
 
     add_definitions(-DBUILD_WITH_DDS)
 
- #  install(TARGETS dds
- #  EXPORT realsense2Targets
- #  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
- #  )
-    
-    
-    install(TARGETS dds fastrtps
-    EXPORT realsense2Targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    # CHANGED: Install our interface library only
+    install(TARGETS dds 
+            EXPORT realsense2Targets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
-    
-    
-   # install(TARGETS dds
-   # EXPORT realsense2Targets
-   # INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-#)
+
+    # Install FastDDS library files manually (not as targets to avoid export conflicts)
+    install(FILES 
+            $<TARGET_FILE:fastcdr>
+            $<TARGET_FILE:fastrtps>
+            $<TARGET_FILE:foonathan_memory>
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+
+    # CHANGED: Conditionally install FastDDS headers (useful for packaging)
+    if(INSTALL_FASTDDS_HEADERS)
+        # Install fastcdr headers
+        install(DIRECTORY ${CMAKE_BINARY_DIR}/third-party/fastdds/thirdparty/fastcdr/include/
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+        )
+        
+        # Install fastdds/fastrtps headers  
+        install(DIRECTORY ${CMAKE_BINARY_DIR}/third-party/fastdds/include/
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+        )
+    endif()
 
     message(CHECK_PASS "Done")
 endfunction()
