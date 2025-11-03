@@ -499,7 +499,7 @@ namespace rs2
         auto oy = 0.5f;
         auto power = std::sin(smoothstep(float(_splash_timer.get_elapsed_ms()), 150.f, 2200.f) * 3.14f) * 0.96f;
 
-        if (_use_glsl_render)
+        if (false/*_use_glsl_render*/)
         {
             auto shader = ((splash_screen_shader*)&_2d_vis->get_shader());
             shader->begin();
