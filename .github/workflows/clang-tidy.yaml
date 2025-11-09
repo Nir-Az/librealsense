@@ -1,0 +1,203 @@
+name: Clang-Tidy CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install clang tidy dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y clang clang-tidy cmake g++ ninja-build jq
+      - name: Install SDK dependencies
+        run: |
+          sudo apt update
+          sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
+          sudo apt-get install -qq libusb-1.0-0-dev;
+          sudo apt-get install -qq libgtk-3-dev;
+          sudo apt-get install libglfw3-dev libglfw3;
+
+      - name: Configure project with CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_FLAGS="-Waddress" \
+            -DCMAKE_C_FLAGS="-Waddress" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCHECK_FOR_UPDATES=OFF \
+            -DBUILD_EXAMPLES=ON \
+            -DBUILD_TOOLS=ON \
+            -DENABLE_SECURITY_FLAGS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build project
+        run: cmake --build build -j$(nproc)
+
+      - name: Create .clang-tidy config
+        run: |
+          cat <<'EOF' > .clang-tidy
+          Checks: >
+            -*,
+            bugprone-string-compare,
+            bugprone-suspicious-string-compare,
+            bugprone-argument-comment,
+            bugprone-assert-side-effect,
+            bugprone-branch-clone,
+            bugprone-copy-constructor-init,
+            bugprone-dangling-handle,
+            bugprone-exception-escape,
+            bugprone-fold-init-type,
+            bugprone-forward-declaration-namespace,
+            bugprone-forwarding-reference-overload,
+            bugprone-inaccurate-erase,
+            bugprone-incorrect-roundings,
+            bugprone-infinite-loop,
+            bugprone-integer-division,
+            bugprone-lambda-function-name,
+            bugprone-macro-parentheses,
+            bugprone-macro-repeated-side-effects,
+            bugprone-misplaced-operator-in-strlen-in-alloc,
+            bugprone-misplaced-pointer-arithmetic-in-alloc,
+            bugprone-misplaced-widening-cast,
+            bugprone-move-forwarding-reference,
+            bugprone-multiple-statement-macro,
+            bugprone-parent-virtual-call,
+            bugprone-posix-return,
+            bugprone-sizeof-container,
+            bugprone-sizeof-expression,
+            bugprone-string-constructor,
+            bugprone-string-integer-assignment,
+            bugprone-suspicious-enum-usage,
+            bugprone-suspicious-memset-usage,
+            bugprone-suspicious-missing-comma,
+            bugprone-suspicious-semicolon,
+            bugprone-swapped-arguments,
+            bugprone-terminating-continue,
+            bugprone-throw-keyword-missing,
+            bugprone-too-small-loop-variable,
+            bugprone-undefined-memory-manipulation,
+            bugprone-undelegated-constructor,
+            bugprone-unhandled-self-assignment,
+            bugprone-unused-raii,
+            bugprone-unused-return-value,
+            bugprone-use-after-move,
+            bugprone-virtual-near-miss,
+            cert-dcl21-cpp,
+            cert-dcl58-cpp,
+            cert-err34-c,
+            cert-err52-cpp,
+            cert-err60-cpp,
+            cert-flp30-c,
+            cert-msc50-cpp,
+            cert-msc51-cpp,
+            cert-oop58-cpp,
+            clang-diagnostic-address,
+            readability-implicit-bool-conversion,
+            modernize-use-nullptr,
+            performance-inefficient-string-concatenation
+          WarningsAsErrors: '*'
+          HeaderFilterRegex: '^((?!third-party/).)*$|third-party/(realdds|rsutils)/.*'
+          FormatStyle: none
+          CheckOptions:
+            - key: readability-implicit-bool-conversion.AllowIntegerConditions
+              value: 'false'
+            - key: readability-implicit-bool-conversion.AllowPointerConditions
+              value: 'false'
+            - key: clang-diagnostic-address
+              value: 'true'
+          EOF
+          echo "Created .clang-tidy configuration:"
+          cat .clang-tidy
+
+      - name: Run clang-tidy
+        run: |
+          echo "Running clang-tidy..."
+          cp build/compile_commands.json .
+          # Run clang-tidy only on files that are in compile_commands.json
+          # This avoids "Error while processing" for files not in the build
+          echo "Files in compile database:"
+          jq -r '.[].file' compile_commands.json | head -20
+          
+          # Find only .cpp files that exist in compile_commands.json
+          # Exclude third-party files except realdds and rsutils
+          FILES_TO_CHECK=$(jq -r '.[].file' compile_commands.json | \
+            grep -E '\.(cpp|cc|cxx)$' | \
+            grep -v 'third-party/' | \
+            sort -u)
+          
+          # Add back third-party/realdds and third-party/rsutils
+          FILES_TO_CHECK_THIRD_PARTY=$(jq -r '.[].file' compile_commands.json | \
+            grep -E '\.(cpp|cc|cxx)$' | \
+            grep -E 'third-party/(realdds|rsutils)/' | \
+            sort -u)
+          
+          FILES_TO_CHECK=$(echo -e "$FILES_TO_CHECK\n$FILES_TO_CHECK_THIRD_PARTY" | grep -v '^$' | sort -u)
+          
+          if [ -z "$FILES_TO_CHECK" ]; then
+            echo "No files found in compile_commands.json"
+            exit 1
+          fi
+          
+          echo "Running clang-tidy on $(echo "$FILES_TO_CHECK" | wc -l) files..."
+          echo "Sample files to check:"
+          echo "$FILES_TO_CHECK" | head -10
+          echo "$FILES_TO_CHECK" | xargs clang-tidy -p . 2>&1 | tee clang-tidy.log
+          
+          # Show summary of issues found
+          echo ""
+          echo "=== Summary of issues found ==="
+          grep -E 'error:' clang-tidy.log | grep -v '\[clang-diagnostic' | wc -l || echo "0 issues found"
+
+      # === NEW: Extract errors only to a separate log ===
+      - name: Extract errors from clang-tidy log
+        run: |
+          # Extract actual clang-tidy warnings/errors, excluding:
+          # - clang-diagnostic-* (compilation errors)
+          # - "Error while processing" messages
+          # Match format: /path/to/file.cpp:123:45: error: message [check-name]
+          grep -E '^[^:]+:[0-9]+:[0-9]+: (error):' clang-tidy.log | \
+            grep -v '\[clang-diagnostic' | \
+            grep -v 'Error while processing' > clang-tidy-errors.log || true
+
+      # === NEW: Summarize only errors at the end ===
+      - name: Errors Only Summary
+        run: |
+          echo "Clang-Tidy Errors Only Summary:"
+          total_errors=$(cat clang-tidy-errors.log | wc -l)
+          echo ""
+          echo "Total errors found: $total_errors"
+          echo ""
+          if (( total_errors > 0 )); then
+            echo "Top error types:"
+            grep -oE '\[[^][]+\]' clang-tidy-errors.log | sort | uniq -c | sort -nr | head -20
+            echo ""
+            echo "CI failed due to errors. See clang-tidy-errors.log for details."
+            exit 1
+          else
+            echo "✅ No clang-tidy errors found."
+          fi
+
+      - name: Upload full clang-tidy log as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-log
+          path: clang-tidy.log
+
+      # === NEW: Upload errors-only log as artifact ===
+      - name: Upload clang-tidy errors-only log as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-errors-log
+          path: clang-tidy-errors.log
