@@ -29,8 +29,43 @@ Please see [Github Actions](https://docs.github.com/en/actions) for the exact UR
 
 In addition to running the tests locally, it is very easy to replicate our continuous integration process for your fork of the project - just sign-in to [Github Actions](https://docs.github.com/en/actions) and enable builds on your fork of `librealsense`. 
 
+## Python Unit Tests (Pytest Migration)
+
+Python unit tests are being migrated from the proprietary LibCI infrastructure to pytest. Migrated tests use the `pytest-*.py` naming convention, while legacy tests remain as `test-*.py`.
+
+### Quick Start
+
+```bash
+# Install pytest-timeout (required for timeout support)
+pip install pytest-timeout
+
+# Run all migrated tests
+py -3.13 -m pytest -v
+
+# Run specific test
+py -3.13 -m pytest live/frames/pytest-t2ff-pipeline.py -v
+
+# Run only nightly tests
+py -3.13 -m pytest -m nightly
+
+# Skip nightly tests (default behavior)
+py -3.13 -m pytest -m "not nightly"
+
+# Validate setup
+py -3.13 validate-pytest-migration.py
+```
+
+### Key Features
+
+- **Device Hub Control**: Maintains full device hub integration for power cycling
+- **Device Markers**: Tests specify which devices they need (e.g., `@pytest.mark.device_each("D400*")`)
+- **Timeouts**: Default 200s, configurable per-test (e.g., `@pytest.mark.timeout(1500)`)
+- **Nightly Tests**: Automatically skipped unless explicitly requested
+
+See [PYTEST_MIGRATION_GUIDE.md](PYTEST_MIGRATION_GUIDE.md) for complete documentation on migrating tests and available fixtures.
+
 ## Controlling Test Execution
 
-We are using [Catch](https://github.com/philsquared/Catch) as our test framework. 
+We are using [Catch](https://github.com/philsquared/Catch) as our test framework for C++ tests. 
 
 To see the list of passing tests (and not just the failures), add `-d yes` to test command line.

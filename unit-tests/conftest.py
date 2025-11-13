@@ -57,6 +57,33 @@ def pytest_configure(config):
     )
 
 
+def pytest_collection_modifyitems(config, items):
+    """
+    Modify test collection to handle nightly tests.
+    
+    By default, nightly tests are skipped unless explicitly requested.
+    This matches LibCI behavior: #test:donotrun:!nightly
+    
+    To run nightly tests:
+    - Use: pytest -m nightly (only nightly)
+    - Use: pytest -m "nightly or not nightly" (all tests including nightly)
+    """
+    # Check if user explicitly requested nightly tests
+    markexpr = config.getoption("-m", default="")
+    
+    # Skip nightly tests unless explicitly included in marker expression
+    # Examples that include nightly: "nightly", "nightly or not nightly", "nightly and device_each"
+    if markexpr and "nightly" in markexpr:
+        # User explicitly mentioned nightly in marker expression, don't skip
+        return
+    
+    # No marker expression or nightly not mentioned - skip nightly tests
+    skip_nightly = pytest.mark.skip(reason="Nightly test (use -m nightly to run)")
+    for item in items:
+        if "nightly" in item.keywords:
+            item.add_marker(skip_nightly)
+
+
 # ============================================================================
 # Session-Scoped Fixtures (Setup/Teardown)
 # ============================================================================

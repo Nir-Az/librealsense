@@ -53,6 +53,53 @@ py -3.13 validate-pytest-migration.py
 
 This allows gradual migration without interference between old and new infrastructure.
 
+## Special Directives
+
+### Timeout Configuration
+
+**LibCI:**
+```python
+#test:timeout 1500
+```
+
+**Pytest:**
+```python
+pytestmark = pytest.mark.timeout(1500)  # seconds
+```
+
+Or for individual tests:
+```python
+@pytest.mark.timeout(300)
+def test_something():
+    ...
+```
+
+**Configuration:**
+- Default timeout: 200 seconds (set in pytest.ini)
+- Requires: `pip install pytest-timeout`
+- Method: thread-based (for Windows compatibility)
+
+### Nightly Tests (donotrun)
+
+**LibCI:**
+```python
+#test:donotrun:!nightly
+```
+Means: Skip this test UNLESS running in nightly context.
+
+**Pytest:**
+```python
+pytestmark = pytest.mark.nightly
+```
+
+**Behavior:**
+- By default: Nightly tests are **skipped** automatically
+- To run only nightly tests: `pytest -m nightly`
+- To run all tests including nightly: `pytest -m "nightly or not nightly"`
+- To exclude nightly: Default behavior (no `-m` flag needed)
+
+This is implemented in `conftest.py` via `pytest_collection_modifyitems` hook.
+
 ## Migration Steps
 
 ### Step 1: Convert Test Structure
@@ -398,4 +445,8 @@ When migrating a test file:
 | Run by marker | `py -3.13 -m pytest -m device_each` |
 | Run by pattern | `py -3.13 -m pytest -k "depth"` |
 | Debug mode | `py -3.13 -m pytest -s -v --log-cli-level=DEBUG` |
+| Run only nightly tests | `py -3.13 -m pytest -m nightly` |
+| Run all including nightly | `py -3.13 -m pytest -m "nightly or not nightly"` |
+| Override timeout | `py -3.13 -m pytest --timeout=300` |
+| Disable timeout | `py -3.13 -m pytest --timeout=0` |
 | Validate setup | `py -3.13 validate-pytest-migration.py` |
