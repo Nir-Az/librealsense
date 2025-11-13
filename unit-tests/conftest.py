@@ -55,6 +55,11 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "live: tests requiring live devices"
     )
+    
+    # Enable rspy debug logging if pytest log level is DEBUG
+    log_cli_level = config.getoption('--log-cli-level', default=None)
+    if log_cli_level and log_cli_level.upper() == 'DEBUG':
+        log.debug_on()
 
 
 def pytest_collection_modifyitems(config, items):
@@ -84,6 +89,27 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_nightly)
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    """
+    Hook called for each test to log device state changes and test duration.
+    """
+    import time
+    
+    # Log test starting
+    log.d(f"Running test: {item.nodeid}")
+    
+    # Track start time
+    start_time = time.time()
+    
+    # Execute the test
+    yield
+    
+    # Log test completion with duration
+    duration = time.time() - start_time
+    log.d(f"Test took {duration:.3f} seconds")
+
+
 # ============================================================================
 # Session-Scoped Fixtures (Setup/Teardown)
 # ============================================================================
@@ -96,10 +122,29 @@ def session_setup_teardown():
     """
     log.d("=== Pytest Session Starting ===")
     
+    # Log pyrealsense2 module location (INFO level so it's always visible)
+    if rs:
+        log.i(f"Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
+    
+    # Log build directory
+    log.d(f"Build directory: {repo.build if hasattr(repo, 'build') else 'unknown'}")
+    
     # Initialize devices (this will query and enumerate all connected devices)
+    log.i("Discovering devices...")
     try:
         devices.query()
-        log.d(f"Found {len(devices.all())} device(s)")
+        all_devices = devices.all()
+        log.d(f"Found {len(all_devices)} device(s)")
+        
+        # Log each discovered device
+        for sn in all_devices:
+            dev = devices.get(sn)
+            if dev:
+                log.d(f"    ... {sn}: {dev}")
+        
+        # Log hub information if available
+        if devices.hub and devices.hub.is_connected():
+            log.d(f"Device hub connected: {type(devices.hub).__name__}")
     except Exception as e:
         log.w(f"Failed to query devices: {e}")
     

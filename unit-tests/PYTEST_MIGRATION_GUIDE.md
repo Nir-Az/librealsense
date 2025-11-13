@@ -25,7 +25,7 @@ py -3.13 -m pytest -v
 # Run specific test file
 py -3.13 -m pytest live/frames/pytest-t2ff-pipeline.py -s -v
 
-# Run with debug logging
+# Run with debug logging (shows device connections, hub operations, test durations)
 py -3.13 -m pytest -s -v --log-cli-level=DEBUG
 
 # Filter by marker
@@ -444,7 +444,7 @@ When migrating a test file:
 | Run specific file | `py -3.13 -m pytest path/to/pytest-file.py` |
 | Run by marker | `py -3.13 -m pytest -m device_each` |
 | Run by pattern | `py -3.13 -m pytest -k "depth"` |
-| Debug mode | `py -3.13 -m pytest -s -v --log-cli-level=DEBUG` |
+| Debug mode (full device logs) | `py -3.13 -m pytest -s -v --log-cli-level=DEBUG` |
 | Run only nightly tests | `py -3.13 -m pytest -m nightly` |
 | Run all including nightly | `py -3.13 -m pytest -m "nightly or not nightly"` |
 | Override timeout | `py -3.13 -m pytest --timeout=300` |
