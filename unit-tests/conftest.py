@@ -53,6 +53,9 @@ def pytest_configure(config):
         "markers", "device_each(pattern): mark test to run on each device matching pattern separately"
     )
     config.addinivalue_line(
+        "markers", "device_exclude(pattern): exclude devices matching pattern from test execution"
+    )
+    config.addinivalue_line(
         "markers", "live: tests requiring live devices"
     )
     
@@ -182,7 +185,7 @@ def module_device_setup(request):
         if item.fspath == request.fspath:
             # Collect all device markers from this module's tests
             for marker in item.iter_markers():
-                if marker.name in ['device', 'device_each']:
+                if marker.name in ['device', 'device_each', 'device_exclude']:
                     device_markers.append(marker)
             break
     
@@ -224,9 +227,17 @@ def _find_matching_devices(device_markers) -> List[str]:
     """
     all_device_sns = devices.all()
     matching_sns = []
+    exclude_patterns = []
     
+    # First, collect all exclusion patterns
     for marker in device_markers:
-        if not marker.args:
+        if marker.name == 'device_exclude' and marker.args:
+            exclude_patterns.append(marker.args[0])
+            log.d(f"Excluding devices matching pattern: {marker.args[0]}")
+    
+    # Then find matching devices
+    for marker in device_markers:
+        if marker.name not in ['device', 'device_each'] or not marker.args:
             continue
             
         pattern = marker.args[0]
@@ -236,7 +247,15 @@ def _find_matching_devices(device_markers) -> List[str]:
         for sn in all_device_sns:
             device = devices.get(sn)
             if _device_matches_pattern(device, pattern):
-                if sn not in matching_sns:
+                # Check if device should be excluded
+                excluded = False
+                for exclude_pattern in exclude_patterns:
+                    if _device_matches_pattern(device, exclude_pattern):
+                        log.d(f"  Device {device.name} ({sn}) excluded by pattern: {exclude_pattern}")
+                        excluded = True
+                        break
+                
+                if not excluded and sn not in matching_sns:
                     matching_sns.append(sn)
                     log.d(f"  Found matching device: {device.name} ({sn})")
                 
