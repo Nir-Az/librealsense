@@ -39,6 +39,22 @@ except ImportError:
 
 
 # ============================================================================
+# Platform Detection
+# ============================================================================
+
+def is_jetson_platform():
+    """
+    Detect if running on NVIDIA Jetson platform.
+    """
+    try:
+        with open('/proc/device-tree/model', 'r') as f:
+            model = f.read()
+            return 'jetson' in model.lower()
+    except:
+        return False
+
+
+# ============================================================================
 # Pytest Hooks
 # ============================================================================
 

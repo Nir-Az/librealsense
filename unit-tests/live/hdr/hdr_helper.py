@@ -50,7 +50,7 @@ def to_signed(value):
     return str(value)
 
 
-def test_json_load(config, test_title):
+def verify_json_load(config, test_title):
     global batch_size
     with test.closure(test_title):
         prior_config = json.loads(am.serialize_json())
@@ -182,7 +182,7 @@ def load_and_perform_test(hdr_config, test_title, resolution=(640, 480)):
     """
     Load the HDR configuration and perform the HDR test.
     """
-    test_json_load(hdr_config, test_title + " - Load JSON")
+    verify_json_load(hdr_config, test_title + " - Load JSON")
     is_auto = False
     for key in hdr_config["hdr-preset"]["items"][0]["controls"].keys():
         if key == "depth-ae":
