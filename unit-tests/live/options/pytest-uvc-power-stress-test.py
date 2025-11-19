@@ -100,6 +100,6 @@ def test_uvc_power_stress_concurrent_presets(devices_for_stress_test):
         
         time.sleep(0.5)
     
-    # Wait for all threads to finish
+    # Wait for threads to finish
     for t in threads:
         t.join()

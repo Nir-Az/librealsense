@@ -15,6 +15,7 @@ import pytest
 import pyrealsense2 as rs
 import time
 import platform
+from rspy import tests_wrapper as tw
 
 # Module-level markers
 pytestmark = [
@@ -59,6 +60,8 @@ def streaming_sensors(test_device):
     def color_callback(frame):
         color_frames.append(frame)
     
+    tw.start_wrapper(dev)
+    
     depth_sensor.open(depth_profile)
     depth_sensor.start(depth_callback)
     
@@ -77,6 +80,8 @@ def streaming_sensors(test_device):
             color_sensor.close()
     except:
         pass
+    finally:
+        tw.stop_wrapper(dev)
 
 
 def check_frame_drops(frames, allowed_drops, product_line):

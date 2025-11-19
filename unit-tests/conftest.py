@@ -85,14 +85,18 @@ def pytest_collection_modifyitems(config, items):
     """
     Modify test collection to:
     1. Handle nightly tests (skip by default unless explicitly requested)
-    2. Sort tests by priority (lower numbers run first)
+    2. Handle DDS tests (skip by default unless explicitly requested)
+    3. Sort tests by priority (lower numbers run first)
     
-    By default, nightly tests are skipped unless explicitly requested.
-    This matches LibCI behavior: #test:donotrun:!nightly
+    By default, nightly and DDS tests are skipped unless explicitly requested.
+    This matches LibCI behavior: #test:donotrun:!nightly and #test:donotrun:!dds
     
     To run nightly tests:
     - Use: pytest -m nightly (only nightly)
     - Use: pytest -m "nightly or not nightly" (all tests including nightly)
+    
+    To run DDS tests:
+    - Use: pytest -m dds (only DDS)
     
     Priority system (matches LibCI test:priority):
     - Tests sorted by priority value (lower numbers run first)
@@ -100,7 +104,7 @@ def pytest_collection_modifyitems(config, items):
     - Priority 500: Default for tests without explicit priority
     - Priority 501-999: Run after normal tests (low priority)
     """
-    # Check if user explicitly requested nightly tests
+    # Check if user explicitly requested nightly or DDS tests
     markexpr = config.getoption("-m", default="")
     
     # Skip nightly tests unless explicitly included in marker expression
@@ -114,6 +118,17 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "nightly" in item.keywords:
                 item.add_marker(skip_nightly)
+    
+    # Skip DDS tests unless explicitly included in marker expression
+    if markexpr and "dds" in markexpr:
+        # User explicitly mentioned dds in marker expression, don't skip
+        pass
+    else:
+        # No marker expression or dds not mentioned - skip DDS tests
+        skip_dds = pytest.mark.skip(reason="DDS test (use -m dds to run)")
+        for item in items:
+            if "dds" in item.keywords:
+                item.add_marker(skip_dds)
     
     # Sort tests by priority (lower numbers first)
     def get_priority(item):
