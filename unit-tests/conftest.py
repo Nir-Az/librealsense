@@ -83,7 +83,9 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """
-    Modify test collection to handle nightly tests.
+    Modify test collection to:
+    1. Handle nightly tests (skip by default unless explicitly requested)
+    2. Sort tests by priority (lower numbers run first)
     
     By default, nightly tests are skipped unless explicitly requested.
     This matches LibCI behavior: #test:donotrun:!nightly
@@ -91,6 +93,12 @@ def pytest_collection_modifyitems(config, items):
     To run nightly tests:
     - Use: pytest -m nightly (only nightly)
     - Use: pytest -m "nightly or not nightly" (all tests including nightly)
+    
+    Priority system (matches LibCI test:priority):
+    - Tests sorted by priority value (lower numbers run first)
+    - Priority 1-499: Run before normal tests (high priority)
+    - Priority 500: Default for tests without explicit priority
+    - Priority 501-999: Run after normal tests (low priority)
     """
     # Check if user explicitly requested nightly tests
     markexpr = config.getoption("-m", default="")
@@ -99,13 +107,23 @@ def pytest_collection_modifyitems(config, items):
     # Examples that include nightly: "nightly", "nightly or not nightly", "nightly and device_each"
     if markexpr and "nightly" in markexpr:
         # User explicitly mentioned nightly in marker expression, don't skip
-        return
+        pass
+    else:
+        # No marker expression or nightly not mentioned - skip nightly tests
+        skip_nightly = pytest.mark.skip(reason="Nightly test (use -m nightly to run)")
+        for item in items:
+            if "nightly" in item.keywords:
+                item.add_marker(skip_nightly)
     
-    # No marker expression or nightly not mentioned - skip nightly tests
-    skip_nightly = pytest.mark.skip(reason="Nightly test (use -m nightly to run)")
-    for item in items:
-        if "nightly" in item.keywords:
-            item.add_marker(skip_nightly)
+    # Sort tests by priority (lower numbers first)
+    def get_priority(item):
+        """Extract priority value from test item, default to 500."""
+        marker = item.get_closest_marker("priority")
+        if marker and marker.args:
+            return marker.args[0]
+        return 500  # Default priority for tests without explicit priority
+    
+    items.sort(key=get_priority)
 
 
 @pytest.hookimpl(hookwrapper=True)
