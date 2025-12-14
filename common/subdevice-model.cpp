@@ -826,21 +826,19 @@ namespace rs2
     {
         bool res = false;
 
-        if (!ui.is_multiple_resolutions)
-        {
-            return false;
-        }
-
         std::vector<rs2_stream> relevant_streams = { RS2_STREAM_DEPTH, RS2_STREAM_INFRARED };
         for (auto&& stream_type : relevant_streams)
         {
             // resolution
             // Draw combo-box with all resolution options for this stream type
-            res &= draw_resolutions_combo_box_multiple_resolutions(error_message, label, streaming_tooltip, col0, col1, stream_type);
+            res |= draw_resolutions_combo_box_multiple_resolutions(error_message, label, streaming_tooltip, col0, col1, stream_type);
 
-            // stream and formats
-            // Draw combo-box with all format options for current stream type
-            res &= draw_formats_combo_box_multiple_resolutions(error_message, label, streaming_tooltip, col0, col1, stream_type);
+            if (draw_streams_selector) 
+            {
+                // stream and formats
+                // Draw combo-box with all format options for current stream type
+                res |= draw_formats_combo_box_multiple_resolutions(error_message, label, streaming_tooltip, col0, col1, stream_type);
+            }
         }
 
         return res;
@@ -864,22 +862,19 @@ namespace rs2
         auto col0 = ImGui::GetCursorPosX();
         auto col1 = 9.f * (float)config_file::instance().get( configurations::window::font_size );
 
-        if (ui.is_multiple_resolutions && !strcmp(s->get_info(RS2_CAMERA_INFO_NAME), "Stereo Module"))
+        if (ui.is_multiple_resolutions)
         {
             if (draw_fps_selector)
             {
                 res |= draw_fps(error_message, label, streaming_tooltip, col0, col1);
             }
 
-            if (draw_streams_selector)
+            if (!streaming)
             {
-                if (!streaming)
-                {
-                    ImGui::Text("Available Streams:");
-                }
-
-                res |= draw_res_stream_formats(error_message, label, streaming_tooltip, col0, col1);
+                ImGui::Text("Available Streams:");
             }
+
+            res |= draw_res_stream_formats(error_message, label, streaming_tooltip, col0, col1);
         }
         else
         {
