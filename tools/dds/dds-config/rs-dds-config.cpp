@@ -191,6 +191,7 @@ try
     cli::value< uint32_t > link_timeout_arg( "link-timeout", "milliseconds", 4000, "Milliseconds before --eth-first link times out and falls back to USB" );
     cli::value< uint32_t > mtu_arg( "mtu", "bytes", 9000, "Size per Ethernet packet. 500-9000 in 500 byte steps" );
     cli::value< uint16_t > trans_delay_arg( "transmission-delay", "microseconds", 0, "Wait this much after each packet is sent before sending next one. 0-144 in 3 microsecond steps" );
+    cli::value< uint16_t > udp_ttl_arg( "ttl", "1-255", 1, "UDP only. Value to use in UDP packet TTL field" );
     cli::value< int > domain_id_arg( "domain-id", "0-232", 0, "DDS Domain ID to use (default is 0)" );
     cli::flag usb_first_arg( "usb-first", "Prioritize USB and fall back to Ethernet after link timeout" );
     cli::flag eth_first_arg( "eth-first", "Prioritize Ethernet and fall back to USB after link timeout" );
@@ -211,6 +212,7 @@ try
                         .arg( dhcp_timeout_arg )
                         .arg( mtu_arg )
                         .arg( trans_delay_arg )
+                        .arg( udp_ttl_arg )
                         .arg( ip_arg )
                         .arg( mask_arg )
                         .arg( gateway_arg )
@@ -239,6 +241,8 @@ try
         }
         return EXIT_SUCCESS;
     }
+
+    std::cout << "rs-dds-config " << RS2_API_FULL_VERSION_STR << std::endl << std::endl;
     
     // Enable DDS in future runs
     auto const filename = rsutils::os::get_special_folder( rsutils::os::special_folder::app_data ) + RS2_CONFIG_FILENAME;
@@ -357,6 +361,10 @@ try
         {
             requested.transmission_delay = trans_delay_arg.getValue();
         }
+        if( udp_ttl_arg.isSet() )
+        {
+            requested.udp_ttl = udp_ttl_arg.getValue();
+        }
     }
 
     if( ! g_quiet )
@@ -393,6 +401,7 @@ try
             INFO( indent( 8 ) << setting( "timeout, sec", current.dhcp.timeout, requested.dhcp.timeout ) );
         }
         INFO( indent( 4 ) << setting( "transmission delay, us", current.transmission_delay, requested.transmission_delay ) );
+        INFO( indent( 4 ) << setting( "UDP TTL", current.udp_ttl, requested.udp_ttl ) );
         std::cout << std::endl;
     }
 

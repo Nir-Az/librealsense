@@ -2,7 +2,7 @@
 # Copyright(c) 2025 RealSense Inc. All Rights Reserved.
 
 # Currently only D555 supports DDS configuration natively
-# test:device each(D555)
+# test:device D555
 
 import pyrealsense2 as rs
 import pyrsutils as rsutils
@@ -102,6 +102,29 @@ with test.closure("Test transmission delay configuration"):
         else:
             test.unreachable()
     new_config.transmission_delay = orig_config.transmission_delay # Restore field that might fail other tests, depending header version.
+
+with test.closure("Test UDP TTL configuration"):
+    new_config.udp_ttl = 128
+    if new_config.header.version < 5:
+        try:
+            set_eth_config( new_config )
+        except ValueError as e:
+            test.check_exception( e, ValueError, "Camera FW does not support UDP TTL configuration." )
+        else:
+            test.unreachable()
+    else:
+        set_eth_config( new_config )
+        updated_config = get_eth_config()
+        test.check( updated_config.udp_ttl == 128 )
+
+        new_config.udp_ttl = 300
+        try:
+            set_eth_config( new_config )
+        except ValueError as e:
+            test.check_exception( e, ValueError, "UDP TTL should be 1-255 (or 0 for system default). Current 300" )
+        else:
+            test.unreachable()
+    new_config.udp_ttl = orig_config.udp_ttl # Restore field that might fail other tests, depending header version.
 
 with test.closure("Test configuration failures"): # Failures depending on version tested separately
     new_config.header.version = 2

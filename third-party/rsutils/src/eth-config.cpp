@@ -4,6 +4,7 @@
 #include <rsutils/type/eth-config.h>
 #include <rsutils/type/eth-config-v3.h>
 #include <rsutils/type/eth-config-v4.h>
+#include <rsutils/type/eth-config-v5.h>
 
 #include <rsutils/number/crc32.h>
 #include <rsutils/string/hexdump.h>
@@ -65,6 +66,7 @@ eth_config::eth_config( eth_config_v3 const & v3 )
     , link{ v3.mtu, v3.link_speed, v3.link_check_timeout, link_priority( v3.link_priority ) }
     , dhcp{ v3.dhcp_on != 0, v3.dhcp_timeout }
     , transmission_delay( 0 )
+    , udp_ttl( 0 )
 {
     if( header.version != 3 )
         throw std::runtime_error( rsutils::string::from() << "eth-config expecting version 3. Got " << header.version );
@@ -80,11 +82,27 @@ eth_config::eth_config( eth_config_v4 const & v4 )
     , link{ v4.mtu, v4.link_speed, v4.link_check_timeout, link_priority( v4.link_priority ) }
     , dhcp{ v4.dhcp_on != 0, v4.dhcp_timeout }
     , transmission_delay( v4.transmission_delay )
+    , udp_ttl( 0 )
 {
     if( header.version != 4 )
         throw std::runtime_error( rsutils::string::from() << "eth-config expecting version 4. Got " << header.version );
 }
 
+eth_config::eth_config( eth_config_v5 const & v5 )
+    : header( v5.header )
+    , mac_address( rsutils::string::from( rsutils::string::hexdump( v5.mac_address, sizeof( v5.mac_address ) )
+                                              .format( "{01}:{01}:{01}:{01}:{01}:{01}" ) ) )
+    , configured{ v5.config_ip, v5.config_netmask, v5.config_gateway }
+    , actual{ v5.actual_ip, v5.actual_netmask, v5.actual_gateway }
+    , dds{ v5.domain_id }
+    , link{ v5.mtu, v5.link_speed, v5.link_check_timeout, link_priority( v5.link_priority ) }
+    , dhcp{ v5.dhcp_on != 0, v5.dhcp_timeout }
+    , transmission_delay( v5.transmission_delay )
+    , udp_ttl( v5.udp_ttl )
+{
+    if( header.version != 5 )
+        throw std::runtime_error( rsutils::string::from() << "eth-config expecting version 5. Got " << header.version );
+}
 
 eth_config::eth_config( std::vector< uint8_t > const & hwm_response )
 {
@@ -124,6 +142,15 @@ eth_config::eth_config( std::vector< uint8_t > const & hwm_response )
         *this = *config;
         break;
     }
+    case 5: {
+        if( header->size != sizeof( eth_config_v5 ) - sizeof( *header ) )
+            throw std::runtime_error( rsutils::string::from()
+                                      << "Invalid Eth config table v5 size (" << header->size << "); expecting "
+                                      << sizeof( eth_config_v5 ) << "-" << sizeof( *header ) );
+        auto config = reinterpret_cast< eth_config_v5 const * >( hwm_response.data() );
+        *this = *config;
+        break;
+    }
     default:
         throw std::runtime_error( rsutils::string::from()
                                   << "Unrecognized Eth config table version " << header->version );
@@ -143,7 +170,8 @@ bool eth_config::operator==( eth_config const & other ) const noexcept
         && link.priority == other.link.priority
         && link.timeout == other.link.timeout
         && dhcp.timeout == other.dhcp.timeout
-        && transmission_delay == other.transmission_delay;
+        && transmission_delay == other.transmission_delay
+        && udp_ttl == other.udp_ttl;
 }
 
 
@@ -158,8 +186,8 @@ std::vector< uint8_t > eth_config::build_command() const
     validate();
 
     std::vector< uint8_t > data;
-    data.resize( sizeof( eth_config_v4 ) );
-    eth_config_v4 & cfg = *reinterpret_cast< eth_config_v4 * >( data.data() );
+    data.resize( sizeof( eth_config_v5 ) );
+    eth_config_v5 & cfg = *reinterpret_cast< eth_config_v5 * >( data.data() );
     configured.ip.get_components( cfg.config_ip );
     configured.netmask.get_components( cfg.config_netmask );
     configured.gateway.get_components( cfg.config_gateway );
@@ -170,12 +198,18 @@ std::vector< uint8_t > eth_config::build_command() const
     cfg.link_priority = (uint8_t)link.priority;
     cfg.mtu = link.mtu;
     cfg.transmission_delay = transmission_delay;
+    cfg.udp_ttl = udp_ttl;
+
+    if( header.version < 5 )
+    {
+        cfg.udp_ttl = 0;  // Not supported in FW, keep default DDS layer value.
+    }
 
     if( header.version == 3 )
     {
         cfg.mtu = 9000;  // R/O, but must be set to this value
         cfg.transmission_delay = 0; // Was reserved on v3, keep 0
-        data.resize( sizeof( eth_config_v3 ) ); // Trim v4 reserved bytes
+        data.resize( sizeof( eth_config_v3 ) ); // Trim greater version reserved bytes
     }
 
     eth_config_header & cfg_header = *reinterpret_cast< eth_config_header * >( data.data() ); // Getting reference to header again after possible resize
@@ -188,7 +222,7 @@ std::vector< uint8_t > eth_config::build_command() const
 
 void eth_config::validate() const
 {
-    if( header.version != 3 && header.version != 4 )
+    if( header.version != 3 && header.version != 4 && header.version != 5 )
         throw std::invalid_argument( rsutils::string::from() << "Unrecognized Eth config table version " << header.version );
 
     if( ! configured.ip.is_valid() )
@@ -213,6 +247,11 @@ void eth_config::validate() const
         throw std::invalid_argument( rsutils::string::from() << "Transmission delay must be divisible by 3. Current " << transmission_delay );
     if( header.version == 3 && transmission_delay != 0 )
         throw std::invalid_argument( "Camera FW does not support transmission delay." );
+
+    if( header.version < 5 && udp_ttl != 0 )
+        throw std::invalid_argument( "Camera FW does not support changing UDP TTL value." );
+    if( header.version >= 5 && udp_ttl > 255 )
+        throw std::invalid_argument( rsutils::string::from() << "UDP TTL should be 1-255 (or 0 for system default). Current " << udp_ttl );
 }
 
 }  // namespace type
