@@ -34,9 +34,7 @@ public:
     {
         OFFLINE,                  // disconnected by device-watcher
         ONLINE,                   // default state, waiting for handshake (device-header)
-        WAIT_FOR_DEVICE_OPTIONS,  //   |
-        WAIT_FOR_STREAM_HEADER,   //   | handshake (initialization)
-        WAIT_FOR_STREAM_OPTIONS,  //   |
+        INITIALIZING,             // handshake with device
         READY                     // post handshake; streamable, controllable, etc.
     };
 
@@ -52,6 +50,9 @@ public:
     std::shared_ptr< dds_subscriber > _subscriber;
 
     std::map< std::string, std::shared_ptr< dds_stream > > _streams;
+    std::map< std::string, bool > _stream_header_received;
+    std::map< std::string, bool > _stream_options_received;
+    bool _device_options_received;
 
     std::mutex _replies_mutex;
     std::condition_variable _replies_cv;

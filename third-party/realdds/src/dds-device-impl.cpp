@@ -115,6 +115,9 @@ void dds_device::impl::reset()
     _server_guid = {};
     _n_streams_expected = 0;
     _streams.clear();
+    _stream_header_received.clear();
+    _stream_options_received.clear();
+    _device_options_received = false;
     _options.clear();
     _extrinsics_map.clear();
     if( _metadata_reader )
@@ -779,14 +782,16 @@ void dds_device::impl::on_device_header( json const & j, dds_sample const & samp
         }
     }
 
-    set_state( state_t::WAIT_FOR_DEVICE_OPTIONS );
+    set_state( state_t::INITIALIZING );
 }
 
 
 void dds_device::impl::on_device_options( json const & j, dds_sample const & sample )
 {
-    if( _state != state_t::WAIT_FOR_DEVICE_OPTIONS )
+    if( _state != state_t::INITIALIZING )
         return;
+
+    _device_options_received = true;
 
     if( auto options_j = j.nested( topics::notification::device_options::key::options ) )
     {
@@ -799,16 +804,14 @@ void dds_device::impl::on_device_options( json const & j, dds_sample const & sam
         }
     }
 
-    if( _n_streams_expected )
-        set_state( state_t::WAIT_FOR_STREAM_HEADER );
-    else
+    if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected )
         set_state( state_t::READY );
 }
 
 
 void dds_device::impl::on_stream_header( json const & j, dds_sample const & sample )
 {
-    if( _state != state_t::WAIT_FOR_STREAM_HEADER )
+    if( _state != state_t::INITIALIZING )
         return;
 
     if( _streams.size() >= _n_streams_expected )
@@ -817,8 +820,11 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
     auto & stream_name = j.at( topics::notification::stream_header::key::name ).string_ref();
 
     auto & stream = _streams[stream_name];
-    if( stream )
-        DDS_THROW( runtime_error, "stream '" << stream_name << "' already exists" );
+    if( _stream_header_received[stream_name] )
+    {
+        LOG_WARNING( "stream header for stream '" << stream_name << "' already received. Ignoring..." );
+        return;
+    }
 
     auto & sensor_name = j.at( topics::notification::stream_header::key::sensor_name ).string_ref();
     size_t default_profile_index = j.at( "default-profile-index" ).get< size_t >();
@@ -858,25 +864,29 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
         DDS_THROW( runtime_error,
                    "failed to instantiate stream type '" << stream_type << "' (instead, got '" << stream->type_string()
                                                          << "')" );
-
+    _stream_header_received[stream_name] = true;
     LOG_DEBUG( "[" << debug_name() << "] ... stream " << _streams.size() << "/" << _n_streams_expected << " '" << stream_name
                              << "' received with " << profiles.size() << " profiles"
                              << ( stream->metadata_enabled() ? " and metadata" : "" ) );
 
-    set_state( state_t::WAIT_FOR_STREAM_OPTIONS );
+    if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
+        _device_options_received )
+        set_state( state_t::READY );
 }
 
 
 void dds_device::impl::on_stream_options( json const & j, dds_sample const & sample )
 {
-    if( _state != state_t::WAIT_FOR_STREAM_OPTIONS )
+    if( _state != state_t::INITIALIZING )
         return;
 
     auto & stream_name = j.at( topics::notification::stream_options::key::stream_name ).string_ref();
-    auto stream_it = _streams.find( stream_name );
-    if( stream_it == _streams.end() )
-        DDS_THROW( runtime_error, "stream '" << stream_name << "' options received out of order" );
-    auto stream = stream_it->second;
+    auto & stream = _streams[stream_name];
+    if( _stream_options_received[stream_name] )
+    {
+        LOG_WARNING( "stream options for stream '" << stream_name << "' already received. Ignoring..." );
+        return;
+    }
 
     if( auto options_j = j.nested( topics::notification::stream_options::key::options ) )
     {
@@ -952,10 +962,10 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
         stream->init_embedded_filters(std::move(embedded_filters));
     }
 
-    if( _streams.size() >= _n_streams_expected )
+    _stream_options_received[stream_name] = true;
+    if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
+        _device_options_received )
         set_state( state_t::READY );
-    else
-        set_state( state_t::WAIT_FOR_STREAM_HEADER );
 }
 
 
