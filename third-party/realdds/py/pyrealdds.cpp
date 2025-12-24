@@ -1218,13 +1218,14 @@ PYBIND11_MODULE(NAME, m) {
         .def( "participant", &dds_device::participant )
         .def( "server_guid", &dds_device::server_guid )
         .def( "guid", &dds_device::guid )
-        .def( "is_ready", &dds_device::is_ready )
+        .def( "is_ready", &dds_device::is_ready, "Device is ready after handshake phase", "allow_partial_capabilities"_a = false )
         .def( "is_online", &dds_device::is_online )
         .def( "is_offline", &dds_device::is_offline )
         .def( "wait_until_ready",
               &dds_device::wait_until_ready,
               py::call_guard< py::gil_scoped_release >(),
-              "timeout-ms"_a = 5000 )
+              "Waits until a device is ready, throws if timeout",
+              "timeout-ms"_a = 5000, "allow_partial_capabilities"_a = false )
         .def( "wait_until_online",
               &dds_device::wait_until_online,
               py::call_guard< py::gil_scoped_release >(),

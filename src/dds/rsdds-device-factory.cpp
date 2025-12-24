@@ -53,7 +53,10 @@ public:
             {
                 try
                 {
-                    dev->wait_until_ready();  // make sure handshake is complete, might throw
+                    dev->wait_until_ready( 5000, true );  // make sure handshake was (even partially) performed, might throw
+                    if( ! dev->is_ready() )
+                        LOG_ERROR( "Discovered DDS device " << dev->debug_name()
+                                   << " failed to be ready within timeout, using partial capabilities." );
                     _callbacks.raise( dev, true );
                 }
                 catch (std::runtime_error e)
@@ -249,7 +252,7 @@ std::vector< std::shared_ptr< device_info > > rsdds_device_factory::query_device
         _watcher_singleton->get_device_watcher()->foreach_device(
             [&]( std::shared_ptr< realdds::dds_device > const & dev ) -> bool
             {
-                if( ! dev->is_ready() )
+                if( ! dev->is_ready( true ) )
                 {
                     LOG_DEBUG( "device '" << dev->device_info().debug_name() << "' is not ready" );
                     return true;

@@ -52,10 +52,11 @@ public:
 
     // A device is ready for use after it's gone through handshake and can start streaming.
     // Losing discovery will lose ready status.
-    bool is_ready() const;
+    // May allow partial capabilities for better user experience in case of network message loss.
+    bool is_ready( bool allow_partial_capabilities = false ) const;
 
     // Wait until ready. Will throw if not ready within the timeout!
-    void wait_until_ready( size_t timeout_ms = 5000 ) const;
+    void wait_until_ready( size_t timeout_ms = 5000, bool allow_partial_capabilities = false ) const;
 
     // A device is offline when discovery is lost, and assumed online otherwise
     bool is_online() const;

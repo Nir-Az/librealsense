@@ -222,7 +222,7 @@ void dds_device::impl::on_notification( json && j, dds_sample const & notificati
 
 void dds_device::impl::on_set_filter(rsutils::json const& j, dds_sample const&)
 {
-    if (!is_ready())
+    if( ! is_ready() && ! is_initializing() )
         return;
 
     // This is the handler for "set-filter", meaning someone sent a control request to set a
@@ -271,7 +271,7 @@ void dds_device::impl::on_set_filter(rsutils::json const& j, dds_sample const&)
 
 void dds_device::impl::on_query_filter(json const& j, dds_sample const&)
 {
-    if (!is_ready())
+    if( ! is_ready() && ! is_initializing() )
         return;
 
     // This is the notification for "query-filter", which can get sent as a reply to a control or independently by the
@@ -321,7 +321,7 @@ void dds_device::impl::on_query_filter(json const& j, dds_sample const&)
 
 void dds_device::impl::on_set_option( json const & j, dds_sample const & )
 {
-    if( ! is_ready() )
+    if( ! is_ready() && ! is_initializing() )
         return;
 
     // This is the handler for "set-option" or "query-option", meaning someone sent a control request to set/get an
@@ -370,7 +370,7 @@ void dds_device::impl::on_set_option( json const & j, dds_sample const & )
 
 void dds_device::impl::on_query_options( json const & j, dds_sample const & )
 {
-    if( ! is_ready() )
+    if( ! is_ready() && ! is_initializing() )
         return;
 
     // This is the notification for "query-options", which can get sent as a reply to a control or independently by the
@@ -601,7 +601,7 @@ void dds_device::impl::set_embedded_filter(const std::shared_ptr< dds_embedded_f
         { topics::control::key::id, topics::control::set_filter::id },
         { topics::control::set_filter::key::name, filter->get_name() },
         { topics::control::set_filter::key::options, options_value }
-        });
+    });
     if (auto stream = filter->get_stream())
         j[topics::control::set_filter::key::stream_name] = stream->name();
 
@@ -618,7 +618,7 @@ json dds_device::impl::query_embedded_filter(const std::shared_ptr< dds_embedded
     json j = json::object({
         { topics::control::key::id, topics::control::query_filter::id },
         { topics::control::query_filter::key::name, filter->get_name() }
-        });
+    });
     if (auto stream = filter->get_stream())
         j[topics::control::query_filter::key::stream_name] = stream->name();
 
@@ -814,17 +814,18 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
     if( _state != state_t::INITIALIZING )
         return;
 
-    if( _streams.size() >= _n_streams_expected )
-        DDS_THROW( runtime_error, "more streams than expected (" << _n_streams_expected << ") received" );
     auto & stream_type = j.at( topics::notification::stream_header::key::type ).string_ref();
     auto & stream_name = j.at( topics::notification::stream_header::key::name ).string_ref();
 
-    auto & stream = _streams[stream_name];
     if( _stream_header_received[stream_name] )
     {
-        LOG_WARNING( "stream header for stream '" << stream_name << "' already received. Ignoring..." );
+        LOG_WARNING( "[" << debug_name() << "] stream header for stream '" << stream_name << "' already received. Ignoring..." );
         return;
     }
+
+    auto & stream = _streams[stream_name];
+    if( _streams.size() > _n_streams_expected )
+        DDS_THROW( runtime_error, "more streams than expected (" << _n_streams_expected << ") received" );
 
     auto & sensor_name = j.at( topics::notification::stream_header::key::sensor_name ).string_ref();
     size_t default_profile_index = j.at( "default-profile-index" ).get< size_t >();
@@ -884,7 +885,7 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
     auto & stream = _streams[stream_name];
     if( _stream_options_received[stream_name] )
     {
-        LOG_WARNING( "stream options for stream '" << stream_name << "' already received. Ignoring..." );
+        LOG_WARNING( "[" << debug_name() << "] stream options for stream '" << stream_name << "' already received. Ignoring..." );
         return;
     }
 
@@ -901,8 +902,8 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
             }
             catch( std::exception const& e )
             {
-                LOG_ERROR("[" << debug_name() << "] Invalid option for stream " << stream->name()
-                    << ". Error: " << e.what() << ", reading" << option_j);
+                LOG_ERROR( "[" << debug_name() << "] Invalid option for stream " << stream->name()
+                               << ". Error: " << e.what() << ", reading" << option_j );
             }
         }
         stream->init_options( options );
@@ -955,14 +956,15 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
             }
             catch (std::exception const& e)
             {
-                LOG_ERROR("[" << debug_name() << "] Invalid embedded filter for stream " << stream->name()
-                    << ". Error: " << e.what() << ", reading" << embedded_filter_j);
+                LOG_ERROR( "[" << debug_name() << "] Invalid embedded filter for stream " << stream->name()
+                               << ". Error: " << e.what() << ", reading" << embedded_filter_j );
             }            
         }
         stream->init_embedded_filters(std::move(embedded_filters));
     }
 
     _stream_options_received[stream_name] = true;
+    LOG_DEBUG( "[" << debug_name() << "] ... stream " << stream_name << "' received with " << stream->options().size() << " options" );
     if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
         _device_options_received )
         set_state( state_t::READY );

@@ -78,6 +78,7 @@ public:
 
     bool is_offline() const { return state_t::OFFLINE == _state; }
     bool is_online() const { return ! is_offline(); }
+    bool is_initializing() const { return state_t::INITIALIZING == _state; }
     bool is_ready() const { return state_t::READY == _state; }
 
     void open( const dds_stream_profiles & profiles );
