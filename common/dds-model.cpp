@@ -245,12 +245,16 @@ void dds_model::render_dds_config_window( ux_window & window, std::string & erro
             {
                 ImGui::SameLine();
                 ImGui::SetCursorPosX( ImGui::GetCursorPosX() + 50 );
-                ImGui::Text( "Link Timeout (seconds)" );
+                ImGui::Text( "Link Timeout [ms]" );
                 ImGui::SameLine();
                 int tempTimeout = static_cast< int >( _link_timeout_to_set );
-                if( ImGui::InputInt( "##Link Timeout (seconds)", &tempTimeout ) )
+                if( ImGui::InputInt( "##Link Timeout", &tempTimeout, 100 ) )
                 {
-                    _link_timeout_to_set = static_cast< uint32_t >( std::max( 0, tempTimeout ) );
+                    if( tempTimeout < 2000 )
+                        tempTimeout = 2000;
+                    if( tempTimeout > 30000 )
+                        tempTimeout = 30000;
+                    _link_timeout_to_set = static_cast< uint32_t >( tempTimeout );
                 }
             }
             ImGui::RadioButton( "USB First", reinterpret_cast< int * >( &connection_priority ), 1 );

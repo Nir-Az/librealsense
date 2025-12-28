@@ -40,6 +40,31 @@ with test.closure("Test link timeout configuration"):
     updated_config = get_eth_config()
     test.check( updated_config.link.timeout == orig_config.link.timeout * 2 )
 
+    if new_config.header.version >= 5:
+        new_config.link.timeout = 1000
+        try:
+            set_eth_config( new_config )
+        except ValueError as e:
+            test.check_exception( e, ValueError, "Link timeout should be 2000-30000. Current 1000" )
+        else:
+            test.unreachable()
+
+        new_config.link.timeout = 31000
+        try:
+            set_eth_config( new_config )
+        except ValueError as e:
+            test.check_exception( e, ValueError, "Link timeout should be 2000-30000. Current 31000" )
+        else:
+            test.unreachable()
+
+        new_config.link.timeout = 2345
+        try:
+            set_eth_config( new_config )
+        except ValueError as e:
+            test.check_exception( e, ValueError, "Link timeout must be divisible by 100. Current 2345" )
+        else:
+            test.unreachable()
+
 with test.closure("Test MTU configuration"):
     new_config.link.mtu = 4000
     if new_config.header.version == 3:

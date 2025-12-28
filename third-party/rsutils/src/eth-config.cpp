@@ -241,6 +241,11 @@ void eth_config::validate() const
     if( header.version == 3 && link.mtu != 9000 )
         throw std::invalid_argument( "Camera FW supports only MTU 9000." );
 
+    if( link.timeout < 2000 || link.timeout > 30000 )
+        throw std::invalid_argument( rsutils::string::from() << "Link timeout should be 2000-30000. Current " << link.timeout );
+    if( ( link.timeout % 100 ) != 0 )
+        throw std::invalid_argument( rsutils::string::from() << "Link timeout must be divisible by 100. Current " << link.timeout );
+
     if( transmission_delay > 144 )
         throw std::invalid_argument( rsutils::string::from() << "Transmission delay should be 0-144. Current " << transmission_delay );
     if( ( transmission_delay % 3 ) != 0)
