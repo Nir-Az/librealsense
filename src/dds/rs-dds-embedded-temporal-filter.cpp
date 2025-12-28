@@ -175,17 +175,13 @@ namespace librealsense {
     void rs_dds_embedded_temporal_filter::validate_persistency_option(rsutils::json opt_j) const
     {
         auto dds_persistency = find_dds_option_by_name(_dds_ef->get_options(), PERSISTENCY_OPTION_NAME);
-        int32_t persistency_val = opt_j[PERSISTENCY_OPTION_NAME].get<int32_t>();
-        // Check range using DDS option
-        if (!dds_persistency->get_minimum_value().is_null() && persistency_val < dds_persistency->get_minimum_value().get<int32_t>())
+        std::string persistency_val = opt_j[PERSISTENCY_OPTION_NAME].get<std::string>();
+        // Check range not relevant for string
+        // Checking that len is no more than max len to avoid DDS errors
+        if( persistency_val.size() > PERSISTENCY_MAX_LEN )
         {
-            throw std::invalid_argument("Persistency value " + std::to_string(persistency_val) +
-                " is below minimum " + std::to_string(dds_persistency->get_minimum_value().get<int32_t>()));
-        }
-        if (!dds_persistency->get_maximum_value().is_null() && persistency_val > dds_persistency->get_maximum_value().get<int32_t>())
-        {
-            throw std::invalid_argument("Persistency value " + std::to_string(persistency_val) +
-                " is above maximum " + std::to_string(dds_persistency->get_maximum_value().get<int32_t>()));
+            throw std::invalid_argument("Persistency value " + (persistency_val) +
+                " is too long ");
         }
     }
 
