@@ -134,7 +134,7 @@ with test.closure("Test UDP TTL configuration"):
         try:
             set_eth_config( new_config )
         except ValueError as e:
-            test.check_exception( e, ValueError, "Camera FW does not support UDP TTL configuration." )
+            test.check_exception( e, ValueError, "Camera FW does not support changing UDP TTL value." )
         else:
             test.unreachable()
     else:
