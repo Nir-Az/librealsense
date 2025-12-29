@@ -4916,6 +4916,22 @@ void rs2_set_transmission_delay( const rs2_device * device, unsigned int delay, 
 }
 HANDLE_EXCEPTIONS_AND_RETURN( , device )
 
+unsigned int rs2_get_udp_ttl( const rs2_device * device, rs2_error ** error ) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL( device );
+    auto eth_config = VALIDATE_INTERFACE( device->device, librealsense::eth_config_device );
+    return eth_config->get_udp_ttl();
+}
+HANDLE_EXCEPTIONS_AND_RETURN( 0, device )
+
+void rs2_set_udp_ttl( const rs2_device * device, unsigned int ttl, rs2_error ** error ) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL( device );
+    auto eth_config = VALIDATE_INTERFACE( device->device, librealsense::eth_config_device );
+    return eth_config->set_udp_ttl( ttl );
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, device )
+
 void rs2_restore_default_eth_config( const rs2_device * device, rs2_error ** error ) BEGIN_API_CALL
 {
     VALIDATE_NOT_NULL( device );
