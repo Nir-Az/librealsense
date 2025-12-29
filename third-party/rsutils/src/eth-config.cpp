@@ -2,9 +2,7 @@
 // Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <rsutils/type/eth-config.h>
-#include <rsutils/type/eth-config-v3.h>
-#include <rsutils/type/eth-config-v4.h>
-#include <rsutils/type/eth-config-v5.h>
+#include <rsutils/type/eth-config-struct.h>
 
 #include <rsutils/number/crc32.h>
 #include <rsutils/string/hexdump.h>
