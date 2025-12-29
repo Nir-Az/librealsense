@@ -1,23 +1,34 @@
 ## License: Apache 2.0. See LICENSE file in root directory.
-## Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
+## Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #####################################################
-##                   auto calibration              ##
+##                   Embedded Filters              ##
 #####################################################
 
-import argparse
-import json
+
 import sys
-import time
-
 import pyrealsense2 as rs
 
 
-ctx = rs.context()
+'''
+Aim of this example is to show how the python API for embedded filters must be used.
+Scenario is:
+1. Get connected DDS device
+2. Get its depth sensor
+3. Get its embedded filters
+4. For each embedded filter: show supported options and print current values
+'''
+
+def list_embedded_filter_options(embedded_filter):
+    options = embedded_filter.get_supported_options()
+    print("Supported options:")
+    for opt in options:
+        print(repr(opt) + ": " + str(embedded_filter.get_option_value(opt).value))
+    print("\n")
 
 
 def main(arguments=None):
-    #args = parse_arguments(arguments)
+    ctx = rs.context()
     try:
         device = ctx.query_devices()[0]
     except IndexError:
@@ -30,14 +41,14 @@ def main(arguments=None):
     depth_sensor = device.first_depth_sensor()
     embedded_filters = depth_sensor.query_embedded_filters()
     for filter in embedded_filters:
-
-
-'''
-def parse_arguments(args):
-    parser = argparse.ArgumentParser(description=__desc__)
-    #parser.add_argument('--exposure', default='auto', help="Exposure value or 'auto' to use auto exposure")
-    return parser.parse_args(args)
-'''
+        if filter.get_type() == rs.embedded_filter_type.decimation:
+            print("Decimation Embedded Filter found")
+            list_embedded_filter_options(filter)
+        elif filter.get_type() == rs.embedded_filter_type.temporal:
+            print("Temporal Embedded Filter found")
+            list_embedded_filter_options(filter)
+        else:
+            print("Embedded Filter found is of type: {}".format(filter.get_type()))
 
 
 if __name__ == '__main__':
