@@ -64,7 +64,8 @@ namespace librealsense {
 
         // In below implementation:
         // - setting one option leads to
-        //   * setting the new value for one option,
+        //   * setting the new value for one option in the device,
+        //   * setting the value also in the DDS filter
         // - getting one option leads to:
         //   * returning only the relevant option's value
         //   * the getting of the filter's options communicating with the device by DDS
