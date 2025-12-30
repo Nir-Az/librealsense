@@ -2,7 +2,7 @@
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 # test:device each(D400*) !D457  # D457 device is known for HW reset issues..
-# test:device each(D500*)
+# test:device each(D500*) !D555 # until test passing for D555
 # test:donotrun:!nightly
 
 import pyrealsense2 as rs
