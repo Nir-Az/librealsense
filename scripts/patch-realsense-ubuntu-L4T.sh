@@ -101,7 +101,7 @@ case ${JETSON_L4T_VERSION} in
 		PATCHES_REV="6.0"
 		KERNEL_RELEASE="5.15"
 	;;
-	"38.2" | "38.2.1" | "38.2.2")
+	"38.2" | "38.2.1" | "38.2.2" | "38.3")
 		# 38.2 --> 7.0
 		PATCHES_REV="7.0"
 		# starting from 38.2 licence link is inconsistent with release version
@@ -123,7 +123,7 @@ if version_lt "$PATCHES_REV" "6.0"; then
 	l4t_gh_dir=../linux-${KERNEL_RELEASE}-source-tree
 	if [[ ! -d ${l4t_gh_dir} ]]; then
 		mkdir ${l4t_gh_dir}
-		pushd ${l4t_gh_dir}
+		pushd ${l4t_gh_dir} > /dev/null
 		git init
 		git remote add origin git://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
 		# Use NVIDIA script instead to synchronize source tree and peripherals
@@ -134,7 +134,7 @@ if version_lt "$PATCHES_REV" "6.0"; then
 	fi
 
 	#Search the repository for the tag that matches the maj.min for L4T
-	pushd ${l4t_gh_dir}
+	pushd ${l4t_gh_dir} > /dev/null
 	TEGRA_TAG=$(git ls-remote --tags origin | grep ${JETSON_L4T_VERSION} | grep '[^^{}]$' | tail -n 1 | awk -F/ '{print $NF}')
 	echo -e "\e[32mThe matching L4T source tree tag is \e[47m${TEGRA_TAG}\e[0m"
 	popd
