@@ -34,12 +34,11 @@ def main(arguments=None):
     except IndexError:
         print('Device is not connected')
         sys.exit(1)
-    if device.supports(rs.camera_info.connection_type):
-        if device.get_info(rs.camera_info.connection_type) != "DDS":
-            print('Device is not connected with DDS')
-            sys.exit(1)
     depth_sensor = device.first_depth_sensor()
     embedded_filters = depth_sensor.query_embedded_filters()
+    if len(embedded_filters) == 0:
+        print('No embedded filters found in this device')
+        sys.exit(1)
     for filter in embedded_filters:
         if filter.get_type() == rs.embedded_filter_type.decimation:
             print("Decimation Embedded Filter found")
