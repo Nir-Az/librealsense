@@ -219,15 +219,14 @@ function DownloadAndSync {
 		if [ $? -eq 0 ]; then
 			echo "Syncing up with tag $TAG..."
 			git checkout -b mybranch_$(date +%Y-%m-%d-%s) $TAG
-			echo "$2 source sync'ed to tag $TAG successfully!"
+			echo -e "\e[32m$2 source sync'ed to tag $TAG successfully!\e[0m"
 		else
 			echo "Couldn't find tag $TAG"
-			echo "$2 source sync to tag $TAG failed!"
+			echo -e "\e[31m$2 source sync to tag $TAG failed!\e[0m"
 			RET=1
 		fi
 		popd > /dev/null
 	fi
-	echo ""
 	echo ""
 
 	return "$RET"
