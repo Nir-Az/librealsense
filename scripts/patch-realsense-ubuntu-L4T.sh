@@ -13,11 +13,9 @@ exec 2>&3
 
 function DisplayNvidiaLicense {
     revision=$1
-
-    # By default referencing license agreement of JP 5.0.2
-    license_path="https://developer.download.nvidia.com/embedded/L4T/${revision}/release/Tegra_Software_License_Agreement-Tegra-Linux.txt"
-
-    echo -e "\nPlease notice: This script will download the kernel source (from nv-tegra, NVIDIA's public git repository) which is subject to the following license:\n\n${license_path}\n"
+    license_path="https://developer.download.nvidia.com/embedded/L4T/${revision}/Tegra_Software_License_Agreement-Tegra-Linux.txt"
+    echo -e "\nPlease notice: This script will download the kernel source (from nv-tegra, NVIDIA's public git repository) which is subject to the following license:"
+    echo -e "${license_path}\n"
 
     license="$(curl -L -s ${license_path})"
     [[ -z $license || "$license" == "Not found" ]] && echo "License link not found" && exit 2
@@ -78,7 +76,6 @@ fi
 # setting UBUNTU_CODENAME
 [[ -f /etc/os-release ]] && eval $(cat /etc/os-release|grep UBUNTU_CODENAME=)
 
-PATCHES_REV=""
 #Select the kernel patches revision that matches the paltform configuration
 case ${JETSON_L4T_VERSION} in
 	"32.2.1" | "32.2.3" | "32.3.1" | "32.4.3")
@@ -117,28 +114,6 @@ echo -e "\e[32mL4T ${JETSON_L4T_VERSION} to use patches revision ${PATCHES_REV}\
 
 # Get the required tools to build the patched modules
 sudo apt-get install build-essential git libssl-dev curl -y
-if version_lt "$PATCHES_REV" "6.0"; then
-	# Get the linux kernel repo, extract the L4T tag
-	echo -e "\e[32mRetrieve the corresponding L4T git tag the kernel source tree\e[0m"
-	l4t_gh_dir=../linux-${KERNEL_RELEASE}-source-tree
-	if [[ ! -d ${l4t_gh_dir} ]]; then
-		mkdir ${l4t_gh_dir}
-		pushd ${l4t_gh_dir} > /dev/null
-		git init
-		git remote add origin git://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
-		# Use NVIDIA script instead to synchronize source tree and peripherals
-		#git clone git://nv-tegra.nvidia.com/linux-${KERNEL_RELEASE}
-		popd
-	else
-		echo -e "Directory ${l4t_gh_dir} is present, skipping initialization...\e[0m"
-	fi
-
-	#Search the repository for the tag that matches the maj.min for L4T
-	pushd ${l4t_gh_dir} > /dev/null
-	TEGRA_TAG=$(git ls-remote --tags origin | grep ${JETSON_L4T_VERSION} | grep '[^^{}]$' | tail -n 1 | awk -F/ '{print $NF}')
-	echo -e "\e[32mThe matching L4T source tree tag is \e[47m${TEGRA_TAG}\e[0m"
-	popd
-fi
 
 #Retrieve tegra tag version for sync, required for get and sync kernel source with Jetson:
 #https://forums.developer.nvidia.com/t/r32-1-tx2-how-can-i-build-extra-module-in-the-tegra-device/72942/9
@@ -147,22 +122,23 @@ sdk_dir=$(pwd)
 echo -e "\e[32mCreate the sandbox - NVIDIA L4T source tree(s)\e[0m"
 mkdir -p ${sdk_dir}/Tegra
 TEGRA_SOURCE_SYNC_SH="sync.sh"
+RELEASE_STRING="release"
+TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
 if [[ "$PATCHES_REV" = "5.0.2" ]]; then
 	KBASE=./Tegra/sources/kernel/kernel-$KERNEL_RELEASE
+	RELEASE_STRING="Release"
 fi
 if [[ "$PATCHES_REV" = "6.0" ]]; then
 	KBASE=./Tegra/kernel/kernel-jammy-src
-	TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
 fi
 if [[ "$PATCHES_REV" = "7.0" ]]; then
 	KBASE=./Tegra/kernel/kernel-noble-src
-	TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
 fi
 cp ./scripts/Tegra/$TEGRA_SOURCE_SYNC_SH ${sdk_dir}/Tegra
 cp ./scripts/Tegra/${PATCHES_REV}.repos ${sdk_dir}/Tegra/repos
 
 # Display NVIDIA license
-DisplayNvidiaLicense "r${JETSON_L4T_RELEASE}_Release_v${JETSON_L4T_REVISION_LONG}"
+DisplayNvidiaLicense "r${JETSON_L4T_RELEASE}_Release_v${JETSON_L4T_REVISION_LONG}/${RELEASE_STRING}"
 
 # Download NVIDIA source
 ./Tegra/$TEGRA_SOURCE_SYNC_SH -k ${TEGRA_TAG}
@@ -287,13 +263,13 @@ popd > /dev/null
 if [[ "$PATCHES_REV" = "4.4" ]]; then # for Jetpack 4.4 and older
 	echo -e "\e[32mMove the modified modules into the modules tree\e[0m"
 	#Optional - create kernel modules directories in kernel tree
-	sudo mkdir -p /lib/modules/`uname -r`/kernel/drivers/iio/accel
-	sudo mkdir -p /lib/modules/`uname -r`/kernel/drivers/iio/gyro
-	sudo mkdir -p /lib/modules/`uname -r`/kernel/drivers/iio/common/hid-sensors
-	sudo cp  ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     /lib/modules/`uname -r`/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
-	sudo cp  ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      /lib/modules/`uname -r`/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
-	sudo cp  ~/${TEGRA_TAG}-hid-sensor-iio-common.ko   /lib/modules/`uname -r`/kernel/drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko
-	sudo cp  ~/${TEGRA_TAG}-hid-sensor-trigger.ko      /lib/modules/`uname -r`/kernel/drivers/iio/common/hid-sensors/hid-sensor-trigger.ko
+	sudo mkdir -p $RUNNING_KERNEL/kernel/drivers/iio/accel
+	sudo mkdir -p $RUNNING_KERNEL/drivers/iio/gyro
+	sudo mkdir -p $RUNNING_KERNEL/drivers/iio/common/hid-sensors
+	sudo cp  ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     $RUNNING_KERNEL/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
+	sudo cp  ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      $RUNNING_KERNEL/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
+	sudo cp  ~/${TEGRA_TAG}-hid-sensor-iio-common.ko   $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko
+	sudo cp  ~/${TEGRA_TAG}-hid-sensor-trigger.ko      $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-trigger.ko
 fi
 
 # update kernel module dependencies
@@ -332,14 +308,14 @@ else
 	echo -e "\e[32mDone\e[0m"
 fi
 if [[ "$PATCHES_REV" = "4.4" ]]; then # for Jetpack 4.4 and older
-	try_module_insert hid_sensor_accel_3d   ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     /lib/modules/`uname -r`/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
-	try_module_insert hid_sensor_gyro_3d    ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      /lib/modules/`uname -r`/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
+	try_module_insert hid_sensor_accel_3d   ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     $RUNNING_KERNEL/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
+	try_module_insert hid_sensor_gyro_3d    ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      $RUNNING_KERNEL/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
 	#Preventively unload all HID-related modules
 	try_unload_module hid_sensor_accel_3d
 	try_unload_module hid_sensor_gyro_3d
 	try_unload_module hid_sensor_trigger
 	try_unload_module hid_sensor_trigger
-	try_module_insert hid_sensor_trigger    ~/${TEGRA_TAG}-hid-sensor-trigger.ko      /lib/modules/`uname -r`/kernel/drivers/iio/common/hid-sensors/hid-sensor-trigger.ko
-	try_module_insert hid_sensor_iio_common ~/${TEGRA_TAG}-hid-sensor-iio-common.ko   /lib/modules/`uname -r`/kernel/drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko
+	try_module_insert hid_sensor_trigger    ~/${TEGRA_TAG}-hid-sensor-trigger.ko      $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-trigger.ko
+	try_module_insert hid_sensor_iio_common ~/${TEGRA_TAG}-hid-sensor-iio-common.ko   $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko
 fi
 echo -e "\e[92m\n\e[1mScript has completed. Please consult the installation guide for further instruction.\n\e[0m"
