@@ -146,59 +146,45 @@ function DownloadAndSync {
 	local OPT="$5"
 
 	if [ -z "$TAG" ]; then
-		echo "Please enter a tag to sync $2 source to"
-		echo -n "(enter nothing to skip): "
+		echo -n "Please enter a tag to sync $2 source to (enter nothing to skip): "
 		read TAG
-		TAG=$(echo $TAG)
 		UpdateTags $OPT $TAG
 	fi
 
 	if [ -d "${LDK_SOURCE_DIR}" ]; then
 		echo "Directory for $WHAT, ${LDK_SOURCE_DIR}, already exists!"
-		pushd "${LDK_SOURCE_DIR}" > /dev/null
-		if ! git status 2>&1 >/dev/null; then
-			echo -e "\e[33m...but the directory is not a git repository -- clean it up first\e[0m"
-			echo ""
-			popd > /dev/null
+		if ! git -C ${LDK_SOURCE_DIR} status 2>&1 >/dev/null; then
+			echo -e "\e[33m...but the directory is not a git repository -- clean it up first\e[0m\n"
 			false
 		fi
-		if [[ $REPO_URL != `git config remote.origin.url` ]]; then
+		ACTUAL_REPO=$(git -C ${LDK_SOURCE_DIR} config remote.origin.url)
+		if [[ $REPO_URL != $ACTUAL_REPO ]]; then
 			echo -e "\e[33mRepo URL are different:"
 			echo configured: $REPO_URL
-			echo actual: `git config remote.origin.url`
+			echo actual: $ACTUAL_REPO
 			echo -e "Consider removing ${WHAT} folder and start again\e[0m"
 		fi
-		git config remote.origin.url
-		git tag -l 2>/dev/null | grep -q -P "^$TAG\$" || \
-			git fetch --all 2>&1 >/dev/null || true
-		popd > /dev/null
+		git -C ${LDK_SOURCE_DIR} tag -l 2>/dev/null | grep -q -P "^$TAG\$" || \
+			git -C ${LDK_SOURCE_DIR} fetch --all 2>&1 >/dev/null || true
 	else
 		echo "Downloading default $WHAT source..."
-		
 		if ! git clone "$REPO_URL" -n ${LDK_SOURCE_DIR} 2>&1 >/dev/null; then
-			echo -e "\e[31m$2 source sync failed!\e]0m"
-			echo ""
-			popd > /dev/null
+			echo -e "\e[31msource sync with ${REPO_URL} failed!\e]0m\n"
 			false
 		fi
-
 		echo "The default $WHAT source is downloaded in: ${LDK_SOURCE_DIR}"
 	fi
 
 	if [ ! -z "$TAG" ]; then
-		pushd ${LDK_SOURCE_DIR} > /dev/null
-		if git tag -l 2>/dev/null | grep -q -P "^$TAG\$"; then
+		if git -C ${LDK_SOURCE_DIR} tag -l 2>/dev/null | grep -q -P "^$TAG\$"; then
 			echo "Syncing up with tag $TAG..."
-			git checkout -b mybranch_$(date +%Y-%m-%d-%s) $TAG
+			git -C ${LDK_SOURCE_DIR} checkout -b mybranch_$(date +%Y-%m-%d-%s) $TAG
 			echo -e "\e[32m$2 source sync'ed to tag $TAG successfully!\e[0m"
 		else
-			echo "Couldn't find tag $TAG"
-			echo -e "\e[31m$2 source sync to tag $TAG failed!\e[0m"
-			popd > /dev/null
+			echo -e "Couldn't find tag $TAG\e[31m$2 source sync to tag $TAG failed!\e[0m"
 			false
 		fi
 	fi
-	echo ""
 	return 0
 }
 
@@ -296,6 +282,7 @@ for ((i=0; i < NSOURCES; i++)); do
 
 	if [ $DALL -eq 1 -o "x${DNLOAD}" == "xy" ]; then
 		DownloadAndSync "$WHAT" "${LDK_DIR}/${WHAT}" "https://${REPO}" "${TAG}" "${OPT}"
+		echo
 	fi
 done
 
