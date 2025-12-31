@@ -64,11 +64,13 @@ macro(os_set_flags)
         # -z noexecstack: Marks the stack as non-executable to prevent certain types of attacks.
         # -Wl,-z,relro,-z,now: Enables read-only relocations and immediate binding for security.
         # -fstack-protector-strong: Provides stronger stack protection than -fstack-protector.
+        # -Wdate-time: Warns about the use of date/time macros that can affect reproducibility.
         
         # Linker flags
         # -pie: Produces position-independent executables during the linking phase.
         
         # see https://readthedocs.intel.com/SecureCodingStandards/2023.Q2.0/compiler/c-cpp/ for more details
+        # see also RSDSO-20629 for some extra flags
 
         set(SECURITY_COMPILER_FLAGS "-Wformat -Wformat-security -fPIC -fstack-protector -Wno-error=stringop-overflow")
 
@@ -81,7 +83,7 @@ macro(os_set_flags)
             message(STATUS "Configuring for Debug build")
         else() # Release, RelWithDebInfo, or multi configuration generator is being used (aka not specifing build type, or building with VS)
             message(STATUS "Configuring for Release build")
-            set(SECURITY_COMPILER_FLAGS "${SECURITY_COMPILER_FLAGS} -Werror -z noexecstack -Wl,-z,relro,-z,now -fstack-protector-strong")
+            set(SECURITY_COMPILER_FLAGS "${SECURITY_COMPILER_FLAGS} -Werror -z noexecstack -Wl,-z,relro,-z,now -fstack-protector-strong -Wdate-time")
         endif()
         
         push_security_flags()

@@ -1,11 +1,12 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-device.h>
 #include <realdds/dds-participant.h>
 #include <realdds/dds-topic-reader.h>
 #include <realdds/dds-topic-writer.h>
 #include <realdds/topics/dds-topic-names.h>
+#include <realdds/dds-embedded-filter.h>
 #include "dds-device-impl.h"
 
 #include <rsutils/time/timer.h>
@@ -36,7 +37,7 @@ bool dds_device::is_online() const
 }
 
 
-void dds_device::wait_until_ready( size_t timeout_ms )
+void dds_device::wait_until_ready( size_t timeout_ms ) const
 {
     if( is_ready() )
         return;
@@ -203,7 +204,19 @@ json dds_device::query_option_value( const std::shared_ptr< dds_option > & optio
     return _impl->query_option_value( option );
 }
 
-void dds_device::send_control( json const & control, json * reply )
+void dds_device::set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, const json& options_value)
+{
+    wait_until_ready(0);  // throw if not
+    _impl->set_embedded_filter(filter, options_value);
+}
+
+json dds_device::query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter)
+{
+    wait_until_ready(0);  // throw if not
+    return _impl->query_embedded_filter(filter);
+}
+
+void dds_device::send_control( json const & control, json * reply ) const
 {
     wait_until_ready( 0 );  // throw if not
     _impl->write_control_message( control, reply );

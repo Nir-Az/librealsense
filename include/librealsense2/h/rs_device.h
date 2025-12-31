@@ -1,5 +1,5 @@
 /* License: Apache 2.0. See LICENSE file in root directory.
-   Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
+   Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 
 /** \file rs_device.h
 * \brief Exposes RealSense device functionality for C compilers
@@ -85,6 +85,12 @@ int rs2_supports_device_info(const rs2_device* device, rs2_camera_info info, rs2
  * \param[out] error    If non-null, receives any error that occurs during this call, otherwise, errors are ignored
  */
 void rs2_hardware_reset(const rs2_device * device, rs2_error ** error);
+
+/**
+* Check if a camera is in recovery mode
+* \param[in]  device    The RealSense device to check
+* \param[out] error     If non-null, receives any error that occurs during this call, otherwise, errors are ignored*/
+int rs2_is_in_recovery_mode(const rs2_device* device, rs2_error** error);
 
 /**
 * Build debug_protocol raw data command from opcode, parameters and data.

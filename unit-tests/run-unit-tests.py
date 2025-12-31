@@ -1,7 +1,7 @@
 #!python3
 
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2021 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2021 RealSense, Inc. All Rights Reserved.
 
 import sys, os, subprocess, re, platform, getopt, time
 
@@ -10,6 +10,7 @@ current_dir = os.path.dirname( os.path.abspath( __file__ ) )
 sys.path.append( os.path.join( current_dir, 'py' ))
 
 from rspy import log, file, repo, libci
+from rspy.signals import register_signal_handlers
 
 # Python's default list of paths to look for modules includes user-intalled. We want
 # to avoid those to take only the pyrealsense2 we actually compiled!
@@ -47,8 +48,10 @@ def usage():
     print( '        --no-exceptions      Do not load the LibCI/exceptions.specs file' )
     print( '        --context <>         The context to use for test configuration' )
     print( '        --repeat <#>         Repeat each test <#> times' )
+    print( '        --retry <#>          Retry each test <#> times (unless test specified more)' )
     print( '        --config <>          Ignore test configurations; use the one provided' )
     print( '        --device <>          Run only on the specified devices; ignore any test that does not match (implies --live)' )
+    print( '        --exclude-device <>  Exclude the specified devices from testing (space-separated list)' )
     print( '        --no-reset           Do not try to reset any devices, with or without a hub' )
     print( '        --hub-reset          If a hub is available, reset the hub itself' )
     print( '        --custom-fw-d400          If custom fw provided flash it if its different that the current fw installed' )
@@ -80,8 +83,8 @@ else:
 try:
     opts, args = getopt.getopt( sys.argv[1:], 'hvqr:st:',
                                 longopts=['help', 'verbose', 'debug', 'quiet', 'regex=', 'stdout', 'tag=', 'list-tags',
-                                          'list-tests', 'no-exceptions', 'context=', 'repeat=', 'config=', 'no-reset', 'hub-reset',
-                                          'rslog', 'skip-disconnected', 'live', 'not-live', 'device=', 'test-dir=','skip-regex=','custom-fw-d400='] )
+                                          'list-tests', 'no-exceptions', 'context=', 'repeat=', 'retry=', 'config=', 'no-reset', 'hub-reset',
+                                          'rslog', 'skip-disconnected', 'live', 'not-live', 'device=', 'exclude-device=', 'test-dir=','skip-regex=','custom-fw-d400='] )
 except getopt.GetoptError as err:
     log.e( err )  # something like "option -a not recognized"
     usage()
@@ -93,8 +96,10 @@ list_tests = False
 no_exceptions = False
 context = []
 repeat = 1
+retries = 0
 forced_configurations = None
 device_set = None
+exclude_device_set = None
 no_reset = False
 hub_reset = False
 skip_disconnected = False
@@ -131,6 +136,11 @@ for opt, arg in opts:
             log.e( "--repeat must be a number greater than 0" )
             usage()
         repeat = int(arg)
+    elif opt == '--retry':
+        if not arg.isnumeric()  or  int(arg) < 0:
+            log.e( "--retry must be a number greater than or equal to 0" )
+            usage()
+        retries = int(arg)
     elif opt == '--config':
         forced_configurations = [[arg]]
     elif opt == '--device':
@@ -139,6 +149,8 @@ for opt, arg in opts:
             usage()
         only_live = True
         device_set = arg.split()
+    elif opt == '--exclude-device':
+        exclude_device_set = arg.split()
     elif opt == '--no-reset':
         no_reset = True
     elif opt == '--hub-reset':
@@ -477,9 +489,10 @@ def test_wrapper_( test, configuration=None, repetition=1, curr_retry=0, max_ret
 
 
 def test_wrapper( test, configuration=None, repetition=1, serial_numbers=None ):
-    global n_tests
+    global n_tests, retries
     n_tests += 1
-    for retry in range( test.config.retries + 1 ):
+    retry_count = max(test.config.retries, retries)
+    for retry in range( retry_count + 1 ):
         if retry:
             if log.is_debug_on():
                 log.debug_unindent()  # just to make it stand out a little more
@@ -489,10 +502,22 @@ def test_wrapper( test, configuration=None, repetition=1, serial_numbers=None ):
                 time.sleep(1)  # small pause between tries
             else:
                 devices.enable_only( serial_numbers, recycle=True )
-        if test_wrapper_( test, configuration, repetition, retry, test.config.retries, serial_numbers ):
+        if test_wrapper_( test, configuration, repetition, retry, retry_count, serial_numbers ):
             return True
 
     return False
+
+
+def close_hubs():
+    #
+    # Disconnect from the hub -- if we don't it might crash on Linux...
+    # Before that we close all ports, no need for cameras to stay on between LibCI runs
+    if not list_only and not only_not_live:
+        if devices.hub and devices.hub.is_connected():
+            log.d("disconnecting from hub(s)")
+            devices.hub.disable_ports()
+            devices.wait_until_all_ports_disabled()
+            devices.hub.disconnect()
 
 # Run all tests
 try:
@@ -504,6 +529,7 @@ try:
         if pyrs:
             sys.path.insert( 1, pyrs_path )  # Make sure we pick up the right pyrealsense2!
         from rspy import devices
+        register_signal_handlers(close_hubs)
         disable_dds = "dds" not in context
         devices.query( hub_reset = hub_reset, disable_dds=disable_dds ) #resets the device
         devices.map_unknown_ports()
@@ -534,6 +560,30 @@ try:
                 sns.update( included_devices )
             device_set = sns
             log.d( f'ignoring devices other than: {serial_numbers_to_string( device_set )}' )
+        #
+        if exclude_device_set is not None:
+            excluded_sns = set()  # convert the list of exclude specs to a list of serial numbers
+            ignored_list = list()
+            for spec in exclude_device_set:
+                excluded_devices = [sn for sn in devices.by_spec( spec, ignored_list )]
+                excluded_sns.update( excluded_devices )
+            
+            if excluded_sns:
+                log.d( f'excluding devices: {serial_numbers_to_string( excluded_sns )}' )
+                if device_set is not None:
+                    # Remove excluded devices from the included device set
+                    device_set = device_set - excluded_sns
+                    if not device_set:
+                        log.f( 'All specified devices were excluded; no devices left to test' )
+                    log.d( f'final device set after exclusions: {serial_numbers_to_string( device_set )}' )
+                else:
+                    # If no device_set was specified, we need to discover all devices and exclude the specified ones
+                    all_devices = set(devices.all())
+                    device_set = all_devices - excluded_sns
+                    if not device_set:
+                        log.f( 'All discovered devices were excluded; no devices left to test' )
+                    else:
+                        log.d( f'using all devices except excluded ones: {serial_numbers_to_string( device_set )}' )
         #
         log.progress()
     #
@@ -623,6 +673,7 @@ try:
                     except RuntimeError as e:
                         log.w( log.red + test.name + log.reset + ': ' + str( e ) )
                     else:
+                        register_signal_handlers()
                         test_ok = test_wrapper( test, configuration, repetition, serial_numbers ) and test_ok
                     finally:
                         log.debug_unindent()
@@ -653,9 +704,8 @@ try:
                 print( t.name )
     #
     else:
-        n_errors = log.n_errors()
-        if n_errors:
-            log.out( log.red + str( n_errors ) + log.reset, 'of', n_tests, 'test(s)',
+        if failed_tests:
+            log.out( log.red + str( len(failed_tests) ) + log.reset, 'of', n_tests, 'test(s)',
                      log.red + 'failed!' + log.reset + log.clear_eos )
             log.d( 'Failed tests:\n    ' + '\n    '.join( [test.name for test in failed_tests] ))
             sys.exit( 1 )
@@ -663,13 +713,6 @@ try:
         log.out( str( n_tests ) + ' unit-test(s) completed successfully' + log.clear_eos )
 #
 finally:
-    #
-    # Disconnect from the hub -- if we don't it might crash on Linux...
-    # Before that we close all ports, no need for cameras to stay on between LibCI runs
-    if not list_only and not only_not_live:
-        if devices.hub and devices.hub.is_connected():
-            devices.hub.disable_ports()
-            devices.wait_until_all_ports_disabled()
-            devices.hub.disconnect()
+    close_hubs()
 #
 sys.exit( 0 )

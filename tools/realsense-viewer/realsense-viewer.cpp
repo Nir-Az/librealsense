@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017-24 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017-24 RealSense, Inc. All Rights Reserved.
 #include <librealsense2/rs.hpp>
 #include "viewer.h"
 #include "os.h"
@@ -130,7 +130,7 @@ void add_playback_device( context & ctx,
 // This function is called every frame
 // If between the frames there was an asyncronous connect/disconnect event
 // the function will pick up on this and add the device to the viewer
-bool refresh_devices(std::mutex& m,
+void refresh_devices(std::mutex& m,
     context& ctx,
     device_changes& devices_connection_changes,
     std::vector<device>& current_connected_devices,
@@ -139,9 +139,10 @@ bool refresh_devices(std::mutex& m,
     viewer_model& viewer_model,
     std::string& error_message)
 {
+    
     event_information info({}, {});
     if (!devices_connection_changes.try_get_next_changes(info))
-        return false;
+        return ;
     try
     {
         //Remove disconnected
@@ -283,7 +284,7 @@ bool refresh_devices(std::mutex& m,
     {
         error_message = "Unknown error";
     }
-    return true;
+    return;
 }
 
 
@@ -295,7 +296,7 @@ int main(int argc, const char** argv) try
     std::shared_ptr<device_models_list> device_models = std::make_shared<device_models_list>();
 
     context ctx( settings.dump() );
-    ux_window window("Intel RealSense Viewer", ctx);
+    ux_window window("RealSense Viewer", ctx);
 
     // Create RealSense Context
     device_changes devices_connection_changes(ctx);
@@ -372,7 +373,7 @@ int main(int argc, const char** argv) try
     // Closing the window
     while (window)
     {
-        auto device_changed = refresh_devices(m, ctx, devices_connection_changes, connected_devs,
+        refresh_devices(m, ctx, devices_connection_changes, connected_devs,
             device_names, *device_models, viewer_model, error_message);
 
         auto output_height = viewer_model.get_output_height();
@@ -504,7 +505,7 @@ int main(int argc, const char** argv) try
 
             ImGui::PopStyleColor();
             ImGui::EndPopup();
-            }
+        }
         ImGui::PopFont();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();

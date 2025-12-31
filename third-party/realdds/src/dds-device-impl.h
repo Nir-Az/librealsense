@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include <realdds/dds-device.h>
@@ -86,6 +86,9 @@ public:
     void set_option_value( const std::shared_ptr< dds_option > & option, rsutils::json new_value );
     rsutils::json query_option_value( const std::shared_ptr< dds_option > & option );
 
+    void set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, rsutils::json options_value);
+    rsutils::json query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter);
+
     using on_metadata_available_signal = rsutils::signal< std::shared_ptr< const rsutils::json > const & >;
     using on_metadata_available_callback = on_metadata_available_signal::callback;
     rsutils::subscription on_metadata_available( on_metadata_available_callback && cb )
@@ -133,6 +136,9 @@ private:
     void on_calibration_changed( rsutils::json const &, dds_sample const & );
 
     void on_notification( rsutils::json &&, dds_sample const & );
+
+    void on_set_filter(rsutils::json const&, dds_sample const&);
+    void on_query_filter(rsutils::json const&, dds_sample const&);
 
     on_metadata_available_signal _on_metadata_available;
     on_device_log_signal _on_device_log;

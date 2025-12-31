@@ -1,7 +1,9 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
+# Currently, we exclude D555 as it's failing
 # test:device each(D400*)
+# test:device each(D500*) !D555
 # test:donotrun:!nightly
 
 import pyrealsense2 as rs
@@ -68,6 +70,7 @@ test.check_equal( len(tested_fps), len(time_to_test_fps) )
 
 dev, _ = test.find_first_device_or_exit()
 product_line = dev.get_info(rs.camera_info.product_line)
+camera_name = dev.get_info(rs.camera_info.name)
 
 #####################################################################################################
 test.start("Testing depth fps " + product_line + " device - "+ platform.system() + " OS")
@@ -84,7 +87,12 @@ for i in range(len(tested_fps)):
         dp = next(p for p in ds.profiles
                   if p.fps() == requested_fps
                   and p.stream_type() == rs.stream.depth
-                  and p.format() == rs.format.z16)
+                  and p.format() == rs.format.z16
+                  # On D585S the operational depth resolution is 1280x720
+                  # 1280x960 is also available but only allowed in service mode
+                  # 60 fps is only available in bypass mode
+                  and ((p.as_video_stream_profile().height() == 720 and p.fps() != 60) if "D585S" in camera_name else True))
+
     except StopIteration:
         log.i("Requested fps: {:.1f} [Hz], not supported".format(requested_fps))
     else:
@@ -121,6 +129,7 @@ if cs:
                       if p.fps() == requested_fps
                       and p.stream_type() == rs.stream.color
                       and p.format() == rs.format.rgb8)
+                 
         except StopIteration:
             log.i("Requested fps: {:.1f} [Hz], not supported".format(requested_fps))
         else:

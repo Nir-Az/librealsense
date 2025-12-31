@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -8,6 +8,7 @@
 #include <src/color-sensor.h>
 
 #include "stream.h"
+#include <src/metadata-parser.h>
 
 #include <rsutils/lazy.h>
 #include <map>
@@ -50,6 +51,16 @@ namespace librealsense
         void create_color_device(std::shared_ptr<context> ctx,
             const platform::backend_device_group& group);
         void init();
+
+        template<class Attribute, typename Flag>
+        std::shared_ptr<md_attribute_parser_base> create_color_md_mipi_parser(
+            Attribute md_mipi_rgb_mode::* attribute,
+            Flag flag,
+            attrib_modifyer mod = nullptr) const
+        {
+            auto md_prop_offset = offsetof(metadata_mipi_rgb_raw, rgb_mode);
+            return make_mipi_color_attribute_parser(attribute, flag, md_prop_offset, _fw_version, mod);
+        }
 
         friend class d400_color_sensor;
         friend class rs435i_device;

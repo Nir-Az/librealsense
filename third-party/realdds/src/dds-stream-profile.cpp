@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-stream-profile.h>
 #include <realdds/dds-stream-base.h>
@@ -198,6 +198,11 @@ dds_video_stream_profile::dds_video_stream_profile( rsutils::json const & j, int
 {
     _width = j[index++].get< int16_t >();
     _height = j[index++].get< int16_t >();
+}
+
+bool dds_video_stream_profile::is_compressed_encoding() const
+{
+    return _encoding.to_rs2() == RS2_FORMAT_MJPEG;
 }
 
 

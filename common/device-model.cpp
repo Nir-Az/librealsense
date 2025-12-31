@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #include <librealsense2/rs_advanced_mode.hpp>
 #include <librealsense2/rs.hpp>
@@ -148,28 +148,6 @@ namespace rs2
         open_issue(ss.str());
     }
 
-    template <typename T>
-    std::string safe_call(T t)
-    {
-        try
-        {
-            t();
-            return "";
-        }
-        catch (const error& e)
-        {
-            return error_to_string(e);
-        }
-        catch (const std::exception& e)
-        {
-            return e.what();
-        }
-        catch (...)
-        {
-            return "Unknown error occurred";
-        }
-    }
-
     std::pair<std::string, std::string> get_device_name(const device& dev)
     {
         // retrieve device name
@@ -200,9 +178,32 @@ namespace rs2
 
     device_model::~device_model()
     {
-        for (auto&& n : related_notifications) n->dismiss(false);
+        try
+        {
+            {
+                std::lock_guard<std::mutex> lock(dev_mutex);
+                for (auto&& n : related_notifications) n->dismiss(false);
 
-        _updates->set_device_status(*_updates_profile, false);
+                _updates->set_device_status(*_updates_profile, false);
+
+                stopping = true;
+            }
+
+            if (check_for_device_updates_thread.joinable())
+            {
+                LOG_DEBUG("Waiting for device updates thread to finish...");
+                check_for_device_updates_thread.join();
+                LOG_DEBUG("Device updates thread joined");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            LOG_ERROR(rsutils::string::from() << "Exception in device_model destructor: " << e.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("Unknown exception in device_model destructor");
+        }
     }
 
     bool device_model::check_for_bundled_fw_update(const rs2::context &ctx, std::shared_ptr<notifications_model> not_model , bool reset_delay )
@@ -215,6 +216,9 @@ namespace rs2
 
         // 'notification_type_is_displayed()' is used to detect if fw_update notification is on to avoid displaying it during FW update process when
         // the device enters recovery mode
+        std::lock_guard<std::mutex> lock(dev_mutex); // locking to fix a bug where the destructor was called, destroying dev and causing access violation on this thread
+        if (stopping) return false;
+
         if( ! not_model->notification_type_is_displayed< fw_update_notification_model >()
             && ( dev.is< updatable >() || dev.is< update_device >() ) )
         {
@@ -267,7 +271,8 @@ namespace rs2
 
             auto dev_name = get_device_name(dev);
 
-            if( ( dev.is<update_device>() || is_upgradeable( fw, recommended_fw_ver) ) )
+            // TODO - D436. Don't suggest to update FW as it doesn't support D436. Revert after next release with bundle supporting FW
+            if( ( dev.is<update_device>() || is_upgradeable( fw, recommended_fw_ver) ) && pid != "1156") //0x1156 is pid for D436
             {
                 std::stringstream msg;
 
@@ -372,7 +377,8 @@ namespace rs2
         _updates(viewer.updates),
         _updates_profile(std::make_shared<dev_updates_profile::update_profile>()),
         _allow_remove(remove),
-        _dds_model(dev)
+        _dds_model(dev),
+        _hdr_model(dev)
     {
         auto name = get_device_name(dev);
         id = rsutils::string::from() << name.first << ", " << name.second;
@@ -384,7 +390,7 @@ namespace rs2
             // checking if the sensor is color_sensor or is D405 (with integrated RGB in depth sensor)
             if (s->is<color_sensor>() || (dev.supports(RS2_CAMERA_INFO_PRODUCT_ID) && !strcmp(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID), "0B5B")))
                 objects = _detected_objects;
-            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), objects, error_message, viewer, new_device_connected);
+            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), objects, error_message, viewer, this, new_device_connected);
             subdevices.push_back(model);
         }
 
@@ -1035,6 +1041,7 @@ namespace rs2
             error_message = e.what();
         }
     }
+
     void device_model::check_for_device_updates(viewer_model& viewer, bool activated_by_user )
     {
         std::weak_ptr< updates_model > updates_model_protected( viewer.updates );
@@ -1042,7 +1049,9 @@ namespace rs2
             _updates_profile );
         std::weak_ptr< notifications_model > notification_model_protected( viewer.not_model );
         const context & ctx( viewer.ctx );
-        std::thread check_for_device_updates_thread( [ctx,
+        if (check_for_device_updates_thread.joinable())
+            check_for_device_updates_thread.join();
+        check_for_device_updates_thread = std::thread( [ctx,
                                                       updates_model_protected,
                                                       notification_model_protected,
                                                       this,
@@ -1189,7 +1198,6 @@ namespace rs2
             }
         } );
 
-        check_for_device_updates_thread.detach();
     }
 
     float device_model::draw_device_panel(float panel_width,
@@ -1323,7 +1331,6 @@ namespace rs2
             RsImGui::CustomTooltip("%s", "Click for more");
             window.link_hovered();
         }
-        static bool keep_showing_advanced_mode_modal = false;
         bool open_calibration_ui = false;
         if (ImGui::BeginPopup(label.c_str()))
         {
@@ -1341,7 +1348,7 @@ namespace rs2
                     bool selected = is_advanced_mode_enabled;
                     if (ImGui::MenuItem("Advanced Mode", nullptr, &selected))
                     {
-                        keep_showing_advanced_mode_modal = true;
+                        show_advanced_mode_popup = true;
                     }
 
                     ImGui::Separator();
@@ -1380,7 +1387,6 @@ namespace rs2
                                            << ( is_streaming ? " (Disabled while streaming)" : "" );
                         RsImGui::CustomTooltip("%s", tooltip.c_str());
                     }
-
 
                     if( dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
                         && ( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) )
@@ -1430,6 +1436,7 @@ namespace rs2
                         }
                     }
                 }
+
                 ImGuiSelectableFlags is_streaming_flag = (is_streaming) ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
                 if( _dds_model.supports_DDS() )
                 {
@@ -1456,17 +1463,21 @@ namespace rs2
         }
 
 
-        if (keep_showing_advanced_mode_modal)
+        if (show_advanced_mode_popup)
         {
             const bool is_advanced_mode_enabled = dev.as<advanced_mode>().is_enabled();
             std::string msg = rsutils::string::from()
                            << "\t\tAre you sure you want to "
                            << ( is_advanced_mode_enabled ? "turn off Advanced mode" : "turn on Advanced mode" )
                            << "\t\t";
-            keep_showing_advanced_mode_modal = prompt_toggle_advanced_mode(!is_advanced_mode_enabled, msg, restarting_device_info, viewer, window, error_message);
+            show_advanced_mode_popup = prompt_toggle_advanced_mode(!is_advanced_mode_enabled, msg, restarting_device_info, viewer, window, error_message);
         }
 
         _calib_model.update(window, error_message);
+
+        if ( _hdr_model.supports_HDR() )
+            _hdr_model.render_hdr_config_window( window, error_message );
+
         if( _dds_model.supports_DDS() )
         {
             _dds_model.render_dds_config_window( window, error_message );
@@ -1830,33 +1841,24 @@ namespace rs2
 
                     //Find Resolution
                     std::pair<int, int> requested_res{ kvp.second.width,kvp.second.height };
-                    size_t res_id = 0;
-                    for (; res_id < sub->res_values.size(); res_id++)
-                    {
-                        if (sub->res_values[res_id] == requested_res)
-                            break;
-                    }
-                    if (res_id == sub->res_values.size())
-                    {
-                        throw std::runtime_error( rsutils::string::from()
-                                                  << "No match found for requested resolution: " << requested_res.first
-                                                  << "x" << requested_res.second );
-                    }
                     if (!sub->ui.is_multiple_resolutions)
-                        sub->ui.selected_res_id = static_cast<int>(res_id);
-                    else
                     {
-                        int depth_res_id, ir1_res_id, ir2_res_id;
-                        sub->get_depth_ir_mismatch_resolutions_ids(depth_res_id, ir1_res_id, ir2_res_id);
-
-                        if (kvp.first.first == RS2_STREAM_DEPTH)
-                        sub->ui.selected_res_id_map[depth_res_id] = static_cast<int>(res_id);
-                        else
+                        size_t res_id = 0;
+                        for (; res_id < sub->res_values.size(); res_id++)
                         {
-                            sub->ui.selected_res_id_map[ir1_res_id] = static_cast<int>(res_id);
-                            sub->ui.selected_res_id_map[ir2_res_id] = static_cast<int>(res_id);
+                            if (sub->res_values[res_id] == requested_res)
+                                break;
                         }
+                        if (res_id == sub->res_values.size())
+                        {
+                            throw std::runtime_error(rsutils::string::from()
+                                << "No match found for requested resolution: " << requested_res.first
+                                << "x" << requested_res.second);
+                        }
+                        sub->ui.selected_res_id = static_cast<int>(res_id);
                     }
+                    else
+                        sub->ui.selected_stream_to_res[kvp.first.first] = requested_res;
                 }
             }
         }
@@ -2070,6 +2072,7 @@ namespace rs2
                     if (sub->draw_option(RS2_OPTION_VISUAL_PRESET, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;
+                        std::this_thread::sleep_for( std::chrono::milliseconds( 20 ) ); // Give FW time to update advanced mode controls before reading them
                         selected_file_preset.clear();
                     }
                 }
@@ -2120,7 +2123,7 @@ namespace rs2
                             sub->_options_invalidated = true;
                         }
                     }
-                    auto ret = file_dialog_open(open_file, "JavaScript Object Notation (JSON | PRESET)\0*.json;*.preset\0", NULL, NULL);
+                    auto ret = file_dialog_open(open_file, "JavaScript Object Notation (JSON | PRESET)\0*.json\0*.preset\0", NULL, NULL);
                     if (ret)
                     {
                         error_message = safe_call([&]() { load_json(ret); });
@@ -2192,6 +2195,16 @@ namespace rs2
         });
     }
 
+    bool rs2::device_model::is_color_streaming() const
+    {
+        for( const auto & sub : subdevices )
+        {
+            if (sub->s->is<color_sensor>() && sub->streaming)
+                return true;
+        }
+        return false;
+    }
+
     void device_model::draw_controls(float panel_width, float panel_height,
         ux_window& window,
         std::string& error_message,
@@ -2258,7 +2271,7 @@ namespace rs2
                 {
                     std::string desc = dev.get_info(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR);
                     ss.str("");
-                    ss << "   " << textual_icons::usb_type << " " << desc;
+                    ss << "   " << textual_icons::usb << " " << desc;
                     ImGui::SameLine();
                     if (!starts_with(desc, "3.")) ImGui::PushStyleColor(ImGuiCol_Text, yellow);
                     else ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
@@ -2718,211 +2731,11 @@ namespace rs2
                     }
                 }
 
-                if (sub->post_processing.size() > 0)
-                {
-                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-                    const ImVec2 pos = ImGui::GetCursorPos();
+                draw_embedded_filters(sub, windows_width, window, viewer,
+                    error_message, label, draw_later, update_read_only_options);
 
-                    draw_later.push_back([windows_width, &window, sub, pos, &viewer, this]() {
-                        ImGui::SetCursorPos({ windows_width - 41, pos.y - 3 });
-
-                        try
-                        {
-
-                            ImGui::PushFont(window.get_font());
-
-                            ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
-                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
-                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, sensor_bg);
-
-                            if (!sub->post_processing_enabled)
-                            {
-                                std::string label = rsutils::string::from()
-                                                 << " " << textual_icons::toggle_off << "##" << id << ","
-                                                 << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ",post";
-
-                                ImGui::PushStyleColor(ImGuiCol_Text, redish);
-                                ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
-
-                                if (ImGui::Button(label.c_str(), { 30,24 }))
-                                {
-                                    sub->post_processing_enabled = true;
-                                    config_file::instance().set(get_device_sensor_name(sub.get()).c_str(),
-                                        sub->post_processing_enabled);
-                                    for (auto&& pb : sub->post_processing)
-                                    {
-                                        if (!pb->visible)
-                                            continue;
-                                        if (pb->is_enabled())
-                                            pb->processing_block_enable_disable(true);
-                                    }
-                                }
-                                if (ImGui::IsItemHovered())
-                                {
-                                    RsImGui::CustomTooltip("Enable post-processing filters");
-                                    window.link_hovered();
-                                }
-                            }
-                            else
-                            {
-                                std::string label = rsutils::string::from()
-                                                 << " " << textual_icons::toggle_on << "##" << id << ","
-                                                 << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ",post";
-                                ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-                                ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
-
-                                if (ImGui::Button(label.c_str(), { 30,24 }))
-                                {
-                                    sub->post_processing_enabled = false;
-                                    config_file::instance().set(get_device_sensor_name(sub.get()).c_str(),
-                                        sub->post_processing_enabled);
-                                    for (auto&& pb : sub->post_processing)
-                                    {
-                                        if (!pb->visible)
-                                            continue;
-                                        if (pb->is_enabled())
-                                            pb->processing_block_enable_disable(false);
-                                    }
-                                }
-                                if (ImGui::IsItemHovered())
-                                {
-                                    RsImGui::CustomTooltip("Disable post-processing filters");
-                                    window.link_hovered();
-                                }
-                            }
-                            ImGui::PopStyleColor(5);
-                            ImGui::PopFont();
-                        }
-                        catch (...)
-                        {
-                            ImGui::PopStyleColor(5);
-                            ImGui::PopFont();
-                            throw;
-                        }
-                    });
-
-                    label = rsutils::string::from() << "Post-Processing##" << id;
-                    if (ImGui::TreeNode(label.c_str()))
-                    {
-                        for (auto&& pb : sub->post_processing)
-                        {
-                            if (!pb->visible) continue;
-
-                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-
-                            const ImVec2 pos = ImGui::GetCursorPos();
-
-                            draw_later.push_back([windows_width, &window, sub, pos, &viewer, this, pb]() {
-                                ImGui::SetCursorPos({ windows_width - 42, pos.y - 3 });
-
-                                try
-                                {
-                                    ImGui::PushFont(window.get_font());
-
-                                    ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
-                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
-                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, sensor_bg);
-                                    int font_size = window.get_font_size();
-                                    const ImVec2 button_size = { font_size * 2.f, font_size * 1.5f };
-
-                                    if (!sub->post_processing_enabled)
-                                    {
-                                        if (!pb->is_enabled())
-                                        {
-                                            std::string label = rsutils::string::from()
-                                                             << " " << textual_icons::toggle_off << "##" << id << ","
-                                                             << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ","
-                                                             << pb->get_name();
-
-                                            ImGui::PushStyleColor(ImGuiCol_Text, redish);
-                                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
-                                            RsImGui::RsImButton([&]() {ImGui::ButtonEx(label.c_str(), button_size);}, true);
-                                        }
-                                        else
-                                        {
-                                            std::string label = rsutils::string::from()
-                                                             << " " << textual_icons::toggle_on << "##" << id << ","
-                                                             << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ","
-                                                             << pb->get_name();
-                                            ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-                                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
-                                            RsImGui::RsImButton([&]() {ImGui::ButtonEx(label.c_str(), button_size);}, true);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (!pb->is_enabled())
-                                        {
-                                            std::string label = rsutils::string::from()
-                                                             << " " << textual_icons::toggle_off << "##" << id << ","
-                                                             << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ","
-                                                             << pb->get_name();
-
-                                            ImGui::PushStyleColor(ImGuiCol_Text, redish);
-                                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
-
-                                            if (ImGui::Button(label.c_str(), button_size))
-                                            {
-                                                pb->enable(true);
-                                                pb->save_to_config_file();
-                                            }
-                                            if (ImGui::IsItemHovered())
-                                            {
-                                                label = rsutils::string::from() << "Enable " << pb->get_name() << " post-processing filter";
-                                                RsImGui::CustomTooltip("%s", label.c_str());
-                                                window.link_hovered();
-                                            }
-                                        }
-                                        else
-                                        {
-                                            std::string label = rsutils::string::from()
-                                                             << " " << textual_icons::toggle_on << "##" << id << ","
-                                                             << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << ","
-                                                             << pb->get_name();
-                                            ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-                                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
-
-                                            if (ImGui::Button(label.c_str(), button_size))
-                                            {
-                                                pb->enable(false);
-                                                pb->save_to_config_file();
-                                            }
-                                            if (ImGui::IsItemHovered())
-                                            {
-                                                label = rsutils::string::from()
-                                                     << "Disable " << pb->get_name() << " post-processing filter";
-                                                RsImGui::CustomTooltip("%s", label.c_str());
-                                                window.link_hovered();
-                                            }
-                                        }
-                                    }
-
-                                    ImGui::PopStyleColor(5);
-                                    ImGui::PopFont();
-                                }
-                                catch (...)
-                                {
-                                    ImGui::PopStyleColor(5);
-                                    ImGui::PopFont();
-                                    throw;
-                                }
-                            });
-
-                            label = rsutils::string::from() << pb->get_name() << "##" << id;
-                            if (ImGui::TreeNode(label.c_str()))
-                            {
-                                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-                                pb->draw_options( viewer,
-                                                  dev.is< playback >() || update_read_only_options,
-                                                  false,
-                                                  error_message );
-
-                                ImGui::TreePop();
-                            }
-                        }
-                        ImGui::TreePop();
-                    }
-                }
+                draw_processing_blocks(sub, windows_width, window, viewer, 
+                    error_message, label, draw_later, update_read_only_options);
 
                 ImGui::TreePop();
             }
@@ -2959,6 +2772,321 @@ namespace rs2
         }
     }
 
+    void device_model::draw_processing_blocks(std::shared_ptr<subdevice_model> sub, float windows_width,
+        ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
+        std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options)
+    {
+        if (sub->post_processing.size() > 0)
+        {
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+            const ImVec2 pos = ImGui::GetCursorPos();
+
+            draw_later.push_back([windows_width, &window, sub, pos, &viewer, this]() {
+                ImGui::SetCursorPos({ windows_width - 41, pos.y - 3 });
+
+                try
+                {
+
+                    ImGui::PushFont(window.get_font());
+
+                    ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, sensor_bg);
+
+                    if (!sub->post_processing_enabled)
+                    {
+                        std::string label = rsutils::string::from()
+                            << " " << textual_icons::toggle_off << "##" << id << ","
+                            << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ",post";
+
+                        ImGui::PushStyleColor(ImGuiCol_Text, redish);
+                        ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
+
+                        if (ImGui::Button(label.c_str(), { 30,24 }))
+                        {
+                            sub->post_processing_enabled = true;
+                            config_file::instance().set(get_post_processing_device_sensor_name(sub.get()).c_str(),
+                                sub->post_processing_enabled);
+                            for (auto&& pb : sub->post_processing)
+                            {
+                                if (!pb->visible)
+                                    continue;
+                                if (pb->is_enabled())
+                                    pb->processing_block_enable_disable(true);
+                            }
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            RsImGui::CustomTooltip("Enable post-processing filters");
+                            window.link_hovered();
+                        }
+                    }
+                    else
+                    {
+                        std::string label = rsutils::string::from()
+                            << " " << textual_icons::toggle_on << "##" << id << ","
+                            << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ",post";
+                        ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
+                        ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
+
+                        if (ImGui::Button(label.c_str(), { 30,24 }))
+                        {
+                            sub->post_processing_enabled = false;
+                            config_file::instance().set(get_post_processing_device_sensor_name(sub.get()).c_str(),
+                                sub->post_processing_enabled);
+                            for (auto&& pb : sub->post_processing)
+                            {
+                                if (!pb->visible)
+                                    continue;
+                                if (pb->is_enabled())
+                                    pb->processing_block_enable_disable(false);
+                            }
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            RsImGui::CustomTooltip("Disable post-processing filters");
+                            window.link_hovered();
+                        }
+                    }
+                    ImGui::PopStyleColor(5);
+                    ImGui::PopFont();
+                }
+                catch (...)
+                {
+                    ImGui::PopStyleColor(5);
+                    ImGui::PopFont();
+                    throw;
+                }
+                });
+
+            label = rsutils::string::from() << "Post-Processing##" << id;
+            if (ImGui::TreeNode(label.c_str()))
+            {
+                for (auto&& pb : sub->post_processing)
+                {
+                    if (!pb->visible) continue;
+
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+
+                    const ImVec2 pos = ImGui::GetCursorPos();
+
+                    draw_later.push_back([windows_width, &window, sub, pos, &viewer, this, pb]() {
+                        ImGui::SetCursorPos({ windows_width - 42, pos.y - 3 });
+
+                        try
+                        {
+                            ImGui::PushFont(window.get_font());
+
+                            ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, sensor_bg);
+                            int font_size = window.get_font_size();
+                            const ImVec2 button_size = { font_size * 2.f, font_size * 1.5f };
+
+                            if (!sub->post_processing_enabled)
+                            {
+                                if (!pb->is_enabled())
+                                {
+                                    std::string label = rsutils::string::from()
+                                        << " " << textual_icons::toggle_off << "##" << id << ","
+                                        << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                        << pb->get_name();
+
+                                    ImGui::PushStyleColor(ImGuiCol_Text, redish);
+                                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
+                                    RsImGui::RsImButton([&]() {ImGui::ButtonEx(label.c_str(), button_size); }, true);
+                                }
+                                else
+                                {
+                                    std::string label = rsutils::string::from()
+                                        << " " << textual_icons::toggle_on << "##" << id << ","
+                                        << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                        << pb->get_name();
+                                    ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
+                                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
+                                    RsImGui::RsImButton([&]() {ImGui::ButtonEx(label.c_str(), button_size); }, true);
+                                }
+                            }
+                            else
+                            {
+                                if (!pb->is_enabled())
+                                {
+                                    std::string label = rsutils::string::from()
+                                        << " " << textual_icons::toggle_off << "##" << id << ","
+                                        << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                        << pb->get_name();
+
+                                    ImGui::PushStyleColor(ImGuiCol_Text, redish);
+                                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
+
+                                    if (ImGui::Button(label.c_str(), button_size))
+                                    {
+                                        pb->enable(true);
+                                        pb->save_to_config_file();
+                                    }
+                                    if (ImGui::IsItemHovered())
+                                    {
+                                        label = rsutils::string::from() << "Enable " << pb->get_name() << " post-processing filter";
+                                        RsImGui::CustomTooltip("%s", label.c_str());
+                                        window.link_hovered();
+                                    }
+                                }
+                                else
+                                {
+                                    std::string label = rsutils::string::from()
+                                        << " " << textual_icons::toggle_on << "##" << id << ","
+                                        << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                        << pb->get_name();
+                                    ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
+                                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
+
+                                    if (ImGui::Button(label.c_str(), button_size))
+                                    {
+                                        pb->enable(false);
+                                        pb->save_to_config_file();
+                                    }
+                                    if (ImGui::IsItemHovered())
+                                    {
+                                        label = rsutils::string::from()
+                                            << "Disable " << pb->get_name() << " post-processing filter";
+                                        RsImGui::CustomTooltip("%s", label.c_str());
+                                        window.link_hovered();
+                                    }
+                                }
+                            }
+
+                            ImGui::PopStyleColor(5);
+                            ImGui::PopFont();
+                        }
+                        catch (...)
+                        {
+                            ImGui::PopStyleColor(5);
+                            ImGui::PopFont();
+                            throw;
+                        }
+                        });
+
+                    label = rsutils::string::from() << pb->get_name() << "##" << id;
+                    if (ImGui::TreeNode(label.c_str()))
+                    {
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+                        pb->draw_options(viewer,
+                            dev.is< playback >() || update_read_only_options,
+                            false,
+                            error_message);
+
+                        ImGui::TreePop();
+                    }
+                }
+                ImGui::TreePop();
+            }
+        }
+    }
+
+    void device_model::draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
+        ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
+        std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options)
+    {
+        if (sub->embedded_filters.size() > 0)
+        {
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+            const ImVec2 pos = ImGui::GetCursorPos();
+
+            label = rsutils::string::from() << "Embedded-Filters##" << id;
+            if (ImGui::TreeNode(label.c_str()))
+            {
+                for (auto&& pb : sub->embedded_filters)
+                {
+                    if (!pb->_is_visible) continue;
+
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+
+                    const ImVec2 pos = ImGui::GetCursorPos();
+
+                    draw_later.push_back([windows_width, &window, sub, pos, &viewer, this, pb]() {
+                        ImGui::SetCursorPos({ windows_width - 42, pos.y - 3 });
+
+                        try
+                        {
+                            ImGui::PushFont(window.get_font());
+
+                            ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, sensor_bg);
+                            int font_size = window.get_font_size();
+                            const ImVec2 button_size = { font_size * 2.f, font_size * 1.5f };
+
+                            if (!pb->is_enabled())
+                            {
+                                std::string label = rsutils::string::from()
+                                    << " " << textual_icons::toggle_off << "##" << id << ","
+                                    << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                    << pb->get_name();
+
+                                ImGui::PushStyleColor(ImGuiCol_Text, redish);
+                                ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
+
+                                if (ImGui::Button(label.c_str(), button_size))
+                                {
+                                    pb->enable(true);
+                                }
+                                if (ImGui::IsItemHovered())
+                                {
+                                    label = rsutils::string::from() << "Enable " << pb->get_name() << " embedded filter";
+                                    RsImGui::CustomTooltip("%s", label.c_str());
+                                    window.link_hovered();
+                                }
+                            }
+                            else
+                            {
+                                std::string label = rsutils::string::from()
+                                    << " " << textual_icons::toggle_on << "##" << id << ","
+                                    << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
+                                    << pb->get_name();
+                                ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
+                                ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
+
+                                if (ImGui::Button(label.c_str(), button_size))
+                                {
+                                    pb->enable(false);
+                                }
+                                if (ImGui::IsItemHovered())
+                                {
+                                    label = rsutils::string::from()
+                                        << "Disable " << pb->get_name() << " embedded filter";
+                                    RsImGui::CustomTooltip("%s", label.c_str());
+                                    window.link_hovered();
+                                }
+                            }
+
+                            ImGui::PopStyleColor(5);
+                            ImGui::PopFont();
+                        }
+                        catch (...)
+                        {
+                            ImGui::PopStyleColor(5);
+                            ImGui::PopFont();
+                            throw;
+                        }
+                        });
+
+                    label = rsutils::string::from() << pb->get_name() << "##" << id;
+                    if (ImGui::TreeNode(label.c_str()))
+                    {
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+                        pb->draw_options(viewer,
+                            dev.is< playback >() || update_read_only_options,
+                            false,
+                            error_message);
+
+                        ImGui::TreePop();
+                    }
+                }
+                ImGui::TreePop();
+            }
+        }
+    }
+
     void device_model::handle_hardware_events(const std::string& serialized_data)
     {
         //TODO: Move under hour glass
@@ -2966,11 +3094,13 @@ namespace rs2
 
     bool device_model::disable_record_button_logic(bool is_streaming, bool is_playback_device)
     {
-        return (!is_streaming || is_playback_device);
+        bool depth_mapping_camera_streaming_alone = is_depth_mapping_camera_streaming_alone();
+        return (!is_streaming || is_playback_device || depth_mapping_camera_streaming_alone);
     }
 
     std::string device_model::get_record_button_hover_text(bool is_streaming)
     {
+        bool depth_mapping_camera_streaming_alone = is_depth_mapping_camera_streaming_alone();
         std::string record_button_hover_text;
         if (!is_streaming)
         {
@@ -2978,10 +3108,45 @@ namespace rs2
         }
         else
         {
-            record_button_hover_text = is_recording ? "Stop Recording" : "Start Recording";
+            if (depth_mapping_camera_streaming_alone)
+            {
+                record_button_hover_text = "To record Depth Mapping Camera also stream Stereo Module";
+            }
+            else
+            { 
+                record_button_hover_text = is_recording ? "Stop Recording" : "Start Recording";
+            }
         }
         return record_button_hover_text;
     }
+
+    //In order to record LPC and enable 3D we need to also record depth stereo sensor
+    bool device_model::is_depth_mapping_camera_streaming_alone()
+    {
+        std::string pid = dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID);
+        if (pid == "0B6B")
+        {
+            bool depth_mapping_sensor_streaming = false;
+            bool depth_stereo_sensor_streaming = false;
+            for (auto&& sub : subdevices)
+            {
+                if (sub->s->is<rs2::depth_mapping_sensor>() && sub->streaming)
+                {
+                    depth_mapping_sensor_streaming = true;
+                }
+                if (sub->s->is<rs2::depth_stereo_sensor>() && sub->streaming)
+                {
+                    depth_stereo_sensor_streaming = true;
+                }
+            }
+            if (depth_mapping_sensor_streaming && !depth_stereo_sensor_streaming)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    
 
     std::vector<std::pair<std::string, std::string>> get_devices_names(const device_list& list)
     {
@@ -3060,6 +3225,10 @@ namespace rs2
         std::string& error_message)
     {
         bool has_autocalib = false;
+
+        bool color_streaming = is_color_streaming();
+        ImGuiSelectableFlags avoid_selection_flag = (color_streaming) ? ImGuiSelectableFlags_Disabled : 0;
+
         for (auto&& sub : subdevices)
         {
             if (sub->supports_on_chip_calib() && !has_autocalib)
@@ -3073,7 +3242,7 @@ namespace rs2
                 bool disable_fl_cal = (((device_pid == "0B5C") || show_disclaimer) &&
                     (!starts_with(device_usb_type, "3."))); // D410/D15/D455@USB2
 
-                if (ImGui::Selectable("On-Chip Calibration"))
+                if (ImGui::Selectable("On-Chip Calibration", false , avoid_selection_flag))
                 {
                     try
                     {
@@ -3167,7 +3336,7 @@ namespace rs2
                 if (ImGui::IsItemHovered())
                     RsImGui::CustomTooltip("Focal length calibration is used to adjust camera focal length with specific target.");
 
-                if (ImGui::Selectable("Tare Calibration"))
+                if (ImGui::Selectable("Tare Calibration", false, avoid_selection_flag))
                 {
                     try
                     {
@@ -3411,7 +3580,7 @@ namespace rs2
                         }
                         else
                         {
-                            manager = std::make_shared< d500_on_chip_calib_manager >( viewer, sub, *this, dev );
+                            manager = std::make_shared<d500_on_chip_calib_manager>(viewer, sub, *this, dev );
                             n = std::make_shared< d500_autocalib_notification_model >( "", manager, false );
                         }
                         viewer.not_model->add_notification( n );
@@ -3554,6 +3723,17 @@ namespace rs2
                         RsImGui::CustomTooltip( "Tare calibration is used to adjust camera absolute distance to flat target.\n"
                                            "User needs either to enter the known ground truth or use the get button\n"
                                            "with specific target to get the ground truth." );
+
+                    if (_calib_model.supports())
+                    {
+                        if (ImGui::Selectable("Calibration Data"))
+                        {
+                            _calib_model.open();
+                        }
+                        if (ImGui::IsItemHovered())
+                            RsImGui::CustomTooltip("Access low level camera calibration parameters");
+                    }
+
                 }
 
                 has_autocalib = true;
@@ -3561,5 +3741,10 @@ namespace rs2
         }
 
         return has_autocalib;
+    }
+
+    void device_model::open_hdr_config_tool_window()
+    {
+        _hdr_model.open_hdr_tool_window();
     }
 }

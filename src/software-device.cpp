@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2018 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2018 RealSense, Inc. All Rights Reserved.
 
 #include "software-device.h"
 #include "software-sensor.h"
@@ -11,8 +11,8 @@
 
 namespace librealsense
 {
-    software_device::software_device( std::shared_ptr< const device_info > const & dev_info )
-        : device( dev_info, false )
+    software_device::software_device( std::shared_ptr< const device_info > const & dev_info, bool device_changed_notifications )
+        : device( dev_info, device_changed_notifications )
     {
     }
 

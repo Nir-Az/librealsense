@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-option.h>
 #include <realdds/dds-exceptions.h>
@@ -428,7 +428,6 @@ json dds_option::to_json() const
     return j;
 }
 
-
 json dds_option::props_to_json() const
 {
     json props = json::array();
@@ -631,5 +630,29 @@ void dds_rect_option::check_type( json & value ) const
     check_rect( value );
 }
 
+
+rsutils::json dds_options_to_json(dds_options const& options)
+{
+    if (!options.empty())
+    {
+        rsutils::json options_json = rsutils::json::array();
+        for (auto& opt : options)
+        {
+            options_json.emplace_back(opt->to_json());
+        }
+        return options_json;
+    }
+    return rsutils::json();
+}
+
+std::shared_ptr<dds_option> find_dds_option_by_name(const dds_options& options, const std::string& name)
+{
+    for (auto opt : options)
+    {
+        if (opt->get_name() == name)
+            return opt;
+    }
+    return nullptr;
+}
 
 }  // namespace realdds

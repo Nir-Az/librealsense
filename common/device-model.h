@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include <set>
@@ -12,6 +12,8 @@
 #include "calibration-model.h"
 #include "objects-in-frame.h"
 #include "dds-model.h"
+#include "hdr-model.h"
+#include "textual-icons.h"
 
 ImVec4 from_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a, bool consistent_color = false);
 ImVec4 operator+(const ImVec4& c, float v);
@@ -70,23 +72,26 @@ namespace rs2
 
     void open_issue(const device_models_list& devices);
 
-    struct textual_icon
+    template <typename T>
+    std::string safe_call(T t)
     {
-        explicit constexpr textual_icon(const char(&unicode_icon)[4]) :
-            _icon{ unicode_icon[0], unicode_icon[1], unicode_icon[2], unicode_icon[3] }
+        try
         {
+            t();
+            return "";
         }
-        operator const char* () const
+        catch (const error& e)
         {
-            return _icon.data();
+            return error_to_string(e);
         }
-    private:
-        std::array<char, 5> _icon;
-    };
-
-    inline std::ostream& operator<<(std::ostream& os, const textual_icon& i)
-    {
-        return os << static_cast<const char*>(i);
+        catch (const std::exception& e)
+        {
+            return e.what();
+        }
+        catch (...)
+        {
+            return "Unknown error occurred";
+        }
     }
 
     namespace configurations
@@ -143,6 +148,10 @@ namespace rs2
             static const char* hwlogger_xml{ "viewer_model.hwlogger_xml" };
 
             static const char* last_ip{ "viewer_model.last_ip" };
+
+            static const char* lpc_point_size{ "viewer_model.lpc_point_size" };
+            static const char* show_safety_zones_3d{ "viewer_model.show_safety_zones_3d" };
+            static const char* show_safety_zones_2d{ "viewer_model.show_safety_zones_2d" };
         }
         namespace window
         {
@@ -180,62 +189,6 @@ namespace rs2
                 binary = 1
             };
         }
-    }
-
-    namespace textual_icons
-    {
-        // A note to a maintainer - preserve order when adding values to avoid duplicates
-        static const textual_icon file_movie{ u8"\uf008" };
-        static const textual_icon times{ u8"\uf00d" };
-        static const textual_icon download{ u8"\uf019" };
-        static const textual_icon refresh{ u8"\uf021" };
-        static const textual_icon lock{ u8"\uf023" };
-        static const textual_icon camera{ u8"\uf030" };
-        static const textual_icon video_camera{ u8"\uf03d" };
-        static const textual_icon edit{ u8"\uf044" };
-        static const textual_icon step_backward{ u8"\uf048" };
-        static const textual_icon play{ u8"\uf04b" };
-        static const textual_icon pause{ u8"\uf04c" };
-        static const textual_icon stop{ u8"\uf04d" };
-        static const textual_icon step_forward{ u8"\uf051" };
-        static const textual_icon plus_circle{ u8"\uf055" };
-        static const textual_icon question_mark{ u8"\uf059" };
-        static const textual_icon info_circle{ u8"\uf05a" };
-        static const textual_icon fix_up{ u8"\uf062" };
-        static const textual_icon minus{ u8"\uf068" };
-        static const textual_icon exclamation_triangle{ u8"\uf071" };
-        static const textual_icon shopping_cart{ u8"\uf07a" };
-        static const textual_icon bar_chart{ u8"\uf080" };
-        static const textual_icon upload{ u8"\uf093" };
-        static const textual_icon square_o{ u8"\uf096" };
-        static const textual_icon unlock{ u8"\uf09c" };
-        static const textual_icon floppy{ u8"\uf0c7" };
-        static const textual_icon square{ u8"\uf0c8" };
-        static const textual_icon bars{ u8"\uf0c9" };
-        static const textual_icon caret_down{ u8"\uf0d7" };
-        static const textual_icon repeat{ u8"\uf0e2" };
-        static const textual_icon circle{ u8"\uf111" };
-        static const textual_icon check_square_o{ u8"\uf14a" };
-        static const textual_icon cubes{ u8"\uf1b3" };
-        static const textual_icon toggle_off{ u8"\uf204" };
-        static const textual_icon toggle_on{ u8"\uf205" };
-        static const textual_icon connectdevelop{ u8"\uf20e" };
-        static const textual_icon usb_type{ u8"\uf287" };
-        static const textual_icon braille{ u8"\uf2a1" };
-        static const textual_icon window_maximize{ u8"\uf2d0" };
-        static const textual_icon window_restore{ u8"\uf2d2" };
-        static const textual_icon grid{ u8"\uf1cb" };
-        static const textual_icon exit{ u8"\uf011" };
-        static const textual_icon see_less{ u8"\uf070" };
-        static const textual_icon dotdotdot{ u8"\uf141" };
-        static const textual_icon link{ u8"\uf08e" };
-        static const textual_icon throphy{ u8"\uF091" };
-        static const textual_icon metadata{ u8"\uF0AE" };
-        static const textual_icon check{ u8"\uF00C" };
-        static const textual_icon mail{ u8"\uF01C" };
-        static const textual_icon cube{ u8"\uf1b2" };
-        static const textual_icon measure{ u8"\uf545" };
-        static const textual_icon wifi{ u8"\uf1eb" };
     }
 
     class viewer_model;
@@ -376,7 +329,9 @@ namespace rs2
         void check_for_device_updates(viewer_model& viewer, bool activated_by_user = false);
         bool disable_record_button_logic(bool is_streaming, bool is_playback_device);
         std::string get_record_button_hover_text(bool is_streaming);
+        bool is_depth_mapping_camera_streaming_alone();
 
+        void open_hdr_config_tool_window();
 
         std::shared_ptr< atomic_objects_in_frame > get_detected_objects() const { return _detected_objects; }
 
@@ -384,6 +339,7 @@ namespace rs2
         std::shared_ptr<syncer_model> syncer;
         std::shared_ptr<rs2::asynchronous_syncer> dev_syncer;
         bool is_streaming() const;
+        bool is_color_streaming() const;
         bool metadata_supported = false;
         bool get_curr_advanced_controls = true;
         device dev;
@@ -408,7 +364,7 @@ namespace rs2
         // This class is in charge of camera accuracy health window parameters,
         // Needed as a member for reseting the window memory on device disconnection.
 
-
+        bool show_advanced_mode_popup = false;
         void draw_info_icon(ux_window& window, ImFont* font, const ImVec2& size);
         int draw_seek_bar();
         int draw_playback_controls(ux_window& window, ImFont* font, viewer_model& view);
@@ -449,6 +405,18 @@ namespace rs2
         bool draw_device_panel_auto_calib_d400(viewer_model& viewer, bool& something_to_show, std::string& error_message);
         bool draw_device_panel_auto_calib_d500(viewer_model& viewer, bool& something_to_show, std::string& error_message);
 
+        void draw_processing_blocks(std::shared_ptr<subdevice_model> sub, float windows_width,
+            ux_window& window, viewer_model& viewer,
+            std::string& error_message, std::string& label,
+            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+
+        void draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
+            ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
+            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+
+        std::thread check_for_device_updates_thread;
+        std::mutex dev_mutex;
+        std::atomic<bool> stopping;
         std::shared_ptr<recorder> _recorder;
         std::vector<std::shared_ptr<subdevice_model>> live_subdevices;
         rsutils::time::periodic_timer      _update_readonly_options_timer;
@@ -458,6 +426,7 @@ namespace rs2
         std::shared_ptr<sw_update::dev_updates_profile::update_profile >_updates_profile;
         calibration_model _calib_model;
         dds_model _dds_model;
+        hdr_model _hdr_model;
     };
 
     std::pair<std::string, std::string> get_device_name(const device& dev);

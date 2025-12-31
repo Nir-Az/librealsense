@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include "ds-device-common.h"
 
@@ -61,7 +61,7 @@ namespace librealsense
         return roi;
     }
 
-    void ds_device_common::enter_update_state() const
+    void ds_device_common::enter_update_state(const command& cmd) const
     {
         // Stop all data streaming/exchange pipes with HW
         _owner->stop_activity();
@@ -72,9 +72,6 @@ namespace librealsense
         try
         {
             LOG_INFO("entering to update state, device disconnect is expected");
-            command cmd(ds::DFU);
-            cmd.param1 = 1;
-            cmd.require_response = false;
             _hw_monitor->send(cmd);
 
             // We allow 6 seconds because on Linux the removal status is updated at a 5 seconds rate.
@@ -168,7 +165,7 @@ namespace librealsense
                         }
                         catch (...)
                         {
-                            if (i < retries - 1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                            if (j < retries - 1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
                             else throw;
                         }
                     }
@@ -221,8 +218,30 @@ namespace librealsense
                 cmdFWB.param1 = (int)index;
                 cmdFWB.param2 = packet_size;
                 cmdFWB.data.assign(image.data() + index, image.data() + index + packet_size);
-                res = hwm->send(cmdFWB);
-                i += packet_size;
+                int retries = 0;
+                bool fwb_succeeded = false;
+                while (!fwb_succeeded && retries < 3)
+                {
+                    try
+                    {
+                        res = hwm->send(cmdFWB);
+                        fwb_succeeded = true;
+                        i += packet_size;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        LOG_DEBUG("FWB command failed during section flash retry, retry number: " << retries << " ,error: " << e.what());
+                        retries++;
+                        if (retries == 3)
+                        {
+                            LOG_ERROR("FWB command failed 3 times during section flash!");
+                            throw;
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+
+
             }
 
             if (callback)

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include "sensor.h"
@@ -7,6 +7,7 @@
 #include <librealsense2/hpp/rs_types.hpp>
 #include <librealsense2/h/rs_internal.h>
 #include <rsutils/lazy.h>
+#include <embedded-filter-interface.h>
 
 namespace librealsense {
 
@@ -14,6 +15,7 @@ namespace librealsense {
 class software_device;
 class stream_profile_interface;
 class video_stream_profile_interface;
+class embedded_filter_interface;
 
 
 class software_sensor
@@ -65,6 +67,7 @@ protected:
     metadata_array _metadata_map;
 
     processing_blocks get_recommended_processing_blocks() const override { return _pbs; }
+    embedded_filters get_supported_embedded_filters() const override { return embedded_filters(); };
     void add_processing_block( std::shared_ptr< processing_block_interface > const & );
 
     // We build profiles using add_video_stream(), etc., and feed those into init_stream_profiles() which could in

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,12 +14,48 @@
 #include "fw-update/fw-update-device-interface.h"
 #include "d400-auto-calibration.h"
 #include "d400-options.h"
+#include <src/core/video.h>
+#include <src/depth-sensor.h>
 
 #include "ds/ds-device-common.h"
 #include "backend-device.h"
 
 namespace librealsense
 {
+    class d400_device;
+
+    class d400_depth_sensor
+        : public synthetic_sensor
+        , public video_sensor_interface
+        , public depth_stereo_sensor
+        , public roi_sensor_base
+    {
+    public:
+        explicit d400_depth_sensor( d400_device * owner, std::shared_ptr< uvc_sensor > uvc_sensor );
+        processing_blocks get_recommended_processing_blocks() const override;
+
+        rs2_intrinsics get_intrinsics( const stream_profile & profile ) const override;
+        void set_frame_metadata_modifier( on_frame_md callback ) override;
+        void open( const stream_profiles & requests ) override;
+        void close() override;
+        rs2_intrinsics get_color_intrinsics( const stream_profile & profile ) const;
+        stream_profiles init_stream_profiles() override;
+        float get_depth_scale() const override;
+        void set_depth_scale( float val );
+        void init_hdr_config( const option_range & exposure_range, const option_range & gain_range );
+
+        std::shared_ptr< hdr_config > get_hdr_config() { return _hdr_cfg; }
+        float get_stereo_baseline_mm() const override;
+
+        float get_preset_max_value() const override;
+
+    protected:
+        const d400_device * _owner;
+        mutable std::atomic< float > _depth_units;
+        float _stereo_baseline_mm;
+        std::shared_ptr< hdr_config > _hdr_cfg;
+    };
+
     class hdr_config;
     class d400_thermal_monitor;
 
@@ -118,6 +154,7 @@ namespace librealsense
 
         std::shared_ptr<auto_gain_limit_option> _gain_limit_value_control;
         std::shared_ptr<auto_exposure_limit_option> _ae_limit_value_control;
+        bool _is_mipi_device;
     };
 
     class ds5u_device : public d400_device
@@ -134,4 +171,5 @@ namespace librealsense
 
     // Update device name according capability in it.
     void update_device_name(std::string& device_name, const ds::ds_caps cap);
-}
+
+ }

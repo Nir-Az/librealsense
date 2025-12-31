@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2019-2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2019-2024 RealSense, Inc. All Rights Reserved.
 
 #include "fw-update-device.h"
 #include "../types.h"
@@ -161,6 +161,7 @@ namespace librealsense
         , _physical_port( usb_device->get_info().id )
         , _pid( rsutils::string::from() << std::uppercase << rsutils::string::hexdump( usb_device->get_info().pid ))
         , _product_line( product_line )
+        , _connection_type( "USB" )
     {
         if (auto messenger = _usb_device->open(FW_UPDATE_INTERFACE_NUMBER))
         {
@@ -185,6 +186,7 @@ namespace librealsense
         , _pid( rsutils::string::from() << std::uppercase << rsutils::string::hexdump( mipi_device->get_info().pid ))
         , _product_line( product_line )
         , _serial_number( mipi_device->get_info().serial_number )
+        , _connection_type( "GMSL" )
     {
         std::ifstream fw_path_in_device(_physical_port.c_str());
         if (!fw_path_in_device)
@@ -396,6 +398,11 @@ namespace librealsense
         return true;
     }
 
+    bool update_device::is_in_recovery_mode() const
+    {
+        return true;
+    }
+
     std::vector<tagged_profile> update_device::get_profiles_tags() const
     {
         return std::vector<tagged_profile>();
@@ -423,6 +430,7 @@ namespace librealsense
         case RS2_CAMERA_INFO_FIRMWARE_VERSION:
             if( ! _last_fw_version.empty() )
                 return _last_fw_version;
+        case RS2_CAMERA_INFO_CONNECTION_TYPE:       return _connection_type;
             // fall-thru
         default:
             throw std::runtime_error("update_device does not support " + std::string(rs2_camera_info_to_string(info)));
@@ -438,6 +446,7 @@ namespace librealsense
         case RS2_CAMERA_INFO_PRODUCT_LINE:
         case RS2_CAMERA_INFO_PHYSICAL_PORT:
         case RS2_CAMERA_INFO_PRODUCT_ID:
+        case RS2_CAMERA_INFO_CONNECTION_TYPE:
             return true;
 
         case RS2_CAMERA_INFO_FIRMWARE_VERSION:

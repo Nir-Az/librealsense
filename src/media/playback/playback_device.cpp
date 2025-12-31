@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #include <cmath>
 #include "playback_device.h"
@@ -12,6 +12,8 @@
 #include <src/depth-sensor.h>
 #include <src/color-sensor.h>
 #include <src/pose.h>
+#include <src/safety-sensor.h>
+#include <src/depth-mapping-sensor.h>
 
 #include <rsutils/string/from.h>
 
@@ -427,6 +429,11 @@ bool playback_device::is_valid() const
     return true;
 }
 
+bool playback_device::is_in_recovery_mode() const
+{
+    return false;
+}
+
 void playback_device::update_time_base(device_serializer::nanoseconds base_timestamp)
 {
     m_base_sys_time = std::chrono::high_resolution_clock::now();
@@ -788,6 +795,8 @@ bool playback_device::try_extend_snapshot(std::shared_ptr<extension_snapshot>& e
     case RS2_EXTENSION_COLOR_SENSOR: return try_extend<color_sensor>(e, ext);
     case RS2_EXTENSION_MOTION_SENSOR: return try_extend<motion_sensor>(e, ext);
     case RS2_EXTENSION_FISHEYE_SENSOR: return try_extend<fisheye_sensor>(e, ext);
+    case RS2_EXTENSION_SAFETY_SENSOR: return try_extend<safety_sensor>(e, ext);
+    case RS2_EXTENSION_DEPTH_MAPPING_SENSOR: return try_extend<depth_mapping_sensor>(e, ext);
     case RS2_EXTENSION_UNKNOWN: //[[fallthrough]]
     case RS2_EXTENSION_COUNT:   //[[fallthrough]]
     default:

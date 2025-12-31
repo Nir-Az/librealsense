@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 #include "../../core/roi.h"
@@ -76,6 +76,7 @@ namespace librealsense
             }
             return processing_blocks_api->get_recommended_processing_blocks();
         }
+        embedded_filters get_supported_embedded_filters() const override { return embedded_filters(); };
 
         rsutils::subscription register_options_changed_callback( options_watcher::callback && cb ) override
         {

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <librealsense2/hpp/rs_sensor.hpp>
 #include "option.h"
@@ -280,6 +280,10 @@ namespace librealsense {
         }
     }
 
+    void rotation_filter::set_streams_to_rotate(const std::vector<rs2_stream>& streams_to_rotate)
+    {
+        _streams_to_rotate = streams_to_rotate;
+    }
 
     bool rotation_filter::should_process( const rs2::frame & frame )
     {

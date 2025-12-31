@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-device-server.h>
 
@@ -129,6 +129,10 @@ static void on_discovery_stream_header( std::shared_ptr< dds_stream_server > con
     for( auto & opt : stream->options() )
         j_options.push_back( std::move( opt->to_json() ) );
 
+    auto& j_embedded_filters = j_stream_options[topics::notification::stream_options::key::embedded_filters] = json::array();
+    for (auto& ef : stream->embedded_filters())
+        j_embedded_filters.push_back(std::move(ef->to_json()));
+
     if( auto video_stream = std::dynamic_pointer_cast< dds_video_stream_server >( stream ) )
     {
         auto & intrinsics = video_stream->get_intrinsics();
@@ -163,10 +167,6 @@ static void on_discovery_stream_header( std::shared_ptr< dds_stream_server > con
                     motion_stream->get_gyro_intrinsics().to_json() }
         } );
     }
-
-    auto & j_filters = j_stream_options[topics::notification::stream_options::key::recommended_filters] = json::array();
-    for( auto & filter : stream->recommended_filters() )
-        j_filters.push_back( filter );
 
     topics::flexible_msg stream_options_message( j_stream_options );
     LOG_DEBUG( stream->name() << " stream-options " << std::setw( 4 ) << j_stream_options << " size "
@@ -322,6 +322,7 @@ void dds_device_server::on_control_message_received()
         { topics::control::set_option::id, &dds_device_server::on_set_option },
         { topics::control::query_option::id, &dds_device_server::on_query_option },
         { topics::control::query_options::id, &dds_device_server::on_query_options },
+        { topics::control::query_filter::id, &dds_device_server::on_query_filter }
         // These are the ones handle internally -- our owner may handle application-dependent controls
     };
 
@@ -524,5 +525,59 @@ std::shared_ptr< dds_option > dds_device_server::get_option( std::string const &
     DDS_THROW( runtime_error, which + " option '" + option_name + "' not found" );
 }
 
+void dds_device_server::on_query_filter(control_sample const& control, rsutils::json& reply)
+{
+    // This is the notification for "query-filter", which can get sent as a reply to a control or independently by the
+    // device. It takes the same form & handling either way.
+    // 
+    // E.g.:
+    // {
+    //  "id": "query-filter",
+    //  "name" : "Decimation Filter",
+    //  "sample" : ["010faf31ac07879500000000.0203", 13] ,
+    //  "stream-name" : "Depth"
+    //  "control" : {
+    //      "id": "query-filter",
+    //      "name" : "Decimation Filter",
+    //      "options" : {
+    //      "Toggle": 1,
+    //      "Magnitude" : 2
+    //      }
+    //      "stream-name" : "Depth"
+    //      }
+    //  }
+
+    json& filter_options_values = reply[topics::reply::query_filter::key::options] = json::object();
+
+    auto fill_filter_options_values = [this](dds_options const& options, json& values)
+        {
+            for (auto const& option : options)
+                values[option->get_name()] = query_option(option);
+        };
+    // assigning filter name and stream name in reply, from control message
+    auto& filter_name = reply[topics::control::query_filter::key::name];
+    filter_name = control.json.nested(topics::control::query_filter::key::name);
+    auto& stream_name = reply[topics::control::query_filter::key::stream_name];
+    stream_name = control.json.nested(topics::control::query_filter::key::stream_name);
+
+    auto filter_name_str = filter_name.string_ref();
+    auto stream_name_str = stream_name.string_ref();
+    
+    for (auto& stream_server : _stream_name_to_server)
+    {
+        if (stream_server.first == stream_name_str)
+        {
+            for (auto& filter : stream_server.second->embedded_filters())
+            {
+                if (filter->get_name() == filter_name_str)
+                {
+                    fill_filter_options_values(filter->get_options(), filter_options_values);
+                    return;
+                }
+            }
+        }
+    }
+    throw std::runtime_error("Embedded filter '" + filter_name_str + "' not found within stream: " + stream_name_str);
+}
 
 }  // namespace realdds

@@ -1,13 +1,13 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017-2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017-2024 RealSense, Inc. All Rights Reserved.
 
 #ifndef LIBREALSENSE_RS2_DEVICE_HPP
 #define LIBREALSENSE_RS2_DEVICE_HPP
 
 #include "rs_types.hpp"
 #include "rs_sensor.hpp"
-#include <array>
-#include <cstring>
+#include <vector>
+#include <string>
 
 namespace rs2
 {
@@ -128,6 +128,17 @@ namespace rs2
             rs2_error* e = nullptr;
             rs2_hardware_reset(_dev.get(), &e);
             error::handle(e);
+        }
+
+        /**
+        * Find if a camera is in recovery mode
+        */
+        bool is_in_recovery_mode()
+        {
+            rs2_error* e = nullptr;
+            auto result = rs2_is_in_recovery_mode(_dev.get(), &e);
+            error::handle(e);
+            return result;
         }
 
         device& operator=(const std::shared_ptr<rs2_device> dev)

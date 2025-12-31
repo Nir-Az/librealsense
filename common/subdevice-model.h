@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -20,6 +20,7 @@
 
 #include "objects-in-frame.h"
 #include "processing-block-model.h"
+#include "embedded-filter-model.h"
 
 #include "realsense-ui-advanced-mode.h"
 #include "fw-update-helper.h"
@@ -36,7 +37,7 @@ namespace rs2
     bool restore_processing_block(const char* name,
         std::shared_ptr<rs2::processing_block> pb, bool enable = true);
 
-    std::string get_device_sensor_name(subdevice_model* sub);
+    std::string get_post_processing_device_sensor_name(subdevice_model* sub);
 
     class frame_queues
     {
@@ -64,7 +65,7 @@ namespace rs2
     struct subdevice_ui_selection
     {
         int selected_res_id = 0;
-        std::map<int, int> selected_res_id_map; // used for depth and ir mixed resolutions
+        std::map<rs2_stream, std::pair<int, int> > selected_stream_to_res; // used for depth and ir mixed resolutions
         bool is_multiple_resolutions = false; // used for depth and ir mixed resolutions
         int selected_shared_fps_id = 0;
         std::map<int, int> selected_fps_id;
@@ -76,14 +77,16 @@ namespace rs2
     public:
         void populate_options( const std::string & opt_base_label, bool * options_invalidated, std::string & error_message );
 
-        subdevice_model(device& dev, std::shared_ptr<sensor> s, std::shared_ptr< atomic_objects_in_frame > objects, std::string& error_message, viewer_model& viewer, bool new_device_connected = true);
+        subdevice_model(device& dev, std::shared_ptr<sensor> s, std::shared_ptr< atomic_objects_in_frame > objects, std::string& error_message, viewer_model& viewer, 
+            device_model* dev_model, bool new_device_connected = true);
         ~subdevice_model();
 
         bool is_there_common_fps();
         bool supports_on_chip_calib();
         bool draw_stream_selection(std::string& error_message);
         bool is_selected_combination_supported();
-        std::vector<stream_profile> get_selected_profiles(bool enforce_inter_stream_policies = true);
+        void select_resolution( int width, int height, rs2_stream stream = RS2_STREAM_ANY );
+        std::vector< stream_profile > get_selected_profiles( bool enforce_inter_stream_policies = true );
         std::vector<stream_profile> get_supported_profiles();
         void stop(std::shared_ptr<notifications_model> not_model);
         void play(const std::vector<stream_profile>& profiles, viewer_model& viewer, std::shared_ptr<rs2::asynchronous_syncer>);
@@ -115,8 +118,6 @@ namespace rs2
         void restore_ui_selection() { ui = last_valid_ui; }
         void store_ui_selection() { last_valid_ui = ui; }
 
-        void get_depth_ir_mismatch_resolutions_ids(int& depth_res_id, int& ir1_res_id, int& ir2_res_id) const;
-
         template<typename T>
         bool get_default_selection_index(const std::vector<T>& values, const T& def, int* index)
         {
@@ -137,6 +138,7 @@ namespace rs2
             *index = (int)(max_default - values.begin());
             return false;
         }
+        inline rs2_extrinsics get_extrinsics_from_depth() const { return _extrinsics_from_depth; }
 
         bool is_depth_calibration_profile() const;
 
@@ -162,7 +164,6 @@ namespace rs2
         subdevice_ui_selection last_valid_ui;
 
         std::vector<std::pair<int, int>> res_values;
-        std::map<int, std::vector<std::pair<int, int>>> profile_id_to_res; // used for depth and ir mixed resolutions
         std::map<int, std::vector<int>> fps_values_per_stream;
         std::vector<int> shared_fps_values;
         bool show_single_fps_list = false;
@@ -176,7 +177,7 @@ namespace rs2
         int next_option = 0;
         std::vector<rs2_option> supported_options;
         bool streaming = false;
-        std::map<int, bool> streaming_map; // used for depth and ir mixed resolutions
+        std::map<rs2_stream, bool> streaming_map; // used for depth and ir mixed resolutions
         bool allow_change_resolution_while_streaming = false;
         bool allow_change_fps_while_streaming = false;
         rect normalized_zoom{ 0, 0, 1, 1 };
@@ -200,13 +201,18 @@ namespace rs2
 
         std::shared_ptr<rs2::colorizer> depth_colorizer;
         std::shared_ptr<rs2::yuy_decoder> yuy2rgb;
+        std::shared_ptr<rs2::m420_decoder> m420_to_rgb;
         std::shared_ptr<rs2::y411_decoder> y411;
 
         std::vector<std::shared_ptr<processing_block_model>> post_processing;
         bool post_processing_enabled = true;
         std::vector<std::shared_ptr<processing_block_model>> const_effects;
 
+        std::vector<std::shared_ptr<embedded_filter_model>> embedded_filters;
+        bool embedded_filters_enabled = true;
+
         bool uvmapping_calib_full = false;
+        device_model* dev_model;
 
     private:
         bool draw_resolutions(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1);
@@ -214,19 +220,24 @@ namespace rs2
         bool draw_streams_and_formats(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1);
         bool draw_res_stream_formats(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1);
         bool draw_resolutions_combo_box_multiple_resolutions(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1,
-            int stream_type_id, int depth_res_id);
+            rs2_stream stream_type);
         bool draw_formats_combo_box_multiple_resolutions(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1,
-            int stream_type_id);
-        bool is_multiple_resolutions_supported() const { return false; }
+            rs2_stream stream_type);
+        bool is_multiple_resolutions_supported() const;
+        int get_res_id_in_resolutions_array(const std::vector<const char*>& res_chars, const std::pair<int, int>& res) const;
+        std::pair<int, int> get_resolution_from_res_chars_id(const std::vector<const char*>& res_chars, int id_in_res_chars) const;
         std::pair<int, int> get_max_resolution(rs2_stream stream) const;
         void sort_resolutions(std::vector<std::pair<int, int>>& resolutions) const;
         bool is_ir_calibration_profile() const;
-
+        void set_extrinsics_from_depth_if_needed();
+        bool is_post_processing_enabled_in_config_file() const;
+        void avoid_streaming_on_embedded_filters_not_matching_configuration() const;
         // used in method get_max_resolution per stream
         std::map<rs2_stream, std::vector<std::pair<int, int>>> resolutions_per_stream;
 
         const float SHORT_RANGE_MIN_DISTANCE = 0.05f; // 5 cm
         const float SHORT_RANGE_MAX_DISTANCE = 4.0f;  // 4 meters
+        rs2_extrinsics _extrinsics_from_depth;
         std::atomic_bool _destructing;
     };
 }

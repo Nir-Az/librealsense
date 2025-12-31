@@ -1,20 +1,37 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2023-4 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2023-4 RealSense, Inc. All Rights Reserved.
+
+"""
+topic-send.py - DDS Topic Message Sender
+
+This script provides a command-line interface for sending messages to DDS topics
+in the RealSense ecosystem. It supports multiple sending modes:
+
+1. Device Control Messages: Send JSON control messages to specific RealSense devices via their topic root
+2. Topic Messages: Send JSON messages to arbitrary DDS topics  
+3. Blob Files: Send binary files as blob messages to topics
+
+Usage Examples:
+- Send control to device: --topic /realsense/D555_<serial_number>/control --message '{"id":"ping"}'
+- Send notification to subscriber: --topic /realsense/D555_<serial_number>/notification --message '{"id":"ping"}'
+- Send to topic: --topic /my/topic --message '{"data":"value"}'
+- Send file as blob: --topic /data/blob --blob myfile.bin
+- Read from file: --topic /realsense/D555_<serial_number>/control --message-file <path_to_file>
+"""
 
 from argparse import ArgumentParser
 from argparse import ArgumentTypeError as ArgumentError  # NOTE: only ArgumentTypeError passes along the original error string
+import sys
+import json
+import os
+
 args = ArgumentParser()
 args.add_argument( '--debug', action='store_true', help='enable debug mode' )
 args.add_argument( '--quiet', action='store_true', help='no output' )
 args.add_argument( '--device', metavar='<path>', help='the topic root for the device' )
 args.add_argument( '--topic', metavar='<path>', help='the topic on which to send a message/blob, if --device is not supplied' )
-import json
-def json_arg(x):
-    try:
-        return json.loads(x)
-    except Exception as e:
-        raise ArgumentError( str(e) )
-args.add_argument( '--message', metavar='<json>', type=json_arg, help='a message to send', default='{"id":"ping","message":"some message"}' )
+args.add_argument( '--message-file', metavar='<filename>', help='JSON file to read message from (use "-" for stdin)' )
+args.add_argument( '--message', metavar='<json>', help='inline JSON message (overrides --message-file)', default=None )
 args.add_argument( '--blob', metavar='<filename>', help='a file to send' )
 args.add_argument( '--ack', action='store_true', help='wait for acks' )
 def domain_arg(x):
@@ -35,10 +52,41 @@ else:
 def e( *a, **kw ):
     print( '-E-', *a, **kw )
 
+if args.message and args.message_file:
+    e( '--message and --message-file are mutually exclusive' )
+    sys.exit( 1 )
+
+# Read message from file or stdin if --message-file is specified and --message is not provided
+if args.message_file:
+    try:
+        # Read from file
+        if not os.path.isfile( args.message_file ):
+            e( f'Message file does not exist: {args.message_file}' )
+            sys.exit( 1 )
+        i( f"Reading JSON message from file: {args.message_file}" )
+        with open( args.message_file, 'r' ) as f:
+            message_content = f.read()           
+        # Parse JSON
+        message = json.loads( message_content )
+        i( f"Loaded message: {message}" )
+    except json.JSONDecodeError as e:
+        e( f'Invalid JSON in message file/stdin: {e}' )
+        sys.exit( 1 )
+    except Exception as e:
+        e( f'Error reading message file/stdin: {e}' )
+        sys.exit( 1 )
+
+if args.message:
+    # Parse inline JSON message
+    try:
+        message = json.loads( args.message )
+    except json.JSONDecodeError as e:
+        e( f'Invalid JSON in --message: {e}' )
+        sys.exit( 1 )
+
 
 import pyrealdds as dds
 import time
-import sys
 
 dds.debug( args.debug )
 
@@ -58,14 +106,11 @@ settings = {
 participant = dds.participant()
 participant.init( dds.load_rs_settings( settings ), args.domain )
 
-message = args.message
-
 if args.blob:
     if not args.topic:
         e( '--blob requires --topic' )
         sys.exit( 1 )
     topic_path = args.topic
-    import os
     if not os.path.isfile( args.blob ):
         e( '--blob <file> does not exist:', args.blob )
         sys.exit( 1 )
@@ -134,5 +179,3 @@ else:
     # all the packets are sent, they may need resending (reliable) but if we exit they won't be...
 
 i( f'After {dds.timestr( dds.now(), start )}' )
-
-

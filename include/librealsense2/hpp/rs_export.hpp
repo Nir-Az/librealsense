@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #ifndef LIBREALSENSE_RS2_EXPORT_HPP
 #define LIBREALSENSE_RS2_EXPORT_HPP
@@ -14,6 +14,8 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <array>
+
 namespace rs2
 {
     struct vec3d {

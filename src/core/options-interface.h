@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -9,6 +9,8 @@
 #include <librealsense2/h/rs_option.h>
 #include <vector>
 #include <string>
+#include <rsutils/subscription.h>
+#include <src/core/options-watcher.h>
 
 
 namespace librealsense {
@@ -23,6 +25,7 @@ public:
     virtual std::vector< rs2_option > get_supported_options() const = 0;
     virtual std::string const & get_option_name( rs2_option ) const = 0;
     virtual ~options_interface() = default;
+    virtual rsutils::subscription register_options_changed_callback(options_watcher::callback&& cb) = 0;
 };
 
 MAP_EXTENSION( RS2_EXTENSION_OPTIONS, librealsense::options_interface );

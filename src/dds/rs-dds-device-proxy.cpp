@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include "rs-dds-device-proxy.h"
 #include "rs-dds-color-sensor-proxy.h"
@@ -146,8 +146,9 @@ static rs2_extrinsics to_rs2_extrinsics( const std::shared_ptr< realdds::extrins
 
 dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const & dev_info,
                                     std::shared_ptr< realdds::dds_device > const & dev)
-    : software_device( dev_info )
+    : software_device( dev_info, true )
     , auto_calibrated_proxy()
+    , ds_advanced_mode_base()
     , _dds_dev( dev )
 {
     //LOG_DEBUG( "=====> dds-device-proxy " << this << " created on top of dds-device " << _dds_dev.get() );
@@ -172,6 +173,9 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
         register_info( RS2_CAMERA_INFO_PRODUCT_LINE, str );
     register_info( RS2_CAMERA_INFO_CAMERA_LOCKED, j.nested( "locked" ).default_value( true ) ? "YES" : "NO" );
     register_info(RS2_CAMERA_INFO_CONNECTION_TYPE, "DDS" );
+    ds_advanced_mode_base::_enabled = j.nested( "advanced-mode" ).default_value( false );
+    
+    eth_config_device::init( static_cast< debug_interface * >( this ) ); // Call after registering device info
 
     // Assumes dds_device initialization finished
     struct sensor_info
@@ -193,8 +197,8 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
         [&]( std::shared_ptr< realdds::dds_stream > const & stream )
         {
             auto & sensor = sensor_name_to_info[stream->sensor_name()];
-            if( stream->type_string() == "depth"
-                || stream->type_string() == "ir" )
+            if( strcmp( stream->type_string(), "depth" ) == 0 
+                || strcmp( stream->type_string(), "ir" ) == 0 )
             {
                 // If there's depth or infrared, it is a depth sensor regardless of what else is in there
                 // E.g., the D405 has a color stream in the depth sensor
@@ -202,11 +206,11 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             }
             else if( RS2_STREAM_ANY == sensor.type )
             {
-                if( stream->type_string() == "color" )
+                if( strcmp( stream->type_string(), "color" ) == 0 )
                 {
                     sensor.type = RS2_STREAM_COLOR;
                 }
-                else if( stream->type_string() == "motion" )
+                else if( strcmp( stream->type_string(), "motion" ) == 0 )
                 {
                     sensor.type = RS2_STREAM_MOTION;
                 }
@@ -294,10 +298,16 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
                 }
             }
 
-            auto & recommended_filters = stream->recommended_filters();
-            for( auto & filter_name : recommended_filters )
+            auto recommended_filters_names = get_recommended_filters_names(stream);
+            for( auto & filter_name : recommended_filters_names )
             {
                 sensor_info.proxy->add_processing_block( filter_name );
+            }
+
+            auto& embedded_filters = stream->embedded_filters();
+            for (auto& embedded_filter : embedded_filters)
+            {
+                sensor_info.proxy->add_embedded_filter(embedded_filter);
             }
         } );  // End foreach_stream lambda
 
@@ -312,10 +322,14 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
         // The get_stream_profiles() call will initialize the profiles (calling dds_sensor_proxy::init_stream_profiles())
         for( auto & profile : sensor_proxy->get_stream_profiles() )
         {
-            auto & source_profiles = sensor_proxy->_formats_converter.get_source_profiles_from_target( profile );
-            if( source_profiles.size() != 1 )
-                LOG_ERROR( "More than one source profile available for [" << profile << "]: " << source_profiles );
-            auto source_profile = source_profiles[0];
+            auto source_profile = profile;
+            if( get_format_conversion() != format_conversion::raw )
+            {
+                auto & source_profiles = sensor_proxy->_formats_converter.get_source_profiles_from_target( profile );
+                if( source_profiles.size() != 1 )
+                    LOG_ERROR( "More than one source profile available for [" << profile << "]: " << source_profiles );
+                auto source_profile = source_profiles[0];
+            }
 
             sid_index type_and_index( source_profile->get_stream_type(), source_profile->get_stream_index() );
             const auto & it = sensor_info.type_and_index_to_dds_stream_sidx.find( type_and_index );
@@ -402,8 +416,13 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             environment::get_instance().get_extrinsics_graph().register_same_extrinsics( *it.second, *profile );
         }
     }
-    // TODO - need to register extrinsics group in dev?
 
+    if( ! dev->device_info().is_recovery() )
+    {
+        // Call after seneors have been initialized
+        ds_advanced_mode_base::initialize_advanced_mode( this );  // Call even if not enabled, so API calls won't throw
+        device_specific_initialization();
+    }
     // Use the default D400 matchers:
     // Depth & IR matched by frame-number, time-stamp-matched to color.
     // Motion streams will not get synced.
@@ -439,6 +458,9 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             {
                 for( auto & profile : it->second )
                     set_video_profile_intrinsics( profile, video_stream );
+
+                for( const auto & cb : _calib_changed_callbacks )
+                    cb->on_calibration_change( rs2_calibration_status::RS2_CALIBRATION_SUCCESSFUL );
             }
             else
             {
@@ -637,6 +659,11 @@ void dds_device_proxy::hardware_reset()
     _dds_dev->send_control( control, &reply );
 }
 
+bool dds_device_proxy::is_in_recovery_mode() const
+{
+    return _dds_dev->device_info().is_recovery();
+}
+
 std::string dds_device_proxy::get_opcode_string(int opcode) const
 {
     std::string product_line = get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
@@ -808,24 +835,44 @@ void dds_device_proxy::update( const void * /*image*/, int /*image_size*/, rs2_u
 }
 
 
-std::vector< sensor_interface * > dds_device_proxy::get_serializable_sensors()
+bool dds_device_proxy::supports_ethernet_configuration()
 {
-    std::vector< sensor_interface * > sensors;
-    auto const n_sensors = get_sensors_count();
-    for( auto i = 0; i < n_sensors; ++i )
-        sensors.push_back( &get_sensor( i ) );
-    return sensors;
+    std::string dev_name = get_info( RS2_CAMERA_INFO_NAME ); // Info supported, registered at constructor
+    if( dev_name.find( "D555" ) == std::string::npos ) // Currently only D555 devices support eth_config
+        return false;
+
+    return eth_config_device::supports_ethernet_configuration();
 }
 
 
-std::vector< sensor_interface const * > dds_device_proxy::get_serializable_sensors() const
+void dds_device_proxy::device_specific_initialization()
 {
-    std::vector< sensor_interface const * > sensors;
-    auto const n_sensors = get_sensors_count();
-    for( auto i = 0; i < n_sensors; ++i )
-        sensors.push_back( &get_sensor( i ) );
-    return sensors;
+    if( ds_advanced_mode_base::_enabled )
+        ds_advanced_mode_base::_amplitude_factor_support = true;
 }
 
+std::vector<std::string> dds_device_proxy::get_recommended_filters_names(const std::shared_ptr<realdds::dds_stream> stream) const
+{
+    std::vector<std::string> filter_names;
+    if (auto depth_stream = std::dynamic_pointer_cast< realdds::dds_depth_stream >(stream))
+    {
+        filter_names.push_back("Decimation Filter");
+        filter_names.push_back("Rotation Filter");
+        filter_names.push_back("HDR Merge");
+        filter_names.push_back("Filter By Sequence id");
+        filter_names.push_back("Threshold Filter");
+        filter_names.push_back("Depth to Disparity");
+        filter_names.push_back("Spatial Filter");
+        filter_names.push_back("Temporal Filter");
+        filter_names.push_back("Hole Filling Filter");
+        filter_names.push_back("Disparity to Depth");
+    }
+    else if (auto color_stream = std::dynamic_pointer_cast< realdds::dds_color_stream >(stream))
+    {
+        filter_names.push_back("Decimation Filter");
+        filter_names.push_back("Rotation Filter");
+    }
+    return filter_names;
+}
 
 }  // namespace librealsense

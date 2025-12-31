@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -513,7 +513,7 @@ namespace rs2
             _splash_tex.show({ 0.f,0.f,float(_width),float(_height) }, opacity);
         }
 
-        std::string hourglass = u8"\uf251";
+        std::string hourglass = std::string(rsutils::string::from() << textual_icons::hourglass);
         static rsutils::time::periodic_timer every_200ms(std::chrono::milliseconds(200));
         bool do_200ms = every_200ms;
         if (_query_devices && do_200ms)
@@ -523,7 +523,8 @@ namespace rs2
 
             if (!_missing_device)
             {
-                _dev_stat_message = u8"\uf287 RealSense device detected.";
+                std::string rs_dev_detected = std::string(rsutils::string::from() << textual_icons::usb
+                    << " RealSense device detected.");
                 _query_devices = false;
             }
         }
@@ -810,7 +811,7 @@ namespace rs2
         _first_frame = true;
         _app_ready = false;
         _splash_timer.reset();
-        _dev_stat_message = u8"\uf287 Please connect Intel RealSense device!";
+        _dev_stat_message = std::string(rsutils::string::from() << textual_icons::usb << " Please connect RealSense device!");
 
         {
             std::lock_guard<std::mutex> lock(_on_load_message_mtx);

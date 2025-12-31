@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -13,12 +13,43 @@
 #include "ds/ds-device-common.h"
 #include "backend-device.h"
 #include "d500-auto-calibration.h"
+#include <src/core/video.h>
+#include <src/depth-sensor.h>
 
 #include <rsutils/lazy.h>
 
 
 namespace librealsense
 {
+    class d500_device;
+
+    class d500_depth_sensor
+        : public synthetic_sensor
+        , public video_sensor_interface
+        , public depth_stereo_sensor
+        , public roi_sensor_base
+    {
+    public:
+        explicit d500_depth_sensor( d500_device * owner, std::shared_ptr< uvc_sensor > uvc_sensor );
+
+        processing_blocks get_recommended_processing_blocks() const override;
+        rs2_intrinsics get_intrinsics( const stream_profile & profile ) const override;
+        void set_frame_metadata_modifier( on_frame_md callback ) override;
+        void open( const stream_profiles & requests ) override;
+        void close() override;
+        rs2_intrinsics get_color_intrinsics( const stream_profile & profile ) const;
+        stream_profiles init_stream_profiles() override;
+        float get_depth_scale() const override;
+        void set_depth_scale( float val );
+        float get_stereo_baseline_mm() const override;
+        float get_preset_max_value() const override;
+
+    protected:
+        const d500_device * _owner;
+        mutable std::atomic< float > _depth_units;
+        float _stereo_baseline_mm;
+    };
+
     class ds_thermal_monitor;
     class ds_devices_common;
     class d500_info;

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include "ds-calib-parsers.h"
 #include "ds-private.h"
@@ -153,7 +153,7 @@ namespace librealsense
         // predefined platform specific extrinsic, IMU assembly transformation based on mechanical drawing (meters)
         rs2_extrinsics _def_extr;
 
-        if (_pid == ds::RS435I_PID)
+        if (_pid == ds::RS435I_PID || _pid == ds::RS436_PID)
         {
             // D435i specific - Bosch BMI055
             _def_extr = { { 1, 0, 0, 0, 1, 0, 0, 0, 1 }, { -0.00552f, 0.0051f, 0.01174f} };
@@ -174,6 +174,12 @@ namespace librealsense
         {
             _def_extr = { { 1, 0, 0, 0, 1, 0, 0, 0, 1 },{ -0.0374f, 0.00719f, 0.0223f } };
             _imu_2_depth_rot = { { -1,0,0 },{ 0,1,0 },{ 0,0,-1 } };
+        }
+        else if ( _pid == ds::D585_PID || _pid == ds::D585S_PID )
+        {
+            // D585/D585S specific - Bosch BMI085
+            _def_extr = { { 1, 0, 0, 0, 1, 0, 0, 0, 1 },{ -0.0195f, 0.0f, -0.0114f } };
+            _imu_2_depth_rot = { { -1,0,0 },{ 0,-1,0 },{ 0,0,1 } };
         }
         else // unmapped configurations
         {

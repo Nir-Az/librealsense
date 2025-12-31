@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -58,6 +58,8 @@ public:
     virtual std::pair< uint32_t, rs2_extrinsics > get_extrinsics( const stream_interface & ) const = 0;
 
     virtual bool is_valid() const = 0;
+
+    virtual bool is_in_recovery_mode() const = 0;
 
     virtual std::vector< tagged_profile > get_profiles_tags() const = 0;
 

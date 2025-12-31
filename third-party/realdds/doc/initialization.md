@@ -175,8 +175,7 @@ Information about a specific stream:
       }
       ```
 - `options` is an array of option objects, same as `device-options` above; stream options are shown in the Viewer
-- `recommended-filters` is an array of filter names to be enabled in the Viewer
-
+- `embedded-filters` is an array of embedded filters, with name and options for each filter; all these are shown in the Viewer
 E.g.:
   
 ```JSON
@@ -188,7 +187,7 @@ E.g.:
         "gyro": [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
     },
     "options": [],
-    "recommended-filters": []
+    "embedded-filters": []
 }
 ```
 
@@ -205,16 +204,23 @@ E.g.:
         "focal-length": [631.3428955078125,631.3428955078125]
     },
     "options": [],
-    "recommended-filters": [
-        "Decimation Filter",
-        "HDR Merge",
-        "Filter By Sequence id",
-        "Threshold Filter",
-        "Depth to Disparity",
-        "Spatial Filter",
-        "Temporal Filter",
-        "Hole Filling Filter",
-        "Disparity to Depth"
+	"embedded-filters": [
+        {
+            "name": "Decimation Filter",
+            "options": [
+                ["Toggle",0,0,1,1,0,"Activate filter: 0:disable filter, 1:enable filter"],
+                ["Magnitude",2,1,8,1,2,"How many pixels will be grouped into 1",["read-only"]]
+            ]
+        },
+        {
+            "name": "Temporal Filter",
+            "options": [
+                ["Toggle",0,0,1,1,0,"Activate filter: 0:disable filter, 1:enable filter"],
+                ["Alpha",0.4,0,1,0.01,0.4,"The Alpha factor in an exponential moving average with Alpha=1 - no filter. Alpha = 0 - infinite filter",["float"]],
+                ["Delta",20,1,100,1,20,"Step-size boundary. Establishes the threshold used to preserve surfaces (edges)",["float"]],
+                ["Persistency",3,0,8,1,3,"Hole Filling policy"]
+            ]
+        }
     ]
 }
 ```

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015-24 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015-24 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include "options-interface.h"
@@ -68,6 +68,9 @@ public:
     std::vector<rs2_option> get_supported_options() const override;
 
     std::string const & get_option_name( rs2_option option ) const override;
+
+    virtual rsutils::subscription register_options_changed_callback(options_watcher::callback&& cb) override
+    { return rsutils::subscription(); }
 
 protected:
     std::vector< rs2_option > _ordered_options;
