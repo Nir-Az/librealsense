@@ -11,7 +11,7 @@
 Our official wrapper is  [`pyrealsense2`](https://pypi.org/project/pyrealsense2/)
 We also provide a beta package for early access to new features called [`pyrealsense2-beta`](https://pypi.org/project/pyrealsense2-beta/)
 
-Users who which to pack thier package can create from this folder by running 
+Users who which to pack their package can create from this folder by running 
 
 ```pip install -U setuptools build hatchling```
 
