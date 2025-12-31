@@ -146,22 +146,20 @@ fi
 sdk_dir=$(pwd)
 echo -e "\e[32mCreate the sandbox - NVIDIA L4T source tree(s)\e[0m"
 mkdir -p ${sdk_dir}/Tegra
-TEGRA_SOURCE_SYNC_SH="source_sync.sh"
+TEGRA_SOURCE_SYNC_SH="sync.sh"
 if [[ "$PATCHES_REV" = "5.0.2" ]]; then
 	KBASE=./Tegra/sources/kernel/kernel-$KERNEL_RELEASE
-	TEGRA_SOURCE_SYNC_SH="source_sync_5.0.2.sh"
 fi
 if [[ "$PATCHES_REV" = "6.0" ]]; then
 	KBASE=./Tegra/kernel/kernel-jammy-src
-	TEGRA_SOURCE_SYNC_SH="source_sync_6.0.sh"
 	TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
 fi
 if [[ "$PATCHES_REV" = "7.0" ]]; then
 	KBASE=./Tegra/kernel/kernel-noble-src
-	TEGRA_SOURCE_SYNC_SH="source_sync_7.0.sh"
 	TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
 fi
 cp ./scripts/Tegra/$TEGRA_SOURCE_SYNC_SH ${sdk_dir}/Tegra
+cp ./scripts/Tegra/${PATCHES_REV}.repos ${sdk_dir}/Tegra/repos
 
 # Display NVIDIA license
 DisplayNvidiaLicense "r${JETSON_L4T_RELEASE}_Release_v${JETSON_L4T_REVISION_LONG}"
