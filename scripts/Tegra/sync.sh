@@ -59,7 +59,6 @@ LDK_DIR=$SCRIPT_DIR
 # info about sources.
 # NOTE: *Add only kernel repos here. Add new repos separately below. Keep related repos together*
 # NOTE: nvethrnetrm.git should be listed after "linux-nv-oot.git" due to nesting of sync path
-PATCHES_REV=7.0
 source $SCRIPT_DIR/repos
 
 # exit on error on sync
@@ -300,6 +299,8 @@ for ((i=0; i < NSOURCES; i++)); do
 	fi
 done
 
-ln -sf ../../../../../../nvethernetrm ${LDK_DIR}/nvidia-oot/drivers/net/ethernet/nvidia/nvethernet/nvethernetrm
+if [[ -d ${LDK_DIR}/nvidia-oot/drivers/net/ethernet/nvidia/nvethernet ]]; then
+	ln -sf ../../../../../../nvethernetrm ${LDK_DIR}/nvidia-oot/drivers/net/ethernet/nvidia/nvethernet/nvethernetrm
+fi
 
 exit 0
