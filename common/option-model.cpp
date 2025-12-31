@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include "option-model.h"
 #include <realsense_imgui.h>
@@ -8,6 +8,7 @@
 #include <imgui_internal.h>
 #include "device-model.h"
 #include "subdevice-model.h"
+#include <os.h>
 
 namespace rs2
 {
@@ -31,6 +32,7 @@ namespace rs2
         option.supported = opt->is_valid;  // i.e., supported-and-enabled!
         option.range = options->get_option_range( opt->id );
         option.read_only = options->is_option_read_only( opt->id );
+        option.last_slider_hold_stopwatch.reset( {} ); // Avoids seeming as if a slider was dragged and just released.
         return option;
     }
 }
@@ -129,6 +131,33 @@ bool option_model::draw( std::string & error_message,
                 RsImGui::CustomTooltip( "Select custom region of interest for the auto-exposure "
                                    "algorithm\nClick the button, then draw a rect on the frame" );
         }
+
+        auto advanced = dev->dev.as< rs400::advanced_mode >();
+        auto supports_auto_hdr = std::string(dev->dev.get_info(RS2_CAMERA_INFO_NAME)).find("D45") != std::string::npos; // auto HDR is only supported on D45*
+        if( opt == RS2_OPTION_HDR_ENABLED && advanced && advanced.is_enabled() && supports_auto_hdr)
+        {
+            ImGui::SameLine( 0, 10 );
+
+            std::string button_label = "HDR Config";
+            std::string caption = rsutils::string::from() << "HDR Config##" << button_label;
+
+            RsImGui::RsImButton(
+                [&]()
+                {
+                    if( ImGui::Button( caption.c_str(), { 85, 0 } ) )
+                    {
+                        try
+                        {
+                            dev->dev_model->open_hdr_config_tool_window();
+                        }
+                        catch( const std::exception & e )
+                        {
+                            error_message = rsutils::string::from() << "Failed to open HDR configuration: " << e.what();
+                        }
+                    }
+                });
+        }
+    
     }
 
     return res;
@@ -162,6 +191,10 @@ void option_model::update_all_fields( std::string & error_message, notifications
 {
     try
     {
+        // After slider was dragged value updated using set_option, don't update value again here
+        if( last_slider_hold_stopwatch.get_elapsed_ms() < 500 )
+            return;
+
         value = endpoint->get_option_value( opt );
         supported = value->is_valid;
         if( supported )
@@ -511,23 +544,18 @@ bool option_model::draw_slider( notifications_model & model,
             auto int_value = static_cast< int >( value_as_float() );
 
             if( RsImGui::SliderIntWithSteps( id.c_str(),
-                                           &int_value,
-                                           static_cast< int >( range.min ),
-                                           static_cast< int >( range.max ),
-                                           static_cast< int >( range.step )) )
+                                             &int_value,
+                                             static_cast< int >( range.min ),
+                                             static_cast< int >( range.max ),
+                                             static_cast< int >( range.step ) ) )
             {
                 // TODO: Round to step?
-                slider_clicked = slider_selected( opt,
-                                                  static_cast< float >( int_value ),
-                                                  error_message,
-                                                  model );
+                slider_clicked = slider_selected( opt, static_cast< float >( int_value ), error_message, model );
+                last_slider_hold_stopwatch.reset(); // While sliding the control, avoid other means of updating value
             }
             else
             {
-                slider_clicked = slider_unselected( opt,
-                                                    static_cast< float >( int_value ),
-                                                    error_message,
-                                                    model );
+                slider_clicked = slider_unselected( opt, static_cast< float >( int_value ), error_message, model );
             }
         }
         else
@@ -656,8 +684,7 @@ bool option_model::slider_unselected( rs2_option opt,
                                       notifications_model & model )
 {
     bool res = false;
-    // Slider unselected, if last value was ignored, set with last value if the value was
-    // changed.
+    // Slider unselected, if last value was ignored, set with last value if the value was changed.
     if( have_unset_value )
     {
         if( value != unset_value )
@@ -731,4 +758,13 @@ bool option_model::set_option(rs2_option opt,
     }
 
     return true;
+}
+
+void option_model::update_value( const rs2::option_value & updated_value, notifications_model & model )
+{
+    // After slider was dragged, don't update value from outside (usually on_options_changed callback)
+    if( last_slider_hold_stopwatch.get_elapsed_ms() < 1000 )
+        return;
+
+    value = updated_value;
 }

@@ -1,5 +1,5 @@
 /* License: Apache 2.0. See LICENSE file in root directory.
-   Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
+   Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 
 /** \file rs_types.h
 * \brief
@@ -193,6 +193,13 @@ typedef enum rs2_extension
     RS2_EXTENSION_DEBUG_STREAM_SENSOR,
     RS2_EXTENSION_CALIBRATION_CHANGE_DEVICE,
     RS2_EXTENSION_ROTATION_FILTER,
+    RS2_EXTENSION_SAFETY_SENSOR,
+    RS2_EXTENSION_DEPTH_MAPPING_SENSOR,
+    RS2_EXTENSION_LABELED_POINTS,
+    RS2_EXTENSION_ETH_CONFIG,
+    RS2_EXTENSION_SUPPORTED_EMBEDDED_FILTERS,
+    RS2_EXTENSION_DECIMATION_EMBEDDED_FILTER,
+    RS2_EXTENSION_TEMPORAL_EMBEDDED_FILTER,
     RS2_EXTENSION_COUNT
 } rs2_extension;
 const char* rs2_extension_type_to_string(rs2_extension type);
@@ -225,6 +232,44 @@ typedef enum rs2_matchers
 } rs2_matchers;
 const char* rs2_matchers_to_string(rs2_matchers stream);
 
+typedef enum rs2_point_cloud_label
+{
+    RS2_POINT_CLOUD_LABEL_UNKNOWN,                  // No valid classification can be made for this point
+    RS2_POINT_CLOUD_LABEL_UNDEFINED,                // NAN pixel
+    RS2_POINT_CLOUD_LABEL_INVALID,                  // This point is discarded, i.e. outside of vertical FOV or too close
+    RS2_POINT_CLOUD_LABEL_GROUND,                   // This point belongs to ground plane
+    RS2_POINT_CLOUD_LABEL_NEAR_GROUND,              // This point is not on ground plane, but yet not part of a true obstacle
+    RS2_POINT_CLOUD_LABEL_OVERHEAD,                 // This point belongs to something above robot's height, but below the ceiling height, 
+                                                    // and not part of a true obstacle
+    RS2_POINT_CLOUD_LABEL_ABOVE_CEILING_HEIGHT,     // This point belongs to something above the ceiling height
+    RS2_POINT_CLOUD_LABEL_GAP,                      // This point belongs to a Gap Region
+    RS2_POINT_CLOUD_LABEL_MASKED,                   // This point belongs to a Masked Region
+    RS2_POINT_CLOUD_LABEL_CLIFF,                    // This point is part of a possible cliff
+    RS2_POINT_CLOUD_LABEL_OBSTACLE,                 // This point is a potential obstacle
+    RS2_POINT_CLOUD_LABEL_OBSTACLE_DANGER,          // This point is an actual obstacle inside the danger zone
+    RS2_POINT_CLOUD_LABEL_OBSTACLE_WARNING,         // This point is an actual obstacle inside the warning zone
+    RS2_POINT_CLOUD_LABEL_COUNT
+} rs2_point_cloud_label;
+const char* rs2_point_cloud_label_to_string(rs2_point_cloud_label label);
+
+typedef enum rs2_calib_location
+{
+    RS2_CALIB_LOCATION_FIRST,
+    RS2_CALIB_LOCATION_EEPROM = RS2_CALIB_LOCATION_FIRST,
+    RS2_CALIB_LOCATION_FLASH,
+    RS2_CALIB_LOCATION_RAM,
+    RS2_CALIB_LOCATION_COUNT
+} rs2_calib_location;
+const char* rs2_calib_location_to_string(rs2_calib_location calib_location);
+
+typedef enum rs2_embedded_filter_type
+{
+    RS2_EMBEDDED_FILTER_TYPE_FIRST,
+    RS2_EMBEDDED_FILTER_TYPE_DECIMATION = RS2_EMBEDDED_FILTER_TYPE_FIRST,
+    RS2_EMBEDDED_FILTER_TYPE_TEMPORAL,
+    RS2_EMBEDDED_FILTER_TYPE_COUNT
+} rs2_embedded_filter_type;
+const char* rs2_embedded_filter_type_to_string(rs2_embedded_filter_type embedded_filter);
 
 typedef struct rs2_device_info rs2_device_info;
 typedef struct rs2_device rs2_device;
@@ -253,6 +298,8 @@ typedef struct rs2_context rs2_context;
 typedef struct rs2_device_hub rs2_device_hub;
 typedef struct rs2_sensor_list rs2_sensor_list;
 typedef struct rs2_sensor rs2_sensor;
+typedef struct rs2_embedded_filter rs2_embedded_filter;
+typedef struct rs2_embedded_filter_list rs2_embedded_filter_list;
 typedef struct rs2_options rs2_options;
 typedef struct rs2_options_list rs2_options_list;
 typedef struct rs2_streams_list rs2_streams_list;

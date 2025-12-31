@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include <realdds/dds-option.h>
@@ -114,6 +114,7 @@ private:
     void on_set_option( control_sample const &, rsutils::json & reply );
     void on_query_option( control_sample const &, rsutils::json & reply );
     void on_query_options( control_sample const &, rsutils::json & reply );
+    void on_query_filter(control_sample const&, rsutils::json& reply);
 
     rsutils::json query_option( std::shared_ptr< dds_option > const & ) const;
 

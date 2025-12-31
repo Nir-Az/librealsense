@@ -13,7 +13,6 @@ env:
   LRS_BUILD_CONFIG: Debug
   LRS_RUN_CONFIG: Release
   LRS_RUN_WITH_DEB_CONFIG: RelWithDebInfo
-  PYTHON_PATH: C:\\hostedtoolcache\\windows\\Python\\3.8.1\\x64\\python.exe
   # GH-Actions Windows VM currently supply ~14 GB available on D drive, and ~80 GB on drive C.
   # Building LRS statically with third parties is too much for drive D so we clone to drive 'D' and build on drive 'C'
   WIN_BUILD_DIR: C:/lrs_build
@@ -24,7 +23,7 @@ jobs:
 
   #--------------------------------------------------------------------------------
   Win_SH_EX_CfU:  # Windows, shared, with Examples & Tools, and Check for Updates
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
@@ -55,7 +54,7 @@ jobs:
         cd ${{env.WIN_BUILD_DIR}}
         pwd
         ls        
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true
 
     - name: Build
       # Build your program with the given configuration
@@ -66,7 +65,7 @@ jobs:
 
   #--------------------------------------------------------------------------------
   Win_SH_EX_No_Logs:  # Windows, shared, with Examples & Tools, no EasyLogging and no Check for Updates
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
@@ -97,7 +96,7 @@ jobs:
         cd ${{env.WIN_BUILD_DIR}}
         pwd
         ls        
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=false -DBUILD_EASYLOGGINGPP=false
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=false -DBUILD_EASYLOGGINGPP=false
 
     - name: Build
       # Build your program with the given configuration
@@ -108,13 +107,13 @@ jobs:
         
   #--------------------------------------------------------------------------------
   Win_ST_Py_CI:  # Windows, Static, Python, Tools, libCI with executables
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
     - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
       with:
-       python-version: '3.8.1'
+       python-version: '3.9'
 
     - name: Enable Long Paths
       shell: powershell
@@ -141,7 +140,7 @@ jobs:
       run: |        
         LRS_SRC_DIR=$(pwd)
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=windows" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true 
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=windows" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true 
 
     - name: Build
       # Build your program with the given configuration
@@ -161,20 +160,20 @@ jobs:
       run: |
         mkdir ${{env.WIN_BUILD_DIR}}/rs-all-client
         cd ${{env.WIN_BUILD_DIR}}/rs-all-client
-        cmake $GITHUB_WORKSPACE/.github/workflows/rs-all-client -G "Visual Studio 16 2019"
+        cmake $GITHUB_WORKSPACE/.github/workflows/rs-all-client -G "Visual Studio 17 2022"
         cmake --build . --config Release -- -m
         ./Release/rs-all-client
 
 
   #--------------------------------------------------------------------------------
   Win_SH_Py_DDS_CI:  # Windows, Shared, Python, Tools, DDS, libCI without executables
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
     - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
       with:
-       python-version: '3.8.1'
+       python-version: '3.9'
 
     - name: Enable Long Paths
       shell: powershell
@@ -199,7 +198,7 @@ jobs:
       run: |        
         LRS_SRC_DIR=$(pwd)   
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true 
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true 
 
     - name: Build
       # Build your program with the given configuration
@@ -217,13 +216,13 @@ jobs:
 
 #--------------------------------------------------------------------------------
   Win_SH_Py_DDS_SEC:  # Windows, Shared, Python, Tools, DDS, additional security checks
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
-       python-version: '3.8.1'
+       python-version: '3.9'
 
     - name: Enable Long Paths
       shell: powershell
@@ -248,7 +247,7 @@ jobs:
       run: |        
         LRS_SRC_DIR=$(pwd)   
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true -DENABLE_SECURITY_FLAGS=true
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DENABLE_SECURITY_FLAGS=true
 
     - name: Build
       # Build your program with the given configuration
@@ -260,14 +259,14 @@ jobs:
 
   #--------------------------------------------------------------------------------
   Win_SH_Py_RSUSB_Csharp:  # Windows, Shared, Python, RSUSB backend, C# bindings
-    runs-on: windows-2019
+    runs-on: windows-2025
     timeout-minutes: 60
       
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
     - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
       with:
-       python-version: '3.8.1'
+       python-version: '3.9'
 
     - name: Enable Long Paths
       shell: powershell
@@ -291,7 +290,7 @@ jobs:
       run: |   
         LRS_SRC_DIR=$(pwd)
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DCHECK_FOR_UPDATES=false -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true -DFORCE_RSUSB_BACKEND=true -DBUILD_CSHARP_BINDINGS=true -DDOTNET_VERSION_LIBRARY="4.5" -DDOTNET_VERSION_EXAMPLES="4.5"
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 17 2022" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DCHECK_FOR_UPDATES=false -DBUILD_PYTHON_BINDINGS=true -DFORCE_RSUSB_BACKEND=true -DBUILD_CSHARP_BINDINGS=true -DDOTNET_VERSION_LIBRARY="4.6" -DDOTNET_VERSION_EXAMPLES="4.6"
 
     - name: Build
       # Build your program with the given configuration
@@ -331,9 +330,10 @@ jobs:
     
     - name: Build
       shell: bash
+      # Adding -DENABLE_SECURITY_FLAGS=true here to also check examples and tools. See RSDSO-RSDSO-20629.
       run: |
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_SECURITY_FLAGS=true
         cmake --build . -- -j4
 
 
@@ -513,9 +513,10 @@ jobs:
 
     - name: Build
       shell: bash
+      # Adding -DENABLE_SECURITY_FLAGS=true here to also check DDS. See RSDSO-RSDSO-20629.
       run: | 
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_SECURITY_FLAGS=true
         cmake --build . -- -j4
 
     - name: LibCI
@@ -554,19 +555,12 @@ jobs:
 
   #--------------------------------------------------------------------------------
   
-  Mac_cpp:
-    runs-on: macos-14
+  Mac_DDS_cpp:
+    runs-on: macos-15
     timeout-minutes: 60
     
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..
 
     - name: Prebuild
       run: |
@@ -583,7 +577,7 @@ jobs:
         # We use "greadlink -f" which is mac-os parallel command to "readlink -f" from Linux (-f to convert relative link to absolute link)
         export OPENSSL_ROOT_DIR=`greadlink -f /usr/local/opt/openssl@1.1`        
         echo "OPENSSL_ROOT_DIR = ${OPENSSL_ROOT_DIR}"
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_BUILD_CONFIG}} -DBUILD_EXAMPLES=true -DBUILD_WITH_OPENMP=false -DHWM_OVER_XU=false -DCHECK_FOR_UPDATES=true
+        cmake .. -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=${{env.LRS_BUILD_CONFIG}} -DBUILD_EXAMPLES=true -DBUILD_WITH_OPENMP=false -DHWM_OVER_XU=false -DCHECK_FOR_UPDATES=true -DBUILD_WITH_DDS=true
         cmake --build . -- -j4
         ls
 

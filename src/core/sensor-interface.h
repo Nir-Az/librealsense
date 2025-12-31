@@ -1,18 +1,15 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "info-interface.h"
 #include "options-container.h"
 #include "recommended-processing-blocks-interface.h"
+#include "supported-embedded-filters-interface.h"
 
 #include "tagged-profile.h"
-
-#include <src/core/options-watcher.h>
 #include <librealsense2/hpp/rs_types.hpp>
-
-#include <rsutils/subscription.h>
 
 #include <vector>
 #include <memory>
@@ -29,6 +26,7 @@ class sensor_interface
     : public virtual info_interface
     , public virtual options_interface
     , public virtual recommended_proccesing_blocks_interface
+    , public virtual supported_embedded_filters_interface
 {
 public:
     virtual ~sensor_interface() = default;
@@ -56,8 +54,6 @@ public:
 
     virtual rs2_frame_callback_sptr get_frames_callback() const = 0;
     virtual void set_frames_callback( rs2_frame_callback_sptr cb ) = 0;
-
-    virtual rsutils::subscription register_options_changed_callback( options_watcher::callback && cb ) = 0;
 };
 
 

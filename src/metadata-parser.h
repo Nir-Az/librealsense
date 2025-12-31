@@ -1,12 +1,12 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 // Metadata attributes provided by RS4xx Depth Cameras
 
 #include "frame.h"
 #include "metadata.h"
-
+#include <src/firmware-version.h>
 #include <cmath>
 #include <rsutils/number/crc32.h>
 #include <rsutils/string/from.h>
@@ -210,6 +210,89 @@ namespace librealsense
     std::shared_ptr<md_attribute_parser_base> make_attribute_parser(Attribute S::* attribute, Flag flag, unsigned long long offset, attrib_modifyer mod = nullptr)
     {
         std::shared_ptr<md_attribute_parser<S, Attribute, Flag>> parser(new md_attribute_parser<S, Attribute, Flag>(attribute, flag, offset, mod));
+        return parser;
+    }
+
+    /**\brief MIPI color metadata parser class that handles firmware version-dependent type validation*/
+    template<class S, class Attribute, typename Flag>
+    class md_attribute_parser_mipi_color : public md_attribute_parser<S, Attribute, Flag>
+    {
+    public:
+        md_attribute_parser_mipi_color(Attribute S::* attribute_name, Flag flag, unsigned long long offset,
+            librealsense::firmware_version fw_version, attrib_modifyer mod = nullptr)
+            : md_attribute_parser<S, Attribute, Flag>(attribute_name, flag, offset, mod)
+            , _fw_version(fw_version)
+        {
+        }
+
+        static const librealsense::firmware_version _min_fw_for_type;
+        static const md_type _old_type;
+
+    protected:
+        virtual bool is_attribute_valid(const S* s) const override
+        {
+            // Firmware version-dependent type validation
+            md_type expected_type;
+            if (_fw_version < _min_fw_for_type)
+            {
+                expected_type = _old_type;
+            }
+            else
+            {
+                expected_type = md_type_trait<S>::type;
+            }
+
+            // checking type and size, with updated expected type
+            if (s->header.md_type_id != expected_type)
+            {
+                std::string type
+                    = (md_type_desc.count(s->header.md_type_id) > 0)
+                    ? md_type_desc.at(s->header.md_type_id)
+                    : (rsutils::string::from()
+                        << "0x" << std::hex << static_cast<uint32_t>(s->header.md_type_id) << std::dec);
+                LOG_DEBUG("Metadata type mismatch - actual: " << type << ", expected: 0x" << std::hex
+                    << (uint32_t)expected_type << std::dec << " ("
+                    << md_type_desc.at(expected_type) << ")");
+                return false;
+            }
+
+            if (s->header.md_size < sizeof(*s))
+            {
+                LOG_DEBUG("Metadata size mismatch - actual: " << (uint32_t)s->header.md_size << ", expected: " << sizeof(*s) << std::dec << " ("
+                    << md_type_desc.at(expected_type) << ")");
+                return false;
+            }
+
+            // Check if the attribute's flag is set
+            auto attribute_enabled = (0 != (s->flags & static_cast<uint32_t>(this->_md_flag)));
+            if (!attribute_enabled)
+                return false;
+
+            return true;
+        }
+
+    private:
+        md_attribute_parser_mipi_color() = delete;
+        md_attribute_parser_mipi_color(const md_attribute_parser_mipi_color&) = delete;
+
+        librealsense::firmware_version _fw_version;
+    };
+
+    template<class S, class Attribute, typename Flag>
+    const librealsense::firmware_version md_attribute_parser_mipi_color<S, Attribute, Flag>::_min_fw_for_type{ "5.17.0.12" };
+
+    template<class S, class Attribute, typename Flag>
+    const md_type md_attribute_parser_mipi_color<S, Attribute, Flag>::_old_type = md_type::META_DATA_INTEL_RGB_CONTROL_ID;
+
+    /**\brief A helper function to create a specialized MIPI color attribute parser*/
+    template<class S, class Attribute, typename Flag>
+    std::shared_ptr<md_attribute_parser_base> make_mipi_color_attribute_parser(Attribute S::* attribute, Flag flag,
+        unsigned long long offset,
+        librealsense::firmware_version fw_version,
+        attrib_modifyer mod = nullptr)
+    {
+        std::shared_ptr<md_attribute_parser_mipi_color<S, Attribute, Flag>> parser(
+            new md_attribute_parser_mipi_color<S, Attribute, Flag>(attribute, flag, offset, fw_version, mod));
         return parser;
     }
 

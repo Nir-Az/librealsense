@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <librealsense2/rs.hpp>
 #include <string>
@@ -24,7 +24,7 @@ namespace rs2
             << "/" << (long long)this;
 
         if (_owner)
-            _full_name = get_device_sensor_name(_owner) + "." + _name;
+            _full_name = get_post_processing_device_sensor_name(_owner) + "." + _name;
         else
             _full_name = _name;
 
@@ -44,7 +44,7 @@ namespace rs2
                                                bool is_streaming,
                                                std::string & error_message )
     {
-        for( auto & id_model : options_metadata )
+        for( auto & id_model : _options_id_to_model )
         {
             if( viewer.is_option_skipped( id_model.first ) )
                 continue;
@@ -70,13 +70,45 @@ namespace rs2
     {
         for( option_value option : _block->get_supported_option_values() )
         {
-            options_metadata[option->id] = create_option_model( option,
+            _options_id_to_model[option->id] = create_option_model( option,
                                                                 opt_base_label,
                                                                 model,
                                                                 _block,
                                                                 model ? &model->_options_invalidated : nullptr,
                                                                 error_message );
         }
+    }
+
+    bool restore_processing_block(const char* name,
+        std::shared_ptr<rs2::processing_block> pb, bool enable)
+    {
+        for (auto opt : pb->get_supported_option_values())
+        {
+            std::string key = name;
+            key += ".";
+            key += pb->get_option_name(opt->id);
+            if (config_file::instance().contains(key.c_str()))
+            {
+                float val = config_file::instance().get(key.c_str());
+                try
+                {
+                    auto range = pb->get_option_range(opt->id);
+                    if (val >= range.min && val <= range.max)
+                        pb->set_option(opt->id, val);
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+
+        std::string key = name;
+        key += ".enabled";
+        if (config_file::instance().contains(key.c_str()))
+        {
+            return config_file::instance().get(key.c_str());
+        }
+        return enable;
     }
 
     void save_processing_block_to_config_file(const char* name,

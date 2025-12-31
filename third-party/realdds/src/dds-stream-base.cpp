@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-stream-base.h>
 #include <realdds/dds-utilities.h>
@@ -44,6 +44,8 @@ void dds_stream_base::init_profiles( dds_stream_profiles const & profiles, size_
     {
         check_profile( profile );
         profile->init_stream( self );
+        if( auto vsp = std::dynamic_pointer_cast< dds_video_stream_profile >( profile ) )
+            _compressed = vsp->is_compressed_encoding();
     }
 
     _profiles = profiles;
@@ -61,15 +63,17 @@ void dds_stream_base::init_options( dds_options const & options )
     _options = options;
 }
 
-
-void dds_stream_base::set_recommended_filters( std::vector< std::string > && recommended_filters )
+void dds_stream_base::init_embedded_filters( dds_embedded_filters const & embedded_filters )
 {
-    if( !_recommended_filters.empty() )
-        DDS_THROW( runtime_error, "stream '" + _name + "' recommended filters are already set" );
+    if( !_embedded_filters.empty() )
+        DDS_THROW( runtime_error, "stream '" + _name + "' embedded filters are already initialized" );
 
-    _recommended_filters = std::move( recommended_filters );
+    auto this_stream = shared_from_this();
+    for( auto const & filter : embedded_filters )
+        if( filter )
+            filter->init_stream( this_stream );
+    _embedded_filters = embedded_filters;
 }
-
 
 void dds_stream_base::check_profile( std::shared_ptr< dds_stream_profile > const & profile ) const
 {

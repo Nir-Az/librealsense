@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -77,6 +77,8 @@ public:
     std::pair<uint32_t, rs2_extrinsics> get_extrinsics(const stream_interface& stream) const override;
 
     bool is_valid() const override { return *_is_alive; }
+
+    bool is_in_recovery_mode() const override { return false; }
 
     void tag_profiles(stream_profiles profiles) const override;
 

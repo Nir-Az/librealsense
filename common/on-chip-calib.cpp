@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #include <glad/glad.h>
 #include "on-chip-calib.h"
@@ -30,8 +30,6 @@ namespace rs2
         if (dev.supports(RS2_CAMERA_INFO_NAME))
         {
             device_name_string = _dev.get_info( RS2_CAMERA_INFO_NAME );
-            if( val_in_range( device_name_string, { std::string( "Intel RealSense D415" ) } ) )
-                speed = 4;
         }
 
         if( dev.supports( RS2_CAMERA_INFO_CONNECTION_TYPE ) )
@@ -299,12 +297,7 @@ namespace rs2
             }
 
             // Select Resolution
-            for (int i = 0; i < _sub->res_values.size(); i++)
-            {
-                auto kvp = _sub->res_values[i];
-                if (kvp.first == 1280 && kvp.second == 720)
-                    _sub->ui.selected_res_id = i;
-            }
+            _sub->select_resolution( 1280, 720, RS2_STREAM_INFRARED );
 
             auto profiles = _sub->get_selected_profiles();
 
@@ -314,6 +307,8 @@ namespace rs2
             _sub->play(profiles, _viewer, _model.dev_syncer);
             for (auto&& profile : profiles)
                 _viewer.begin_stream(_sub, profile);
+
+            set_laser_emitter_state( off_value );
         }
         catch (...) {}
     }
@@ -362,12 +357,7 @@ namespace rs2
             }
 
             // Select Resolution
-            for (int i = 0; i < _sub->res_values.size(); i++)
-            {
-                auto kvp = _sub->res_values[i];
-                if (kvp.first == 1280 && kvp.second == 720)
-                    _sub->ui.selected_res_id = i;
-            }
+            _sub->select_resolution( 1280, 720, RS2_STREAM_INFRARED );
 
             auto profiles = _sub->get_selected_profiles();
 
@@ -377,6 +367,8 @@ namespace rs2
             _sub->play(profiles, _viewer, _model.dev_syncer);
             for (auto&& profile : profiles)
                 _viewer.begin_stream(_sub, profile);
+
+            set_laser_emitter_state( off_value );
         }
         catch (...) {}
     }
@@ -448,12 +440,8 @@ namespace rs2
                 }
 
                 // Select Resolution
-                for (int i = 0; i < _sub->res_values.size(); i++)
-                {
-                    auto kvp = _sub->res_values[i];
-                    if (kvp.first == 1280 && kvp.second == 720)
-                        _sub->ui.selected_res_id = i;
-                }
+                _sub->select_resolution( 1280, 720, RS2_STREAM_INFRARED );
+                _sub->select_resolution( 1280, 720, RS2_STREAM_DEPTH );
 
                 auto profiles = _sub->get_selected_profiles();
 
@@ -466,12 +454,7 @@ namespace rs2
                         _sub_color->ui.selected_shared_fps_id = i;
                 }
 
-                for (int i = 0; i < _sub_color->res_values.size(); i++)
-                {
-                    auto kvp = _sub_color->res_values[i];
-                    if (kvp.first == 1280 && kvp.second == 720)
-                        _sub_color->ui.selected_res_id = i;
-                }
+                _sub_color->select_resolution( 1280, 720, RS2_STREAM_COLOR );
 
                 profiles_color = _sub_color->get_selected_profiles();
 
@@ -507,6 +490,7 @@ namespace rs2
                         break;
                     }
                 }
+                _sub->select_resolution( w, h, RS2_STREAM_INFRARED );
             }
             else if (action == RS2_CALIB_ACTION_UVMAPPING_CALIB)
             {
@@ -531,6 +515,8 @@ namespace rs2
                     if (first_done && second_done)
                         break;
                 }
+                _sub->select_resolution( w, h, RS2_STREAM_INFRARED );
+                _sub->select_resolution( w, h, RS2_STREAM_DEPTH);
 
                 _sub_color->ui.selected_format_id.clear();
                 _sub_color->ui.selected_format_id[_uid_color] = 0;
@@ -554,52 +540,6 @@ namespace rs2
                 // TODO - When implementing UV mapping calibration - should remove from here and handle in process_flow()
                 set_laser_emitter_state( off_value );
                 set_thermal_loop_state( off_value );
-            }
-            else if (action == RS2_CALIB_ACTION_UVMAPPING_CALIB)
-            {
-                _uid = 1;
-                _uid2 = 0;
-                bool first_done = false;
-                bool second_done = false;
-                for (const auto& format : _sub->formats)
-                {
-                    if (format.second[0] == "Y8" && !first_done)
-                    {
-                        _uid = format.first;
-                        first_done = true;
-                    }
-
-                    if (format.second[0] == "Z16" && !second_done)
-                    {
-                        _uid2 = format.first;
-                        second_done = true;
-                    }
-
-                    if (first_done && second_done)
-                        break;
-                }
-
-                _sub_color->ui.selected_format_id.clear();
-                _sub_color->ui.selected_format_id[_uid_color] = 0;
-                for (const auto& format : _sub_color->formats)
-                {
-                    int done = false;
-                    for (int i = 0; i < format.second.size(); ++i)
-                    {
-                        if (format.second[i] == "RGB8")
-                        {
-                            _uid_color = format.first;
-                            _sub_color->ui.selected_format_id[_uid_color] = i;
-                            done = true;
-                            break;
-                        }
-                    }
-                    if (done)
-                        break;
-                }
-
-                // TODO - When implementing UV mapping calibration - should remove from here and handle in process_flow()
-                set_laser_emitter_state( off_value );
             }
             else if (action == RS2_CALIB_ACTION_FL_PLUS_CALIB)
             {
@@ -635,6 +575,9 @@ namespace rs2
                         break;
                 }
 
+                _sub->select_resolution( w, h, RS2_STREAM_INFRARED );
+                _sub->select_resolution( w, h, RS2_STREAM_DEPTH );
+
                 // TODO - When implementing FL plus calibration - should remove from here and handle in process_flow()
                 set_laser_emitter_state( off_value );
             }
@@ -659,6 +602,7 @@ namespace rs2
                         }
                     }
                 }
+                _sub->select_resolution( w, h, RS2_STREAM_INFRARED );
             }
             else
             {
@@ -671,6 +615,7 @@ namespace rs2
                         break;
                     }
                 }
+                _sub->select_resolution( w, h, RS2_STREAM_DEPTH );
             }
 
             // Select stream
@@ -691,34 +636,9 @@ namespace rs2
                     _sub->ui.selected_shared_fps_id = i;
             }
 
-            // Select Resolution
-            for (int i = 0; i < _sub->res_values.size(); i++)
-            {
-                auto kvp = _sub->res_values[i];
-                if (kvp.first == w && kvp.second == h)
-                    _sub->ui.selected_res_id = i;
-            }
-
-            // If not supported, try WxHx30
             if (!_sub->is_selected_combination_supported())
             {
-                for (int i = 0; i < _sub->shared_fps_values.size(); i++)
-                {
-                    //if (_sub->shared_fps_values[i] == 30)
-                    _sub->ui.selected_shared_fps_id = i;
-                    if (_sub->is_selected_combination_supported()) break;
-                }
-
-                // If still not supported, try VGA30
-                if (!_sub->is_selected_combination_supported())
-                {
-                    for (int i = 0; i < _sub->res_values.size(); i++)
-                    {
-                        auto kvp = _sub->res_values[i];
-                        if (kvp.first == 640 && kvp.second == 480)
-                            _sub->ui.selected_res_id = i;
-                    }
-                }
+                return false;
             }
 
             auto profiles = _sub->get_selected_profiles();
@@ -734,12 +654,7 @@ namespace rs2
                         _sub_color->ui.selected_shared_fps_id = i;
                 }
 
-                for (int i = 0; i < _sub_color->res_values.size(); i++)
-                {
-                    auto kvp = _sub_color->res_values[i];
-                    if (kvp.first == w && kvp.second == h)
-                        _sub_color->ui.selected_res_id = i;
-                }
+                _sub_color->select_resolution( w, h, RS2_STREAM_COLOR );
 
                 profiles_color = _sub_color->get_selected_profiles();
             }
@@ -784,11 +699,6 @@ namespace rs2
         return frame_arrived;
     }
 
-    std::pair<float, float> on_chip_calib_manager::get_metric(bool use_new)
-    {
-        return _metrics[use_new ? 1 : 0];
-    }
-
     void on_chip_calib_manager::try_start_viewer(int w, int h, int fps, invoker invoke)
     {
         bool started = start_viewer(w, h, fps, invoke);
@@ -804,119 +714,6 @@ namespace rs2
             log( "Failed to start streaming" );
             throw std::runtime_error( rsutils::string::from() << "Failed to start streaming (" << w << ", " << h << ", " << fps << ")!");
         }
-    }
-
-    std::pair<float, float> on_chip_calib_manager::get_depth_metrics(invoker invoke)
-    {
-        using namespace depth_quality;
-
-        auto f = fetch_depth_frame(invoke);
-        auto sensor = _sub->s->as<rs2::depth_stereo_sensor>();
-        auto intr = f.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
-        rs2::region_of_interest roi { (int)(f.get_width() * 0.45f), (int)(f.get_height()  * 0.45f),
-                                      (int)(f.get_width() * 0.55f), (int)(f.get_height() * 0.55f) };
-        std::vector<single_metric_data> v;
-
-        std::vector<float> fill_rates;
-        std::vector<float> rmses;
-
-        auto show_plane = _viewer.draw_plane;
-
-        auto on_frame = [sensor, &fill_rates, &rmses, this](
-            const std::vector<rs2::float3>& points,
-            const plane p,
-            const rs2::region_of_interest roi,
-            const float baseline_mm,
-            const rs2_intrinsics* intrin,
-            const int ground_thruth_mm,
-            const bool plane_fit,
-            const float plane_fit_to_ground_truth_mm,
-            const float distance_mm,
-            bool record,
-            std::vector<single_metric_data>& samples)
-        {
-            static const float TO_MM = 1000.f;
-            static const float TO_PERCENT = 100.f;
-
-            // Calculate fill rate relative to the ROI
-            auto fill_rate = points.size() / float((roi.max_x - roi.min_x)*(roi.max_y - roi.min_y)) * TO_PERCENT;
-            fill_rates.push_back(fill_rate);
-
-            if (!plane_fit) return;
-
-            std::vector<rs2::float3> points_set = points;
-            std::vector<float> distances;
-
-            // Reserve memory for the data
-            distances.reserve(points.size());
-
-            // Convert Z values into Depth values by aligning the Fitted plane with the Ground Truth (GT) plane
-            // Calculate distance and disparity of Z values to the fitted plane.
-            // Use the rotated plane fit to calculate GT errors
-            for (auto & point : points_set)
-            {
-                // Find distance from point to the reconstructed plane
-                auto dist2plane = p.a*point.x + p.b*point.y + p.c*point.z + p.d;
-
-                // Store distance, disparity and gt- error
-                distances.push_back(dist2plane * TO_MM);
-            }
-
-            // Remove outliers [below 1% and above 99%)
-            std::sort(points_set.begin(), points_set.end(), [](const rs2::float3& a, const rs2::float3& b) { return a.z < b.z; });
-            size_t outliers = points_set.size() / 50;
-            points_set.erase(points_set.begin(), points_set.begin() + outliers); // crop min 0.5% of the dataset
-            points_set.resize(points_set.size() - outliers); // crop max 0.5% of the dataset
-
-            // Calculate Plane Fit RMS  (Spatial Noise) mm
-            double plane_fit_err_sqr_sum = std::inner_product(distances.begin(), distances.end(), distances.begin(), 0.);
-            auto rms_error_val = static_cast<float>(std::sqrt(plane_fit_err_sqr_sum / distances.size()));
-            auto rms_error_val_per = TO_PERCENT * (rms_error_val / distance_mm);
-            rmses.push_back(rms_error_val_per);
-        };
-
-        auto rms_std = 1000.f;
-        auto new_rms_std = rms_std;
-        auto count = 0;
-
-        // Capture metrics on bundles of 31 frame
-        // Repeat until get "decent" bundle or reach 10 sec
-        do
-        {
-            rms_std = new_rms_std;
-
-            rmses.clear();
-
-            for (int i = 0; i < 31; i++)
-            {
-                f = fetch_depth_frame(invoke);
-                auto res = depth_quality::analyze_depth_image(f, sensor.get_depth_scale(), sensor.get_stereo_baseline(),
-                    &intr, roi, 0, true, v, false, on_frame);
-
-                _viewer.draw_plane = true;
-                _viewer.roi_rect = res.plane_corners;
-            }
-
-            auto rmses_sum_sqr = std::inner_product(rmses.begin(), rmses.end(), rmses.begin(), 0.);
-            new_rms_std = static_cast<float>(std::sqrt(rmses_sum_sqr / rmses.size()));
-        } while ((new_rms_std < rms_std * 0.8f && new_rms_std > 10.f) && count++ < 10);
-
-        std::sort(fill_rates.begin(), fill_rates.end());
-        std::sort(rmses.begin(), rmses.end());
-
-        float median_fill_rate, median_rms;
-        if (fill_rates.empty())
-            median_fill_rate = 0;
-        else
-            median_fill_rate = fill_rates[fill_rates.size() / 2];
-        if (rmses.empty())
-            median_rms = 0;
-        else
-            median_rms = rmses[rmses.size() / 2];
-
-        _viewer.draw_plane = show_plane;
-
-        return { median_fill_rate, median_rms };
     }
 
     std::vector<uint8_t> on_chip_calib_manager::safe_send_command(const std::vector<uint8_t>& cmd, const std::string& name)
@@ -947,6 +744,16 @@ namespace rs2
 
     void on_chip_calib_manager::calibrate()
     {
+        // High exposure values might limit high FPS calibrations, issue warning to the user
+        auto auto_exposure = _sub->s->supports( RS2_OPTION_ENABLE_AUTO_EXPOSURE ) && _sub->s->get_option( RS2_OPTION_ENABLE_AUTO_EXPOSURE );
+        auto exposure = _sub->s->get_option( RS2_OPTION_EXPOSURE ); // Currently all camera models support exposure option (D400 and D500)
+        if( !auto_exposure && exposure > 15500 )
+        {
+            throw std::runtime_error( "Exposure value is limiting the fps,\n"
+                                      "for the algorithm to be able to converge,\n"
+                                      "please reduce exposure value." ); 
+        }
+
         int occ_timeout_ms = 9000;
         if (action == RS2_CALIB_ACTION_ON_CHIP_OB_CALIB || action == RS2_CALIB_ACTION_ON_CHIP_FL_CALIB)
         {
@@ -1424,8 +1231,11 @@ namespace rs2
 
     void on_chip_calib_manager::process_flow(std::function<void()> cleanup, invoker invoke)
     {
-        if (action == RS2_CALIB_ACTION_FL_CALIB || action == RS2_CALIB_ACTION_UVMAPPING_CALIB || action == RS2_CALIB_ACTION_FL_PLUS_CALIB)
-            stop_viewer(invoke);
+        stop_viewer(invoke);
+
+        if( action == RS2_CALIB_ACTION_ON_CHIP_CALIB || action == RS2_CALIB_ACTION_TARE_CALIB )
+            if( _model.is_color_streaming() )
+                throw std::runtime_error( "Turn off RGB Camera streaming before calibrating." );
 
         update_last_used();
 
@@ -1452,18 +1262,8 @@ namespace rs2
 
         _restored = false;
 
+        // Save options before starting to stream as some models change options by default on stream start. e.g. D500 laser on by default for Depth Module streaming.
         save_options_controlled_by_calib(); // Restored by GUI thread on dismiss or apply.
-
-        // Emitter on by default, off for GT/FL calib and for D415 model
-        float emitter_value = on_value;
-        if( action == RS2_CALIB_ACTION_FL_CALIB          ||
-            action == RS2_CALIB_ACTION_TARE_GROUND_TRUTH ||
-            device_name_string == std::string( "Intel RealSense D415" ) )
-            emitter_value = off_value;
-        set_laser_emitter_state( emitter_value );
-
-        // Thermal loop should be off during calibration as to not change calibration tables during calibration
-        set_thermal_loop_state( off_value );
 
         auto fps = 30;
         if (_sub->dev.supports(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR))
@@ -1472,23 +1272,6 @@ namespace rs2
             if (!starts_with(desc, "3."))
                 fps = 6; //USB2 bandwidth limitation for 720P RGB/DI
         }
-
-        if (action != RS2_CALIB_ACTION_TARE_GROUND_TRUTH && action != RS2_CALIB_ACTION_UVMAPPING_CALIB)
-        {
-            if (!_was_streaming)
-            {
-                if (action == RS2_CALIB_ACTION_FL_CALIB)
-                    try_start_viewer(848, 480, fps, invoke);
-                else
-                    try_start_viewer(0, 0, 0, invoke);
-            }
-
-            // Capture metrics before
-            auto metrics_before = get_depth_metrics(invoke);
-            _metrics.push_back(metrics_before);
-        }
-
-        stop_viewer(invoke);
 
         _ui = std::make_shared<subdevice_ui_selection>(_sub->ui);
         if (action == RS2_CALIB_ACTION_UVMAPPING_CALIB && _sub_color.get())
@@ -1501,15 +1284,26 @@ namespace rs2
             _viewer.is_3d_view = false;
 
 
-        if (action == RS2_CALIB_ACTION_FL_CALIB || action == RS2_CALIB_ACTION_TARE_GROUND_TRUTH || action == RS2_CALIB_ACTION_UVMAPPING_CALIB)
+        if (action == RS2_CALIB_ACTION_FL_CALIB || action == RS2_CALIB_ACTION_TARE_GROUND_TRUTH || action == RS2_CALIB_ACTION_UVMAPPING_CALIB) // Host only calibrations
             try_start_viewer(1280, 720, fps, invoke);
         else
         {
-            if (host_assistance && action != RS2_CALIB_ACTION_TARE_GROUND_TRUTH)
-                try_start_viewer(0, 0, 0, invoke);
+            if (host_assistance)
+                try_start_viewer(1280, 720, 0, invoke); // Host assistance uses HD resolution and crops in host
             else
-                try_start_viewer(256, 144, 90, invoke);
+                try_start_viewer(256, 144, 90, invoke); // Special calibration resolution using an internal cropping of full sensor resolution
         }
+
+        // Change setting after streaming have started and before actual calibration
+        // Emitter on by default, off for GT/FL calib and for D415 model
+        float emitter_value = on_value;
+        if( action == RS2_CALIB_ACTION_FL_CALIB || action == RS2_CALIB_ACTION_TARE_GROUND_TRUTH
+            || device_name_string == std::string( "Intel RealSense D415" ) )
+            emitter_value = off_value;
+        set_laser_emitter_state( emitter_value );
+
+        // Thermal loop should be off during calibration as to not change calibration tables during calibration
+        set_thermal_loop_state( off_value );
 
         if ( action == RS2_CALIB_ACTION_TARE_GROUND_TRUTH )
         {
@@ -1581,10 +1375,6 @@ namespace rs2
 
             // Make new calibration active
             apply_calib(true);
-
-            // Capture metrics after
-            auto metrics_after = get_depth_metrics(invoke);
-            _metrics.push_back(metrics_after);
         }
 
         _progress = 100;
@@ -1968,7 +1758,7 @@ namespace rs2
                 ImGui::PushStyleColor(ImGuiCol_Text, update_state != RS2_CALIB_STATE_TARE_INPUT_ADVANCED ? light_grey : light_blue);
                 ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, update_state != RS2_CALIB_STATE_TARE_INPUT_ADVANCED ? light_grey : light_blue);
 
-                if (ImGui::Button(u8"\uf0d7"))
+                if (ImGui::Button(textual_icons::caret_down))
                 {
                     if (update_state == RS2_CALIB_STATE_TARE_INPUT_ADVANCED)
                         update_state = RS2_CALIB_STATE_TARE_INPUT;
@@ -2103,13 +1893,6 @@ namespace rs2
                 if (ImGui::IsItemHovered())
                     RsImGui::CustomTooltip("%s", "Calculate ground truth for the specific target");
 
-                ImGui::SetCursorScreenPos({ float(x + 9), float(y + height - ImGui::GetTextLineHeightWithSpacing() - 30) });
-                bool assistance = (get_manager().host_assistance != 0);
-                if (ImGui::Checkbox("Host Assistance", &assistance))
-                    get_manager().host_assistance = (assistance ? 1 : 0);
-                if (ImGui::IsItemHovered())
-                    RsImGui::CustomTooltip("%s", "check = host assitance for statistics data, uncheck = no host assistance");
-
                 std::string button_name = rsutils::string::from() << "Calibrate" << "##tare" << index;
 
                 ImGui::SetCursorScreenPos({ float(x + 5), float(y + height - 28) });
@@ -2198,11 +1981,6 @@ namespace rs2
                 //if (ImGui::IsItemHovered())
                 //    RsImGui::CustomTooltip("%s", "On-Chip Calibration Extended");
 
-                ImGui::SetCursorScreenPos({ float(x + 9), float(y + height - ImGui::GetTextLineHeightWithSpacing() - 31) });
-                bool assistance = (get_manager().host_assistance != 0);
-                ImGui::Checkbox("Host Assistance", &assistance);
-                if (ImGui::IsItemHovered())
-                    RsImGui::CustomTooltip("%s", "check = host assitance for statistics data, uncheck = no host assistance");
 
                 auto sat = 1.f + sin(duration_cast<milliseconds>(system_clock::now() - created_time).count() / 700.f) * 0.1f;
                 ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
@@ -2724,90 +2502,8 @@ namespace rs2
                         }
                     }
 
-                    auto old_fr = get_manager().get_metric(false).first;
-                    auto new_fr = get_manager().get_metric(true).first;
-
-                    auto old_rms = fabs(get_manager().get_metric(false).second);
-                    auto new_rms = fabs(get_manager().get_metric(true).second);
-
-                    auto fr_improvement = 100.f * ((new_fr - old_fr) / old_fr);
-                    auto rms_improvement = 100.f * ((old_rms - new_rms) / old_rms);
-
-                    std::string old_units = "mm";
-                    if (old_rms > 10.f)
-                    {
-                        old_rms /= 10.f;
-                        old_units = "cm";
-                    }
-
-                    std::string new_units = "mm";
-                    if (new_rms > 10.f)
-                    {
-                        new_rms /= 10.f;
-                        new_units = "cm";
-                    }
-
-                    // NOTE: Disabling metrics temporarily
-                    // TODO: Re-enable in future release
-                    if (/* fr_improvement > 1.f || rms_improvement > 1.f */ false)
-                    {
-                        std::string txt = rsutils::string::from() << "  Fill-Rate: " << std::setprecision(1) << std::fixed << new_fr << "%%";
-                        if (!use_new_calib)
-                            txt = rsutils::string::from() << "  Fill-Rate: " << std::setprecision(1) << std::fixed << old_fr << "%%\n";
-
-                        ImGui::SetCursorScreenPos({ float(x + 12), float(y + 90) });
-                        ImGui::PushFont(win.get_large_font());
-                        ImGui::Text("%s", static_cast<const char*>(textual_icons::check));
-                        ImGui::PopFont();
-
-                        ImGui::SetCursorScreenPos({ float(x + 35), float(y + 92) });
-                        ImGui::Text("%s", txt.c_str());
-
-                        if (use_new_calib)
-                        {
-                            ImGui::SameLine();
-
-                            ImGui::PushStyleColor(ImGuiCol_Text, white);
-                            txt = rsutils::string::from() << " ( +" << std::fixed << std::setprecision(0) << fr_improvement << "%% )";
-                            ImGui::Text("%s", txt.c_str());
-                            ImGui::PopStyleColor();
-                        }
-
-                        if (rms_improvement > 1.f)
-                        {
-                            if (use_new_calib)
-                            {
-                                txt = rsutils::string::from() << "  Noise Estimate: " << std::setprecision(2) << std::fixed << new_rms << new_units;
-                            }
-                            else
-                            {
-                                txt = rsutils::string::from() << "  Noise Estimate: " << std::setprecision(2) << std::fixed << old_rms << old_units;
-                            }
-
-                            ImGui::SetCursorScreenPos({ float(x + 12), float(y + 90 + ImGui::GetTextLineHeight() + 6) });
-                            ImGui::PushFont(win.get_large_font());
-                            ImGui::Text("%s", static_cast<const char*>(textual_icons::check));
-                            ImGui::PopFont();
-
-                            ImGui::SetCursorScreenPos({ float(x + 35), float(y + 92 + ImGui::GetTextLineHeight() + 6) });
-                            ImGui::Text("%s", txt.c_str());
-
-                            if (use_new_calib)
-                            {
-                                ImGui::SameLine();
-
-                                ImGui::PushStyleColor(ImGuiCol_Text, white);
-                                txt = rsutils::string::from() << " ( -" << std::setprecision(0) << std::fixed << rms_improvement << "%% )";
-                                ImGui::Text("%s", txt.c_str());
-                                ImGui::PopStyleColor();
-                            }
-                        }
-                    }
-                    else
-                    {
-                        ImGui::SetCursorScreenPos({ float(x + 7), (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_OB_CALIB || get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_FL_CALIB ? float(y + 105) + ImGui::GetTextLineHeightWithSpacing() : (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_TARE_CALIB ? (get_manager().tare_health ? float(y + 105) : float(y + 50)) + ImGui::GetTextLineHeightWithSpacing() : float(y + 105))) });
-                        ImGui::Text("%s", "Please compare new vs old calibration\nand decide if to keep or discard the result...");
-                    }
+                    ImGui::SetCursorScreenPos({ float(x + 7), (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_OB_CALIB || get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_FL_CALIB ? float(y + 105) + ImGui::GetTextLineHeightWithSpacing() : (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_TARE_CALIB ? (get_manager().tare_health ? float(y + 105) : float(y + 50)) + ImGui::GetTextLineHeightWithSpacing() : float(y + 105))) });
+                    ImGui::Text("%s", "Please compare new vs old calibration\nand decide if to keep or discard the result...");
 
                     ImGui::SetCursorScreenPos({ float(x + 20), (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_OB_CALIB || get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_FL_CALIB ? float(y + 70) + ImGui::GetTextLineHeightWithSpacing() : (get_manager().action == on_chip_calib_manager::RS2_CALIB_ACTION_TARE_CALIB ? (get_manager().tare_health ? float(y + 70) : float(y + 15)) + ImGui::GetTextLineHeightWithSpacing() : float(y + 70))) });
 
@@ -2900,7 +2596,7 @@ namespace rs2
 
             ImGui::SetCursorScreenPos({ float(x + 10), float(y + 35) });
             ImGui::PushFont(win.get_large_font());
-            std::string txt = rsutils::string::from() << textual_icons::throphy;
+            std::string txt = rsutils::string::from() << textual_icons::trophy;
             ImGui::Text("%s", txt.c_str());
             ImGui::PopFont();
 

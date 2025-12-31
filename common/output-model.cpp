@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2020 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2020 RealSense, Inc. All Rights Reserved.
 
 #include <glad/glad.h>
 #include "output-model.h"
@@ -235,7 +235,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     ImGui::SetCursorPosX(w - 31);
     if (!is_output_open)
     {
-        if (ImGui::Button(u8"\uF139", ImVec2(28, 28)))
+        if (ImGui::Button(textual_icons::circle_chevron_up, ImVec2(28, 28)))
         {
             open(win);
         }
@@ -250,7 +250,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     }
     else
     {
-        if (ImGui::Button(u8"\uF13A", ImVec2(28, 28)))
+        if (ImGui::Button(textual_icons::circle_chevron_down, ImVec2(28, 28)))
         {
             is_output_open = false;
             config_file::instance().set(configurations::viewer::output_open, false);
@@ -273,7 +273,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     ImGui::SetCursorPosX(5);
 
     if (errors_selected) errors_highlighted = true;
-    if (round_indicator(win, u8"\uF057", number_of_errors, redish, "Instances of logged errors", errors_highlighted))
+    if (round_indicator(win, std::string(textual_icons::times_circle), number_of_errors, redish, "Instances of logged errors", errors_highlighted))
     {
         errors_selected = !errors_selected;
         open(win);
@@ -281,7 +281,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     ImGui::SameLine();
 
     if (warnings_selected) warnings_highlighted = true;
-    if (round_indicator(win, u8"\uF071", number_of_warnings, orange, "Instances of logged warnings", warnings_highlighted))
+    if (round_indicator(win, std::string(textual_icons::exclamation_triangle), number_of_warnings, orange, "Instances of logged warnings", warnings_highlighted))
     {
         warnings_selected = !warnings_selected;
         open(win);
@@ -289,7 +289,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     ImGui::SameLine();
 
     if (info_selected) info_highlighted = true;
-    if (round_indicator(win, u8"\uF05A", number_of_info, greenish, "Instances of logged info messages", info_highlighted))
+    if (round_indicator(win,std::string(textual_icons::info_circle), number_of_info, greenish, "Instances of logged info messages", info_highlighted))
     {
         info_selected = !info_selected;
         open(win);
@@ -305,7 +305,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
         ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
     }
     bool focus_search = false;
-    if (ImGui::Button(u8"\uF002", ImVec2(28, 28)))
+    if (ImGui::Button(textual_icons::search, ImVec2(28, 28)))
     {
         focus_search = true;
         search_open = true;
@@ -319,7 +319,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     }
     ImGui::SameLine();
 
-    if( ImGui::Button( u8"\u0023", ImVec2( 28, 28 ) ) )
+    if( ImGui::Button(textual_icons::lock, ImVec2( 28, 28 ) ) )
     {
         search_open = false; // Only one text box can be open at a time
         set_number_open = true;
@@ -339,7 +339,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     int percent = total_frames ? (int)(100 * ((double)number_of_drops / (total_frames))) : 0;
 
     std::stringstream ss;
-    ss << u8"\uF043";
+    ss << textual_icons::tint;
     if (percent) ss << " " << percent << "%";
     auto size = ImGui::CalcTextSize(ss.str().c_str());
 
@@ -413,7 +413,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
         ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, white);
     }
 
-    if (ImGui::Button(u8"\uF2DB", ImVec2(28, 28)))
+    if (ImGui::Button(textual_icons::microchip, ImVec2(28, 28)))
     {
         enable_firmware_logs = !enable_firmware_logs;
     }
@@ -427,7 +427,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
     ImGui::SameLine();
 
 
-    if (round_indicator(win, u8"\uF043", percent, regular_blue, "Frame drops", drops_highlighted, "%"))
+    if (round_indicator(win, std::string(textual_icons::tint), percent, regular_blue, "Frame drops", drops_highlighted, "%"))
     {
         open(win);
     }
@@ -583,7 +583,10 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
 
 
         ImGui::SetCursorPos(ImVec2(7, h - ImGui::GetTextLineHeightWithSpacing() - 2));
-        ImGui::Text("%s", u8"\uF120"); ImGui::SameLine();
+        std::string minus_square_icon_str = std::string(rsutils::string::from()
+                            << textual_icons::minus_square_o);
+        ImGui::Text("%s", minus_square_icon_str.c_str());
+        ImGui::SameLine();
         ImGui::SetCursorPos(ImVec2(30, h - ImGui::GetTextLineHeightWithSpacing() - 4));
 
 
@@ -695,7 +698,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
 
         if( is_dashboard_open )
         {
-            if( ImGui::Button( u8"\uf138", collapse_dashboard_button_size ) )  // close dashboard
+            if( ImGui::Button( textual_icons::circle_chevron_down, collapse_dashboard_button_size ) )  // close dashboard
             {
                 is_dashboard_open = false;
                 config_file::instance().set( configurations::viewer::dashboard_open, is_dashboard_open );
@@ -715,7 +718,7 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
             float cursor_pos_x = ImGui::GetCursorPosX();
             ImGui::SetCursorPosX( 0 );
 
-            if( ImGui::Button( u8"\uf137", collapse_dashboard_button_size ) )  // open dashboard
+            if( ImGui::Button( textual_icons::circle_chevron_up, collapse_dashboard_button_size ) )  // open dashboard
             {
                 is_dashboard_open = true;
                 config_file::instance().set( configurations::viewer::dashboard_open, is_dashboard_open );
@@ -765,7 +768,8 @@ void output_model::draw(ux_window& win, rect view_rect, device_models_list & dev
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
             const auto new_dashboard_name = "new_dashboard";
             ImGui::SameLine();
-            if (ImGui::Button(u8"\uF0D0 Add Dashboard", ImVec2(-1, 25)))
+            std::string add_dash_str = rsutils::string::from() << textual_icons::sort_asc << " Add Dashboard";
+            if (ImGui::Button(add_dash_str.c_str(), ImVec2(-1, 25)))
             {
                 ImGui::OpenPopup(new_dashboard_name);
             }
@@ -1118,7 +1122,7 @@ void stream_dashboard::draw_dashboard(ux_window& win, rect& r)
     ImGui::PushStyleColor(ImGuiCol_Text, grey);
     ImGui::SetCursorPosX(r.w - 25);
     ImGui::SetCursorPosY( 3.f + collapse_buton_h );
-    std::string id = rsutils::string::from() << u8"\uF00D##Close_" << name;
+    std::string id = rsutils::string::from() << textual_icons::times << "##Close_" << name;
     if (ImGui::Button(id.c_str(),ImVec2(22,22)))
     {
         close();
@@ -1204,7 +1208,7 @@ void stream_dashboard::draw_dashboard(ux_window& win, rect& r)
 
 void frame_drops_dashboard::process_frame(rs2::frame f)
 {
-    write_shared_data([&](){
+    shared_data.write([&](){
         double ts = glfwGetTime();
         if (method == 1) ts = f.get_timestamp() / 1000.f;
         auto it = stream_to_time.find(f.get_profile().unique_id());
@@ -1241,7 +1245,7 @@ void frame_drops_dashboard::process_frame(rs2::frame f)
 
 void frame_drops_dashboard::draw(ux_window& win, rect r)
 {
-    auto hist = read_shared_data<std::deque<int>>([&](){ return drops_history; });
+    auto hist = shared_data.read<std::deque<int>>([&](){ return drops_history; });
     for (int i = 0; i < hist.size(); i++)
     {
         add_point((float)i, (float)hist[i]);
@@ -1277,7 +1281,7 @@ int frame_drops_dashboard::get_height() const
 
 void frame_drops_dashboard::clear(bool full)
 {
-    write_shared_data([&](){
+    shared_data.write([&](){
         stream_to_time.clear();
         last_time = 0;
         *total = 0;

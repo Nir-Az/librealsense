@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include "dds-device-impl.h"
 
@@ -21,6 +21,7 @@
 #include <rsutils/json.h>
 
 #include <cassert>
+#include <realdds/dds-embedded-filter.h>
 
 using rsutils::json;
 
@@ -144,6 +145,8 @@ void dds_device::impl::on_notification( json && j, dds_sample const & notificati
         { topics::reply::set_option::id, &dds_device::impl::on_set_option },
         { topics::reply::query_option::id, &dds_device::impl::on_set_option },  // Same handling as on_set_option
         { topics::reply::query_options::id, &dds_device::impl::on_query_options },
+        { topics::reply::set_filter::id, &dds_device::impl::on_set_filter },
+        { topics::reply::query_filter::id, &dds_device::impl::on_query_filter },
         { topics::notification::device_header::id, &dds_device::impl::on_device_header },
         { topics::notification::device_options::id, &dds_device::impl::on_device_options },
         { topics::notification::stream_header::id, &dds_device::impl::on_stream_header },
@@ -214,6 +217,104 @@ void dds_device::impl::on_notification( json && j, dds_sample const & notificati
     }
 }
 
+void dds_device::impl::on_set_filter(rsutils::json const& j, dds_sample const&)
+{
+    if (!is_ready())
+        return;
+
+    // This is the handler for "set-filter", meaning someone sent a control request to set a
+    // filter value. A value will be returned, and it is then updated in the cached values
+
+    std::string explanation;
+    if (!dds_device::check_reply(j, &explanation))
+        return;
+
+    // We need the original control request as part of the reply, 
+    // otherwise we can't know what filter this is for
+    auto control = j.nested(topics::reply::key::control);
+    if (!control.is_object())
+        DDS_THROW(runtime_error, "missing control object");
+
+    std::string const& stream_name = control.nested(topics::control::set_filter::key::stream_name).
+        string_ref_or_empty();
+
+    dds_embedded_filters filters;
+    if (!stream_name.empty())
+    {
+        auto stream_it = _streams.find(stream_name);
+        if (stream_it == _streams.end())
+            DDS_THROW(runtime_error, "stream '" + stream_name + "' not found");
+        filters = stream_it->second->embedded_filters();
+    }
+    auto filter_name_j = j.nested(topics::reply::set_filter::key::name);
+    if (!filter_name_j.exists())
+        DDS_THROW(runtime_error, "missing name");
+
+    auto filter_params_j = j.nested(topics::reply::set_filter::key::options);
+    if (!filter_params_j.exists())
+        DDS_THROW(runtime_error, "missing filter_params");
+
+    auto& filter_name = filter_name_j.string_ref();
+    for (auto& filter : filters)
+    {
+        if (filter->get_name() == filter_name)
+        {
+            filter->set_options(filter_params_j);  // throws!
+            return;
+        }
+    }
+    throw std::runtime_error("filter '" + filter_name + "' not found");
+}
+
+void dds_device::impl::on_query_filter(json const& j, dds_sample const&)
+{
+    if (!is_ready())
+        return;
+
+    // This is the notification for "query-filter", which can get sent as a reply to a control or independently by the
+    // device. It takes the same form & handling either way.
+    // 
+    // E.g.:
+    // {
+    //  "id": "query-filter",
+    //  "name" : "Decimation Filter",
+    //  "sample" : ["010faf31ac07879500000000.0203", 13] ,
+    //  "stream-name" : "Depth"
+    //  "control" : {
+    //      "id": "query-filter",
+    //      "name" : "Decimation Filter",
+    //      "options" : {
+    //      "Toggle": 1,
+    //      "Magnitude" : 2
+    //      }
+    //      "stream-name" : "Depth"
+    //      }
+    //  }
+
+    auto stream_name = j.nested(topics::reply::query_filter::key::stream_name).string_ref();
+    auto filter_name = j.nested(topics::reply::query_filter::key::name).string_ref();
+    auto filter_options = j.nested(topics::reply::query_filter::key::options);
+
+    for (auto& stream : _streams)
+    {
+        // Finding the relevant stream
+        if (stream.first == stream_name)
+        {
+            // Finding the filter and set its options
+            for (auto& filter : stream.second->embedded_filters())
+            {
+                if (filter->get_name() == filter_name)
+                {
+                    filter->set_options(filter_options);
+                    return;
+                }
+            }
+        }
+    }
+
+    DDS_THROW(runtime_error, "Embedded filter '" + filter_name + "' not found");
+}
+
 
 void dds_device::impl::on_set_option( json const & j, dds_sample const & )
 {
@@ -230,7 +331,7 @@ void dds_device::impl::on_set_option( json const & j, dds_sample const & )
     // We need the original control request as part of the reply, otherwise we can't know what option this is for
     auto control = j.nested( topics::reply::key::control );
     if( ! control.is_object() )
-        throw std::runtime_error( "missing control object" );
+        DDS_THROW(runtime_error, "missing control object" );
 
     // Find the relevant (stream) options to update
     dds_options const * options = &_options;
@@ -240,17 +341,17 @@ void dds_device::impl::on_set_option( json const & j, dds_sample const & )
     {
         auto stream_it = _streams.find( stream_name );
         if( stream_it == _streams.end() )
-            throw std::runtime_error( "stream '" + stream_name + "' not found" );
+            DDS_THROW(runtime_error, "stream '" + stream_name + "' not found" );
         options = &stream_it->second->options();
     }
 
     auto value_j = j.nested( topics::reply::set_option::key::value );
     if( ! value_j.exists() )
-        throw std::runtime_error( "missing value" );
+        DDS_THROW(runtime_error, "missing value" );
 
     auto option_name_j = control.nested( topics::control::set_option::key::option_name );
     if( ! option_name_j.is_string() )
-        throw std::runtime_error( "missing option-name" );
+        DDS_THROW(runtime_error, "missing option-name" );
     auto & option_name = option_name_j.string_ref();
     for( auto & option : *options )
     {
@@ -260,7 +361,7 @@ void dds_device::impl::on_set_option( json const & j, dds_sample const & )
             return;
         }
     }
-    throw std::runtime_error( "option '" + option_name + "' not found" );
+    DDS_THROW(runtime_error, "option '" + option_name + "' not found" );
 }
 
 
@@ -452,6 +553,41 @@ json dds_device::impl::query_option_value( const std::shared_ptr< dds_option > &
     return reply.at( topics::reply::query_option::key::value );
 }
 
+void dds_device::impl::set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, json options_value)
+{
+    if (!filter)
+        DDS_THROW(runtime_error, "must provide an embedded filter to set");
+
+    json j = json::object({
+        { topics::control::key::id, topics::control::set_filter::id },
+        { topics::control::set_filter::key::name, filter->get_name() },
+        { topics::control::set_filter::key::options, options_value }
+        });
+    if (auto stream = filter->get_stream())
+        j[topics::control::set_filter::key::stream_name] = stream->name();
+
+    json reply;
+    write_control_message(j, &reply);
+    // the reply will contain the new value (which may be different) and will update the cached one
+}
+
+json dds_device::impl::query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter)
+{
+    if (!filter)
+        DDS_THROW(runtime_error, "must provide an embedded filter to query");
+
+    json j = json::object({
+        { topics::control::key::id, topics::control::query_filter::id },
+        { topics::control::query_filter::key::name, filter->get_name() }
+        });
+    if (auto stream = filter->get_stream())
+        j[topics::control::query_filter::key::stream_name] = stream->name();
+
+    json reply;
+    write_control_message(j, &reply);
+
+    return reply;
+}
 
 void dds_device::impl::write_control_message( json const & j, json * reply )
 {
@@ -594,8 +730,16 @@ void dds_device::impl::on_device_header( json const & j, dds_sample const & samp
             std::string const & from_name = ex[0].string_ref();
             std::string const & to_name = ex[1].string_ref();
             //LOG_DEBUG( "[" << debug_name() << "]     ... got extrinsics from " << from_name << " to " << to_name );
-            extrinsics extr = extrinsics::from_json( ex[2] );
-            _extrinsics_map[std::make_pair( from_name, to_name )] = std::make_shared< extrinsics >( extr );
+            try
+            {
+                extrinsics extr = extrinsics::from_json( ex[2] );
+                _extrinsics_map[std::make_pair( from_name, to_name )] = std::make_shared< extrinsics >( extr );
+            }
+            catch( std::exception const & e )
+            {
+                LOG_ERROR( "[" << debug_name() << "] Invalid extrinsics data from " << from_name << " to " << to_name
+                               << ". Error: " << e.what() << ", reading" << ex );
+            }
         }
     }
 
@@ -715,19 +859,27 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
     {
         if( auto video_stream = std::dynamic_pointer_cast< dds_video_stream >( stream ) )
         {
-            std::set< video_intrinsics > intrinsics;
-            if( j_int.is_array() )
+            try
             {
-                // Multiple resolutions are provided, likely from legacy devices from the adapter
-                for( auto & intr : j_int )
-                    intrinsics.insert( video_intrinsics::from_json( intr ) );
+                std::set< video_intrinsics > intrinsics;
+                if( j_int.is_array() )
+                {
+                    // Multiple resolutions are provided, likely from legacy devices from the adapter
+                    for( auto & intr : j_int )
+                        intrinsics.insert( video_intrinsics::from_json( intr ) );
+                }
+                else
+                {
+                    // Single intrinsics that will get scaled
+                    intrinsics.insert( video_intrinsics::from_json( j_int ) );
+                }
+                video_stream->set_intrinsics( intrinsics );
             }
-            else
+            catch( std::exception const & e )
             {
-                // Single intrinsics that will get scaled
-                intrinsics.insert( video_intrinsics::from_json( j_int ) );
+                LOG_ERROR( "[" << debug_name() << "] Invalid intrinsics for stream " << stream->name()
+                               << ". Error: " << e.what() << ", reading" << j_int );
             }
-            video_stream->set_intrinsics( intrinsics );
         }
         else if( auto motion_stream = std::dynamic_pointer_cast< dds_motion_stream >( stream ) )
         {
@@ -738,15 +890,16 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
         }
     }
 
-    if( auto filters_j = j.nested( topics::notification::stream_options::key::recommended_filters ) )
+    if (auto embedded_filters_j = j.nested(topics::notification::stream_options::key::embedded_filters))
     {
-        std::vector< std::string > filter_names;
-        for( auto & filter : filters_j )
+        dds_embedded_filters embedded_filters;
+        for (auto& embedded_filter_j : embedded_filters_j)
         {
-            filter_names.push_back( filter );
+            auto embedded_filter = dds_embedded_filter::from_json(embedded_filter_j);
+            embedded_filters.push_back(embedded_filter);
         }
 
-        stream->set_recommended_filters( std::move( filter_names ) );
+        stream->init_embedded_filters(std::move(embedded_filters));
     }
 
     if( _streams.size() >= _n_streams_expected )

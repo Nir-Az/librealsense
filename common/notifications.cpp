@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #ifdef _MSC_VER
 #ifndef NOMINMAX
@@ -424,7 +424,7 @@ namespace rs2
                 ImGui::PushStyleColor(ImGuiCol_Button, transparent);
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, transparent);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, transparent);
-                string id = rsutils::string::from() << textual_icons::dotdotdot << "##" << index;
+                string id = rsutils::string::from() << textual_icons::ellipsis_h << "##" << index;
                 if (ImGui::Button(id.c_str()))
                 {
                     selected = shared_from_this();
@@ -871,7 +871,7 @@ namespace rs2
 
             ImGui::SetCursorScreenPos({ float(x + 10), float(y + 35) });
             ImGui::PushFont(win.get_large_font());
-            std::string txt = rsutils::string::from() << textual_icons::throphy;
+            std::string txt = rsutils::string::from() << textual_icons::trophy;
             ImGui::Text("%s", txt.c_str());
             ImGui::PopFont();
 
@@ -1151,7 +1151,7 @@ namespace rs2
 
         ImGui::SetCursorScreenPos({ float(x + 10), float(y + 35) });
         ImGui::PushFont(win.get_large_font());
-        std::string txt = rsutils::string::from() << textual_icons::throphy;
+        std::string txt = rsutils::string::from() << textual_icons::trophy;
         ImGui::Text("%s", txt.c_str());
         ImGui::PopFont();
 
@@ -1186,9 +1186,9 @@ namespace rs2
         ImGui::PopStyleColor();
 
         ImGui::SetCursorScreenPos({ float(x + 10), float(y + 47) });
-        hyperlink(win, "1. Self-Calibration Whitepaper", "https://dev.intelrealsense.com/docs/self-calibration-for-depth-cameras");
+        hyperlink(win, "1. Self-Calibration Whitepaper", "https://dev.realsenseai.com/docs/self-calibration-for-depth-cameras");
         ImGui::SetCursorScreenPos({ float(x + 10), float(y + 67) });
-        hyperlink(win, "2. Firmware Releases / Errata", "https://dev.intelrealsense.com/docs/firmware-releases");
+        hyperlink(win, "2. Firmware Releases / Errata", "https://dev.realsenseai.com/docs/firmware-updates");
 
     }
 

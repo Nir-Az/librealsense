@@ -1,5 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 import sys, os, re, platform
 from time import perf_counter as timestamp
@@ -79,25 +79,28 @@ class Device:
             log.w("connection_type is not supported! Assuming not a dds device")
             self._is_dds = False
 
-        self._usb_location = None
+        self._location = None  # might be either usb location or mac address
         try:
-            self._usb_location = _get_usb_location(self._physical_port)
+            if self._is_dds:
+                self._location = _get_mac_address(dev)
+            elif self._connection_type == "USB":
+                self._location = _get_usb_location(self._physical_port)
+            elif self._connection_type == "GMSL":
+                # GMSL device
+                log.i("GMSL device detected, no location available")
+            else:
+                raise Exception(f"Unknown connection type: {self._connection_type}")
         except Exception as e:
-            log.e('Failed to get usb location:', e)
-
-        self._mac_address = get_mac_address(dev, self._is_dds)
+            log.e('Failed to get usb location / mac address:', e)
 
         self._port = None
         if hub:
             try:
-                if self._is_dds:
-                    self._port = hub.get_port_by_location(self._mac_address)
-                else:
-                    self._port = hub.get_port_by_location(self._usb_location)
+                self._port = hub.get_port_by_location(self._location)
             except Exception as e:
                 log.e('Failed to get device port:', e)
                 log.d('    physical port is', self._physical_port)
-                log.d('    location is', self._mac_address if self._is_dds else self._usb_location)
+                log.d('    location is', self._location)
 
         self._removed = False
 
@@ -241,9 +244,9 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
     #
     # Get all devices, and store by serial-number
     global _device_by_sn, _context, _port_to_sn
-    settings = {}
+    settings = {'dds' : { 'enabled' : True }}  # explicitly enable dds in case there's an issue with the config file
     if disable_dds:
-        settings['dds'] = { 'enabled': False }
+        settings['dds']['enabled'] = False
     _context = rs.context( settings )
     _device_by_sn = dict()
     try:
@@ -512,7 +515,7 @@ def recovery():
     :return: A set of all device serial-numbers that are in recovery mode
     """
     global _device_by_sn
-    return { device.serial_number for device in _device_by_sn.values() if device.handle.is_update_device() }
+    return { device.serial_number for device in _device_by_sn.values() if device.handle.is_in_recovery_mode() }
 
 
 def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME ):
@@ -720,15 +723,12 @@ else:
         return port_location
 
 
-def get_mac_address(dev, is_dds):
-    if not is_dds:
-        return None
-
+def _get_mac_address(dev):
     GET_ETH_CONFIG_OPCODE = 187
     raw_command = rs.debug_protocol(dev).build_command(GET_ETH_CONFIG_OPCODE,1)
     raw_result = rs.debug_protocol(dev).send_and_receive_raw_data(raw_command)
     if raw_result[0] == GET_ETH_CONFIG_OPCODE: # success
-        return ":".join([hex(num)[2:] for num in raw_result[52:58]]) # bytes for the MAC address
+        return ":".join([f"{num:02x}" for num in raw_result[52:58]]) # bytes for the MAC address
 
     return None
 
