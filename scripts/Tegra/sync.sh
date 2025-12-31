@@ -163,6 +163,13 @@ function DownloadAndSync {
 			popd > /dev/null
 			false
 		fi
+		if [[ $REPO_URL != `git config remote.origin.url` ]]; then
+			echo -e "\e[33mRepo URL are different:"
+			echo configured: $REPO_URL
+			echo actual: `git config remote.origin.url`
+			echo -e "Consider removing ${WHAT} folder and start again\e[0m"
+		fi
+		git config remote.origin.url
 		git tag -l 2>/dev/null | grep -q -P "^$TAG\$" || \
 			git fetch --all 2>&1 >/dev/null || true
 		popd > /dev/null
