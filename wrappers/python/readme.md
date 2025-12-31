@@ -11,14 +11,18 @@
 Our official wrapper is  [`pyrealsense2`](https://pypi.org/project/pyrealsense2/)
 We also provide a beta package for early access to new features called [`pyrealsense2-beta`](https://pypi.org/project/pyrealsense2-beta/)
 
-Users who which to pack their package can create from this folder by running 
+To install the package, run:
+> `pip install pyrealsense2`
+
+Or
+
+> `pip install pyrealsense2-beta`
+
+Users who wish to create a python package (wheel) can create it from this folder by running 
 
 ```pip install -U setuptools build hatchling```
 
 ```python -m build . ```
-
-To install the package, run:
-> `pip install pyrealsense2`
 
 Windows users can install the RealSense SDK 2.0 from the release tab to get pre-compiled binaries of the wrapper, for both x86 and x64 architectures. (Python versions 3.9, 3.10, 3.11, 3.12 and 3.13 are supported).
 
