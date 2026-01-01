@@ -96,8 +96,9 @@ def pytest_configure(config):
     
     # Query devices early for test parametrization
     # This needs to happen during configure phase so pytest_generate_tests can access them
+    # hub_reset=True will discover and reset the hub (just like old run-unit-tests.py)
     try:
-        devices.query()
+        devices.query(hub_reset=True)
     except Exception as e:
         log.w(f"Failed to query devices during configuration: {e}")
 
@@ -205,10 +206,8 @@ def pytest_collection_modifyitems(config, items):
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
     """
-    Hook called for each test to log device state changes and test duration.
+    Hook called for each test to add visual separators and indentation.
     """
-    import time
-    
     # Visual separator and test start
     log.i("")
     log.i("-" * 80)
@@ -216,30 +215,36 @@ def pytest_runtest_protocol(item, nextitem):
     log.i("-" * 80)
     log.debug_indent()
     
-    # Track start time
-    start_time = time.time()
-    
-    # Execute the test
+    # Execute the test (setup, call, teardown)
     outcome = yield
     
-    # Log test completion with duration
-    duration = time.time() - start_time
-    
     log.debug_unindent()
-    
-    # Get test result
-    result = outcome.get_result()
-    if hasattr(result, 'passed') and result.passed:
-        status = log.green + "PASSED" + log.reset
-    elif hasattr(result, 'failed') and result.failed:
-        status = log.red + "FAILED" + log.reset
-    elif hasattr(result, 'skipped') and result.skipped:
-        status = log.yellow + "SKIPPED" + log.reset
-    else:
-        status = "COMPLETED"
-    
-    log.i(f"{status} - took {duration:.3f}s")
     log.i("-" * 80)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Hook called after each test phase (setup, call, teardown) to log results.
+    Only logs for the 'call' phase (actual test execution).
+    """
+    outcome = yield
+    report = outcome.get_result()
+    
+    # Only log for the actual test call phase (not setup/teardown)
+    if call.when == "call":
+        duration = report.duration
+        
+        if report.passed:
+            status = log.green + "PASSED" + log.reset
+        elif report.failed:
+            status = log.red + "FAILED" + log.reset
+        elif report.skipped:
+            status = log.yellow + "SKIPPED" + log.reset
+        else:
+            status = "COMPLETED"
+        
+        log.i(f"{status} - took {duration:.3f}s")
 
 
 # ============================================================================
@@ -264,23 +269,6 @@ def session_setup_teardown():
     # Log build directory
     if hasattr(repo, 'build'):
         log.i(f"Build directory: {repo.build}")
-    
-    # Log discovered devices (already queried in pytest_configure)
-    all_devices = devices.all()
-    log.i(f"Found {len(all_devices)} device(s)")
-    log.debug_indent()
-    try:
-        # Log each discovered device
-        for sn in all_devices:
-            dev = devices.get(sn)
-            if dev:
-                log.d(f"... {sn}: {dev}")
-        
-        # Log hub information if available
-        if devices.hub and devices.hub.is_connected():
-            log.i(f"Device hub: {type(devices.hub).__name__}")
-    finally:
-        log.debug_unindent()
     
     log.i("=" * 80)
     log.i("")
