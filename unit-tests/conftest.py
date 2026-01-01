@@ -219,6 +219,7 @@ def pytest_runtest_protocol(item, nextitem):
     outcome = yield
     
     log.debug_unindent()
+    print()  # Plain newline without log prefix
     log.i("-" * 80)
 
 
@@ -234,17 +235,10 @@ def pytest_runtest_makereport(item, call):
     # Only log for the actual test call phase (not setup/teardown)
     if call.when == "call":
         duration = report.duration
-        
-        if report.passed:
-            status = "PASSED"
-        elif report.failed:
-            status = log.red + "FAILED" + log.reset
-        elif report.skipped:
-            status = log.yellow + "SKIPPED" + log.reset
-        else:
-            status = "COMPLETED"
-        
-        log.i(f"{status} - took {duration:.3f}s")
+        # Just log the timing - pytest already shows PASSED/FAILED status
+        log.d(f"Test execution took {duration:.3f}s")
+
+
 
 
 
@@ -291,6 +285,36 @@ def session_setup_teardown():
             devices.hub.disconnect()
         except Exception as e:
             log.w(f"Error during hub cleanup: {e}")
+    
+    log.i("=" * 80)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """
+    Add a custom test summary to the log output.
+    """
+    log.i("")
+    log.i("=" * 80)
+    log.i("Test Summary")
+    log.i("=" * 80)
+    
+    # Get test statistics
+    passed = len(terminalreporter.stats.get('passed', []))
+    failed = len(terminalreporter.stats.get('failed', []))
+    skipped = len(terminalreporter.stats.get('skipped', []))
+    error = len(terminalreporter.stats.get('error', []))
+    
+    total = passed + failed + skipped + error
+    
+    log.i(f"Total tests run: {total}")
+    if passed > 0:
+        log.i(f"Passed: {passed}")
+    if failed > 0:
+        log.i(f"Failed: {failed}")
+    if skipped > 0:
+        log.i(f"Skipped: {skipped}")
+    if error > 0:
+        log.i(f"Errors: {error}")
     
     log.i("=" * 80)
 
