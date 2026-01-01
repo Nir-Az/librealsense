@@ -62,6 +62,9 @@ def pytest_configure(config):
     """
     Register custom markers for device-based testing.
     """
+    # Configure test file discovery pattern
+    config.addinivalue_line("python_files", "pytest-*.py")
+    
     config.addinivalue_line(
         "markers", "device(pattern): mark test to run on devices matching pattern (e.g., D400*, D455)"
     )
