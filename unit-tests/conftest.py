@@ -236,7 +236,7 @@ def pytest_runtest_makereport(item, call):
         duration = report.duration
         
         if report.passed:
-            status = log.green + "PASSED" + log.reset
+            status = "PASSED"
         elif report.failed:
             status = log.red + "FAILED" + log.reset
         elif report.skipped:
@@ -245,6 +245,7 @@ def pytest_runtest_makereport(item, call):
             status = "COMPLETED"
         
         log.i(f"{status} - took {duration:.3f}s")
+
 
 
 # ============================================================================

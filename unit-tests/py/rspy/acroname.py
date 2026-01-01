@@ -68,8 +68,14 @@ class Acroname(device_hub.device_hub):
         :param reset: When true, the acroname will be reset as part of the connection process
         :param req_spec: Required spec to connect to.
         """
+        global specs
+        
         if not self.hub:
             self.hub = brainstem.stem.USBHub3p()
+
+        # If resetting, clear cached specs to force rediscovery and logging
+        if reset:
+            specs = None
 
         if req_spec:
             specs = [req_spec]
