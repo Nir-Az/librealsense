@@ -78,10 +78,68 @@ def pytest_configure(config):
         "markers", "live: tests requiring live devices"
     )
     
+    # Suppress paramiko debug logs and warnings
+    import logging
+    import warnings
+    logging.getLogger("paramiko").setLevel(logging.WARNING)
+    
+    # Suppress paramiko deprecation warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
+    warnings.filterwarnings("ignore", message=".*CryptographyDeprecationWarning.*")
+    warnings.filterwarnings("ignore", message=".*TripleDES.*")
+    warnings.filterwarnings("ignore", message=".*Blowfish.*")
+    
     # Enable rspy debug logging if pytest log level is DEBUG
     log_cli_level = config.getoption('--log-cli-level', default=None)
     if log_cli_level and log_cli_level.upper() == 'DEBUG':
         log.debug_on()
+    
+    # Query devices early for test parametrization
+    # This needs to happen during configure phase so pytest_generate_tests can access them
+    try:
+        devices.query()
+    except Exception as e:
+        log.w(f"Failed to query devices during configuration: {e}")
+
+
+def pytest_generate_tests(metafunc):
+    """
+    Parametrize tests based on device_each markers.
+    
+    For tests with device_each markers, this creates separate test instances
+    for each matching device, so the test runs once per device with only that
+    device enabled.
+    """
+    # Check if this test has device_each markers
+    device_each_markers = [m for m in metafunc.definition.iter_markers("device_each")]
+    
+    if device_each_markers:
+        # Collect all matching devices from device_each markers
+        all_serials = []
+        
+        # Get exclusion patterns
+        exclude_markers = [m for m in metafunc.definition.iter_markers("device_exclude")]
+        exclude_patterns = [m.args[0] for m in exclude_markers if m.args]
+        
+        for marker in device_each_markers:
+            if marker.args:
+                pattern = marker.args[0]
+                # Find all devices matching this pattern
+                for sn in devices.all():
+                    device = devices.get(sn)
+                    if _device_matches_pattern(device, pattern):
+                        # Check exclusions
+                        excluded = any(_device_matches_pattern(device, exp) for exp in exclude_patterns)
+                        if not excluded and sn not in all_serials:
+                            all_serials.append(sn)
+        
+        if all_serials:
+            # Store the list of serials in the test's custom data
+            # This will be accessed by module_device_setup fixture
+            ids = [f"{devices.get(sn).name}-{sn}" for sn in all_serials]
+            # Add a custom fixture that will be requested automatically
+            metafunc.fixturenames.append('_test_device_serial')
+            metafunc.parametrize("_test_device_serial", all_serials, ids=ids, scope="function")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -151,18 +209,37 @@ def pytest_runtest_protocol(item, nextitem):
     """
     import time
     
-    # Log test starting
-    log.d(f"Running test: {item.nodeid}")
+    # Visual separator and test start
+    log.i("")
+    log.i("-" * 80)
+    log.i(f"Test: {item.nodeid}")
+    log.i("-" * 80)
+    log.debug_indent()
     
     # Track start time
     start_time = time.time()
     
     # Execute the test
-    yield
+    outcome = yield
     
     # Log test completion with duration
     duration = time.time() - start_time
-    log.d(f"Test took {duration:.3f} seconds")
+    
+    log.debug_unindent()
+    
+    # Get test result
+    result = outcome.get_result()
+    if hasattr(result, 'passed') and result.passed:
+        status = log.green + "PASSED" + log.reset
+    elif hasattr(result, 'failed') and result.failed:
+        status = log.red + "FAILED" + log.reset
+    elif hasattr(result, 'skipped') and result.skipped:
+        status = log.yellow + "SKIPPED" + log.reset
+    else:
+        status = "COMPLETED"
+    
+    log.i(f"{status} - took {duration:.3f}s")
+    log.i("-" * 80)
 
 
 # ============================================================================
@@ -175,104 +252,137 @@ def session_setup_teardown():
     Session-level setup and teardown.
     Initializes devices and hub, and cleans up at the end.
     """
-    log.d("=== Pytest Session Starting ===")
+    log.i("")
+    log.i("=" * 80)
+    log.i("Pytest Session Starting")
+    log.i("=" * 80)
     
     # Log pyrealsense2 module location (INFO level so it's always visible)
     if rs:
         log.i(f"Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
     
     # Log build directory
-    log.d(f"Build directory: {repo.build if hasattr(repo, 'build') else 'unknown'}")
+    if hasattr(repo, 'build'):
+        log.i(f"Build directory: {repo.build}")
     
-    # Initialize devices (this will query and enumerate all connected devices)
-    log.i("Discovering devices...")
+    # Log discovered devices (already queried in pytest_configure)
+    all_devices = devices.all()
+    log.i(f"Found {len(all_devices)} device(s)")
+    log.debug_indent()
     try:
-        devices.query()
-        all_devices = devices.all()
-        log.d(f"Found {len(all_devices)} device(s)")
-        
         # Log each discovered device
         for sn in all_devices:
             dev = devices.get(sn)
             if dev:
-                log.d(f"    ... {sn}: {dev}")
+                log.d(f"... {sn}: {dev}")
         
         # Log hub information if available
         if devices.hub and devices.hub.is_connected():
-            log.d(f"Device hub connected: {type(devices.hub).__name__}")
-    except Exception as e:
-        log.w(f"Failed to query devices: {e}")
+            log.i(f"Device hub: {type(devices.hub).__name__}")
+    finally:
+        log.debug_unindent()
+    
+    log.i("=" * 80)
+    log.i("")
     
     yield  # Run all tests
     
     # Session teardown
-    log.d("=== Pytest Session Ending ===")
+    log.i("")
+    log.i("=" * 80)
+    log.i("Pytest Session Ending")
+    log.i("=" * 80)
     
     # Disconnect from hub and disable all ports
     if devices.hub and devices.hub.is_connected():
-        log.d("Disconnecting from hub(s)")
+        log.i("Disconnecting from hub(s)")
         try:
             devices.hub.disable_ports()
             devices.wait_until_all_ports_disabled()
             devices.hub.disconnect()
         except Exception as e:
             log.w(f"Error during hub cleanup: {e}")
+    
+    log.i("=" * 80)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
+def _test_device_serial(request):
+    """
+    Internal fixture to receive device serial from parametrization.
+    This is automatically injected for tests with device_each markers.
+    """
+    return request.param
+
+
+@pytest.fixture(scope="function")
 def module_device_setup(request):
     """
-    Module-level fixture that handles device selection and power cycling.
+    Function-level fixture that handles device selection and power cycling.
     
     This fixture:
-    1. Determines which device(s) the module needs based on markers
-    2. Enables only those device port(s) via the hub
-    3. Powers cycles devices between modules
+    1. Determines which device the test needs (from _test_device_serial parameter or markers)
+    2. Enables only that device port via the hub
+    3. Powers cycles the device
     
-    Yields the serial numbers of enabled devices.
+    Yields the serial number of the enabled device.
     """
-    # Get device markers from the test module
-    device_markers = []
-    for item in request.session.items:
-        if item.fspath == request.fspath:
-            # Collect all device markers from this module's tests
-            for marker in item.iter_markers():
-                if marker.name in ['device', 'device_each', 'device_exclude']:
-                    device_markers.append(marker)
-            break
+    serial_number = None
     
-    if not device_markers:
-        # No device requirements, yield None
-        log.d(f"Module {request.module.__name__} has no device requirements")
-        yield None
-        return
-    
-    # Find matching devices
-    serial_numbers = _find_matching_devices(device_markers)
-    
-    if not serial_numbers:
-        pytest.skip(f"No devices found matching requirements: {device_markers}")
-    
-    log.d(f"Module {request.module.__name__} will use devices: {serial_numbers}")
-    
-    # Enable only the required device(s) and power cycle
+    # Check if test was parametrized with _test_device_serial
+    # The parametrization adds it to fixturenames, so we can try to get it
     try:
-        devices.enable_only(serial_numbers, recycle=True)
-        log.d(f"Enabled and recycled devices: {serial_numbers}")
+        serial_number = request.getfixturevalue('_test_device_serial')
+        log.d(f"Test using parametrized device: {serial_number}")
+    except (LookupError, pytest.FixtureLookupError):
+        # Not parametrized, fall back to marker-based detection (for device() marker)
+        device_markers = []
+        for marker in request.node.iter_markers():
+            if marker.name in ['device', 'device_exclude']:
+                device_markers.append(marker)
+        
+        if not device_markers:
+            # No device requirements, yield None
+            log.d(f"Test {request.node.name} has no device requirements")
+            yield None
+            return
+        
+        # Find matching devices (only first one for device() marker)
+        serial_numbers = _find_matching_devices(device_markers, each=False)
+        
+        if not serial_numbers:
+            pytest.skip(f"No devices found matching requirements")
+        
+        serial_number = serial_numbers[0]
+        log.d(f"Test will use first matching device: {serial_number}")
+    
+    # Enable only this specific device and power cycle
+    device = devices.get(serial_number)
+    device_name = device.name if device else serial_number
+    log.i(f"Configuration: {device_name} [{serial_number}]")
+    log.debug_indent()
+    try:
+        log.d(f"Recycling device via hub...")
+        devices.enable_only([serial_number], recycle=True)
+        log.d(f"Device enabled and ready")
     except Exception as e:
-        pytest.fail(f"Failed to enable devices {serial_numbers}: {e}")
+        log.debug_unindent()
+        pytest.fail(f"Failed to enable device {serial_number}: {e}")
+    finally:
+        log.debug_unindent()
     
-    yield serial_numbers
+    yield serial_number
     
-    # Module teardown - devices will be power cycled by next module's setup
+    # Function teardown - device will be power cycled by next test's setup
 
 
-def _find_matching_devices(device_markers) -> List[str]:
+def _find_matching_devices(device_markers, each=True) -> List[str]:
     """
     Find devices that match the given markers.
     
     Args:
         device_markers: List of pytest markers with device requirements
+        each: If True, return all matches; if False, return only first match
         
     Returns:
         List of serial numbers matching the requirements
@@ -312,8 +422,8 @@ def _find_matching_devices(device_markers) -> List[str]:
                     log.d(f"  Found matching device: {device.name} ({sn})")
                 
                 # If not 'each', just take the first match
-                if marker.name != 'device_each':
-                    break
+                if not each:
+                    return matching_sns
     
     return matching_sns
 
@@ -350,42 +460,40 @@ def _device_matches_pattern(device, pattern: str) -> bool:
 # Test-Level Fixtures
 # ============================================================================
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def test_context(module_device_setup):
     """
-    Provides a pyrealsense2 context that only sees the devices enabled for this module.
+    Provides a pyrealsense2 context that only sees the device enabled for this test.
     
     The device hub has already filtered which devices are visible by enabling only
-    specific ports, so a standard context will work correctly.
-    
-    This is module-scoped so all tests in a module share the same context.
+    a specific port, so a standard context will work correctly.
     """
     if not rs:
         pytest.skip("pyrealsense2 not available")
     
     ctx = rs.context()
     
-    # Verify devices are available
+    # Verify device is available
     if module_device_setup and len(list(ctx.devices)) == 0:
         pytest.fail("No devices visible in context after device setup")
     
     return ctx
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def module_test_device(test_context):
     """
-    Provides the first available device for the entire module (module-scoped).
+    Provides the first (and only) available device for the test.
     
-    Use this fixture when you need to set up device configuration once for all tests
-    in a module, such as determining product line or capabilities.
+    Use this fixture when you need to set up device configuration at the start of a test,
+    such as determining product line or capabilities.
     """
     devices_list = list(test_context.devices)
     if not devices_list:
-        pytest.skip("No device available for module")
+        pytest.skip("No device available for test")
     
     dev = devices_list[0]
-    log.d(f"Module using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
+    log.d(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
     
     return dev, test_context
 

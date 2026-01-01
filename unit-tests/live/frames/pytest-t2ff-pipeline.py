@@ -31,7 +31,7 @@ pytestmark = [
 # Test Fixtures and Setup
 # ============================================================================
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def device_config(module_test_device):
     """
     Set up device and determine maximum allowed delays based on product line.
