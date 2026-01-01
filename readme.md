@@ -29,6 +29,12 @@ Please make sure to update your links to the new RealSenseAI organization for bo
 
 Note: A redirection from the previous name IntelRealSense is currently in place, but we cannot guarantee how long it will remain active. We recommend that all users update their references to point to the new GitHub location.
 
+#### Branch Policy
+We have updated our branch policy:
+From now on, we will also push beta releases to the master branch, so users can access up-to-date code and features.
+In the near future, beta binaries will also be pushed to public distribution servers (e.g., APT).
+The last validated official release can be found on our Releases page on GitHub.
+
 ## Use Cases
 
 Below are some of the many real-world applications powered by RealSense technology:
