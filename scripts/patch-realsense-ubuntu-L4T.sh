@@ -283,42 +283,33 @@ if [[ -z "$UVCVIDEO_PATH" ]]; then
 fi
 
 echo -e "\e[32mInsert the modified kernel modules\e[0m"
+
 if version_lt "$PATCHES_REV" "6.0"; then
 	try_module_insert uvcvideo              ~/${TEGRA_TAG}-uvcvideo.ko                $UVCVIDEO_PATH
-	try_load_module  uvcvideo
-	try_load_module  hid-sensor-gyro-3d
-	try_load_module  hid-sensor-accel-3d
+	try_module_insert hid_sensor_gyro_3d    ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      $RUNNING_KERNEL/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
+	try_module_insert hid_sensor_accel_3d   ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     $RUNNING_KERNEL/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
 else
 	# for JP6.0 we will try to remove old modules and then load updated ones
-	echo -e "\e[32mUnload/load kernel modules\e[0m"
+	echo -e "\e[32mUnload kernel modules\e[0m"
 	try_unload_module uvcvideo
-	try_unload_module videodev
 	if version_lt "$PATCHES_REV" "7.0"; then # from Jetpack 6 onward
 		try_unload_module hid_sensor_accel_3d
 		try_unload_module hid_sensor_gyro_3d
 		try_unload_module hid_sensor_trigger
 		try_unload_module industrialio_triggered_buffer
 		try_unload_module kfifo_buf
-		echo -e "\e[32mLoad modified kernel modules\e[0m"
-		try_load_module kfifo_buf
-		try_load_module industrialio_triggered_buffer
-		try_load_module hid_sensor_trigger
-		try_load_module hid_sensor_gyro_3d
-		try_load_module hid_sensor_accel_3d
 	fi
+	try_unload_module videodev
+	echo -e "\e[32mLoad modified kernel modules\e[0m"
 	try_load_module videodev
+        if version_lt "$PATCHES_REV" "7.0"; then # from Jetpack 6 onward
+               try_load_module kfifo_buf
+               try_load_module industrialio_triggered_buffer
+               try_load_module hid_sensor_trigger
+               try_load_module hid_sensor_gyro_3d
+               try_load_module hid_sensor_accel_3d
+        fi
 	try_load_module uvcvideo
-	echo -e "\e[32mDone\e[0m"
 fi
-if [[ "$PATCHES_REV" = "4.4" ]]; then # for Jetpack 4.4 and older
-	try_module_insert hid_sensor_accel_3d   ~/${TEGRA_TAG}-hid-sensor-accel-3d.ko     $RUNNING_KERNEL/kernel/drivers/iio/accel/hid-sensor-accel-3d.ko
-	try_module_insert hid_sensor_gyro_3d    ~/${TEGRA_TAG}-hid-sensor-gyro-3d.ko      $RUNNING_KERNEL/kernel/drivers/iio/gyro/hid-sensor-gyro-3d.ko
-	#Preventively unload all HID-related modules
-	try_unload_module hid_sensor_accel_3d
-	try_unload_module hid_sensor_gyro_3d
-	try_unload_module hid_sensor_trigger
-	try_unload_module hid_sensor_trigger
-	try_module_insert hid_sensor_trigger    ~/${TEGRA_TAG}-hid-sensor-trigger.ko      $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-trigger.ko
-	try_module_insert hid_sensor_iio_common ~/${TEGRA_TAG}-hid-sensor-iio-common.ko   $RUNNING_KERNEL/kernel/drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko
-fi
+echo -e "\e[32mDone\e[0m"
 echo -e "\e[92m\n\e[1mScript has completed. Please consult the installation guide for further instruction.\n\e[0m"
