@@ -152,7 +152,7 @@ function DownloadAndSync {
 	fi
 
 	if [ -d "${LDK_SOURCE_DIR}" ]; then
-		echo "Directory for $WHAT, ${LDK_SOURCE_DIR}, already exists!"
+		echo "Directory for $WHAT: ${LDK_SOURCE_DIR}, already exists!"
 		if ! git -C ${LDK_SOURCE_DIR} status 2>&1 >/dev/null; then
 			echo -e "\e[33m...but the directory is not a git repository -- clean it up first\e[0m\n"
 			false
@@ -160,9 +160,9 @@ function DownloadAndSync {
 		ACTUAL_REPO=$(git -C ${LDK_SOURCE_DIR} config remote.origin.url)
 		if [[ $REPO_URL != $ACTUAL_REPO ]]; then
 			echo -e "\e[33mRepo URL are different:"
-			echo configured: $REPO_URL
+			echo config: $REPO_URL
 			echo actual: $ACTUAL_REPO
-			echo -e "Consider removing ${WHAT} folder and start again\e[0m"
+			echo -e "Consider removing ${LDK_SOURCE_DIR} folder and start all over\e[0m"
 		fi
 		git -C ${LDK_SOURCE_DIR} tag -l 2>/dev/null | grep -q -P "^$TAG\$" || \
 			git -C ${LDK_SOURCE_DIR} fetch --all 2>&1 >/dev/null || true

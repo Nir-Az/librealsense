@@ -1,6 +1,6 @@
 SOURCE_INFO="
 k:kernel/kernel-5.10:nv-tegra.nvidia.com/linux-5.10.git:
-k:kernel/nvgpu:nv-tegra.nvidia.com/linux-nvgpu.git:
+k:nvgpu:nv-tegra.nvidia.com/linux-nvgpu.git:
 k:kernel/nvidia:nv-tegra.nvidia.com/linux-nvidia.git:
 k:kernel/nvidia/drivers/net/ethernet/nvidia/nvethernet/nvethernetrm:nv-tegra.nvidia.com/kernel/nvethernetrm.git:
 k:hardware/nvidia/platform/tegra/common:nv-tegra.nvidia.com/device/hardware/nvidia/platform/tegra/common.git:

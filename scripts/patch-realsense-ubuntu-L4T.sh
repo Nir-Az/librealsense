@@ -77,6 +77,7 @@ fi
 [[ -f /etc/os-release ]] && eval $(cat /etc/os-release|grep UBUNTU_CODENAME=)
 
 #Select the kernel patches revision that matches the paltform configuration
+RELEASE_STRING="release"
 case ${JETSON_L4T_VERSION} in
 	"32.2.1" | "32.2.3" | "32.3.1" | "32.4.3")
 		PATCHES_REV="4.4"		# Baseline for the patches
@@ -85,9 +86,11 @@ case ${JETSON_L4T_VERSION} in
 	"32.4.4" | "32.5" | "32.5.1" | "32.6.1" | "32.7.1")
 		PATCHES_REV="4.4.1"	# JP 4.4.1, 32.7.1 is JP 4.6.1
 	;;
-	"35.1")
-		PATCHES_REV="5.0.2"	# JP 5.0.2
+	"35.1" | "35.4.1")
+		PATCHES_REV="5.0"	# JP 5.0.2, JP 5.1.2
 		KERNEL_RELEASE="5.10"
+		[[ $JETSON_L4T_VERSION = "35.1" ]] && RELEASE_STRING="Release"
+		KBASE=./Tegra/kernel/kernel-$KERNEL_RELEASE
 	;;
 	"36.3" | "36.4" | "36.4.3" | "36.4.4" | "36.4.7")
 		# 36.3 --> 6.0
@@ -97,6 +100,8 @@ case ${JETSON_L4T_VERSION} in
 		# 36.4.7 --> 6.2.1 - same as 36.4.4, with security update
 		PATCHES_REV="6.0"
 		KERNEL_RELEASE="5.15"
+		UBUNTU_CODENAME=jammy
+		KBASE=./Tegra/kernel/kernel-${UBUNTU_CODENAME}-src
 	;;
 	"38.2" | "38.2.1" | "38.2.2" | "38.3")
 		# 38.2 --> 7.0
@@ -104,6 +109,8 @@ case ${JETSON_L4T_VERSION} in
 		# starting from 38.2 licence link is inconsistent with release version
 		JETSON_L4T_REVISION_LONG="2.0"
 		KERNEL_RELEASE="6.8"
+		UBUNTU_CODENAME=noble
+		KBASE=./Tegra/kernel/kernel-${UBUNTU_CODENAME}-src
 	;;
 	*)
 	echo -e "\e[41mUnsupported JetPack revision ${JETSON_L4T_VERSION} aborting script\e[0m"
@@ -122,18 +129,8 @@ sdk_dir=$(pwd)
 echo -e "\e[32mCreate the sandbox - NVIDIA L4T source tree(s)\e[0m"
 mkdir -p ${sdk_dir}/Tegra
 TEGRA_SOURCE_SYNC_SH="sync.sh"
-RELEASE_STRING="release"
 TEGRA_TAG="jetson_$JETSON_L4T_RELEASE.$JETSON_L4T_REVISION"
-if [[ "$PATCHES_REV" = "5.0.2" ]]; then
-	KBASE=./Tegra/sources/kernel/kernel-$KERNEL_RELEASE
-	RELEASE_STRING="Release"
-fi
-if [[ "$PATCHES_REV" = "6.0" ]]; then
-	KBASE=./Tegra/kernel/kernel-jammy-src
-fi
-if [[ "$PATCHES_REV" = "7.0" ]]; then
-	KBASE=./Tegra/kernel/kernel-noble-src
-fi
+
 cp ./scripts/Tegra/$TEGRA_SOURCE_SYNC_SH ${sdk_dir}/Tegra
 cp ./scripts/Tegra/${PATCHES_REV}.repos ${sdk_dir}/Tegra/repos
 
@@ -145,12 +142,12 @@ DisplayNvidiaLicense "r${JETSON_L4T_RELEASE}_Release_v${JETSON_L4T_REVISION_LONG
 
 pushd ${KBASE} > /dev/null
 
-echo -e "\e[32mCopy LibRealSense patches to the sandbox\e[0m"
 L4T_Patches_Dir=${sdk_dir}/scripts/Tegra/LRS_Patches/
 if [ ! -d ${L4T_Patches_Dir} ]; then
 	echo -e "\e[41mThe L4T kernel patches directory  ${L4T_Patches_Dir} was not found, aborting\e[0m"
 	exit 3
 else
+	echo -e "\e[32mCopy LibRealSense patches to the sandbox\e[0m"
 	cp -r ${L4T_Patches_Dir} .
 fi
 
@@ -165,7 +162,7 @@ if [[ -L $RUNNING_KERNEL/build ]] then
 fi
 make mrproper -j$(($(nproc)-1))
 if version_lt "$PATCHES_REV" "6.0"; then
-	make ARCH=arm64 tegra_defconfig -j$(($(nproc)-1))
+	make tegra_defconfig -j$(($(nproc)-1))
 else
 	echo -e "\e[32mUpdate the kernel tree to support HID IMU sensors\e[0m"
 	# appending config to defconfig so later .config will be generated with all necessary dependencies
@@ -187,20 +184,19 @@ fi
 
 #Remove previously applied patches
 git reset --hard
-echo -e "\e[32mApply Librealsense Kernel Patches\e[0m"
+echo -e "\e[32mApply LibRealSense kernel patches\e[0m"
 if version_lt "${PATCHES_REV}" "6.0"; then
 	patch -p1 < ./LRS_Patches/01-realsense-camera-formats-L4T-${PATCHES_REV}.patch
 	patch -p1 < ./LRS_Patches/02-realsense-metadata-L4T-${PATCHES_REV}.patch
 	if [[ "$PATCHES_REV" = "4.4" ]]; then # for Jetpack 4.4 and older
 		patch -p1 < ./LRS_Patches/03-realsense-hid-L4T-4.9.patch
 	fi
-	if [[ "$PATCHES_REV" != "5.0.2" ]]; then
+	if [[ "$PATCHES_REV" != "5.0" ]]; then
 		patch -p1 < ./LRS_Patches/04-media-uvcvideo-mark-buffer-error-where-overflow.patch
 	fi
 	patch -p1 < ./LRS_Patches/05-realsense-powerlinefrequency-control-fix.patch
 else
 	patch -p1 < ${sdk_dir}/scripts/realsense-camera-formats-"${UBUNTU_CODENAME}"-master.patch
-	patch -p1 < ${sdk_dir}/scripts/realsense-metadata-"${UBUNTU_CODENAME}"-master.patch
 	[[ -f ${sdk_dir}/scripts/realsense-powerlinefrequency-control-fix-"${UBUNTU_CODENAME}".patch ]] \
 		&& patch -p1 < ${sdk_dir}/scripts/realsense-powerlinefrequency-control-fix-"${UBUNTU_CODENAME}".patch
 	[[ -f ${sdk_dir}/scripts/makefile-${UBUNTU_CODENAME}-${PATCHES_REV}.patch ]] \
@@ -213,7 +209,6 @@ fi
 #2. Generates Module.symvers if it doesn’t already exist.
 # Extract the local version suffix from the running kernel (e.g., "-tegra" or "")
 KERNEL_LOCALVERSION="$(uname -r | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?//')"
-echo make prepare modules_prepare LOCALVERSION="${KERNEL_LOCALVERSION}" -j$(($(nproc)-1))
 make prepare modules_prepare LOCALVERSION="${KERNEL_LOCALVERSION}" -j$(($(nproc)-1))
 
 echo -e "\e[32mCompiling uvcvideo kernel module\e[0m"

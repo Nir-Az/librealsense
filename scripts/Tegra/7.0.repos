@@ -1,6 +1,6 @@
 SOURCE_INFO="
 k:kernel/kernel-noble-src:nv-tegra.nvidia.com/3rdparty/canonical/linux-noble.git:
-k:nvgpu:nv-tegra.nvidia.com/tegra/kernel-src/linux-nvgpu.git:
+k:kernel/nvgpu:nv-tegra.nvidia.com/tegra/kernel-src/linux-nvgpu.git:
 k:nvidia-oot:nv-tegra.nvidia.com/linux-nv-oot.git:
 k:hwpm:nv-tegra.nvidia.com/linux-hwpm.git:
 k:nvethernetrm:nv-tegra.nvidia.com/kernel/nvethernetrm.git:
