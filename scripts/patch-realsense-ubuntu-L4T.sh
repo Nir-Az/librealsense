@@ -92,12 +92,11 @@ case ${JETSON_L4T_VERSION} in
 		[[ $JETSON_L4T_VERSION = "35.1" ]] && RELEASE_STRING="Release"
 		KBASE=./Tegra/kernel/kernel-$KERNEL_RELEASE
 	;;
-	"36.3" | "36.4" | "36.4.3" | "36.4.4" | "36.4.7")
+	"36.3" | "36.4" | "36.4.3" | "36.4.4")
 		# 36.3 --> 6.0
 		# 36.4 -> 6.1
 		# 36.4.3 --> 6.2
 		# 36.4.4 --> 6.2.1
-		# 36.4.7 --> 6.2.1 - same as 36.4.4, with security update
 		PATCHES_REV="6.0"
 		KERNEL_RELEASE="5.15"
 		UBUNTU_CODENAME=jammy
@@ -160,6 +159,7 @@ RUNNING_KERNEL=/lib/modules/$(uname -r)
 if [[ -L $RUNNING_KERNEL/build ]] then
 	export KBUILD_EXTRA_SYMBOLS=$RUNNING_KERNEL/build/Module.symvers
 fi
+
 make mrproper -j$(($(nproc)-1))
 if version_lt "$PATCHES_REV" "6.0"; then
 	make tegra_defconfig -j$(($(nproc)-1))
@@ -209,12 +209,14 @@ fi
 #2. Generates Module.symvers if it doesn’t already exist.
 # Extract the local version suffix from the running kernel (e.g., "-tegra" or "")
 KERNEL_LOCALVERSION="$(uname -r | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?//')"
+echo -e "\e[32mPrepare\e[0m"
 make prepare modules_prepare LOCALVERSION="${KERNEL_LOCALVERSION}" -j$(($(nproc)-1))
 
 echo -e "\e[32mCompiling uvcvideo kernel module\e[0m"
 make -j$(($(nproc)-1)) M=drivers/media/usb/uvc/ modules
 echo -e "\e[32mCompiling v4l2-core modules\e[0m"
 make -j$(($(nproc)-1)) M=drivers/media/v4l2-core modules
+
 if [[ "$PATCHES_REV" = "4.4" ]]; then # for Jetpack 4.4 and older
 	echo -e "\e[32mCompiling accelerometer and gyro modules\e[0m"
 	make -j$(($(nproc)-1)) M=drivers/iio modules
@@ -224,7 +226,7 @@ if version_lt "$PATCHES_REV" "6.0"; then # for Jetpack 4-5
 	sudo cp drivers/media/usb/uvc/uvcvideo.ko ~/${TEGRA_TAG}-uvcvideo.ko
 	sudo cp drivers/media/v4l2-core/videobuf-vmalloc.ko ~/${TEGRA_TAG}-videobuf-vmalloc.ko
 	sudo cp drivers/media/v4l2-core/videobuf-core.ko ~/${TEGRA_TAG}-videobuf-core.ko
-else
+elif version_lt "$PATCHES_REV" "7.0"; then # for Jetpack 4-5
 	echo -e "\e[32mCompiling hid support, accelerometer and gyro modules\e[0m"
 	make -j$(($(nproc)-1)) M=drivers/hid modules
 	KBUILD_EXTRA_SYMBOLS+=" drivers/hid/Module.symvers"
@@ -243,14 +245,16 @@ if ! version_lt "$PATCHES_REV" "6.0"; then # from Jetpack 6 onward
 	# uvc modules with formats/sku support
 	sudo cp drivers/media/usb/uvc/uvcvideo.ko $RUNNING_KERNEL/extra/
 	sudo cp drivers/media/v4l2-core/videodev.ko $RUNNING_KERNEL/extra/
-	# iio modules for iio-hid support
-	sudo cp drivers/iio/buffer/kfifo_buf.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/iio/buffer/industrialio-triggered-buffer.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/hid/hid-sensor-hub.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/iio/accel/hid-sensor-accel-3d.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/iio/gyro/hid-sensor-gyro-3d.ko $RUNNING_KERNEL/extra/
-	sudo cp drivers/iio/common/hid-sensors/hid-sensor-trigger.ko $RUNNING_KERNEL/extra/
+	if version_lt "$PATCHES_REV" "7.0"; then # from Jetpack 6 onward
+		# iio modules for iio-hid support
+		sudo cp drivers/iio/buffer/kfifo_buf.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/iio/buffer/industrialio-triggered-buffer.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/iio/common/hid-sensors/hid-sensor-iio-common.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/hid/hid-sensor-hub.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/iio/accel/hid-sensor-accel-3d.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/iio/gyro/hid-sensor-gyro-3d.ko $RUNNING_KERNEL/extra/
+		sudo cp drivers/iio/common/hid-sensors/hid-sensor-trigger.ko $RUNNING_KERNEL/extra/
+	fi
 	# set depmod search path to include "extra" modules
 	sudo sed -i 's/search updates/search extra updates/g' /etc/depmod.d/ubuntu.conf
 fi
@@ -286,19 +290,23 @@ if version_lt "$PATCHES_REV" "6.0"; then
 	try_load_module  hid-sensor-accel-3d
 else
 	# for JP6.0 we will try to remove old modules and then load updated ones
-	echo -e "\e[32mUnload kernel modules\e[0m"
+	echo -e "\e[32mUnload/load kernel modules\e[0m"
 	try_unload_module uvcvideo
-	try_unload_module hid_sensor_accel_3d
-	try_unload_module hid_sensor_gyro_3d
-	try_unload_module hid_sensor_trigger
-	try_unload_module industrialio_triggered_buffer
-	try_unload_module kfifo_buf
-	echo -e "\e[32mLoad modified kernel modules\e[0m"
-	try_load_module kfifo_buf
-	try_load_module industrialio_triggered_buffer
-	try_load_module hid_sensor_trigger
-	try_load_module hid_sensor_gyro_3d
-	try_load_module hid_sensor_accel_3d
+	try_unload_module videodev
+	if version_lt "$PATCHES_REV" "7.0"; then # from Jetpack 6 onward
+		try_unload_module hid_sensor_accel_3d
+		try_unload_module hid_sensor_gyro_3d
+		try_unload_module hid_sensor_trigger
+		try_unload_module industrialio_triggered_buffer
+		try_unload_module kfifo_buf
+		echo -e "\e[32mLoad modified kernel modules\e[0m"
+		try_load_module kfifo_buf
+		try_load_module industrialio_triggered_buffer
+		try_load_module hid_sensor_trigger
+		try_load_module hid_sensor_gyro_3d
+		try_load_module hid_sensor_accel_3d
+	fi
+	try_load_module videodev
 	try_load_module uvcvideo
 	echo -e "\e[32mDone\e[0m"
 fi

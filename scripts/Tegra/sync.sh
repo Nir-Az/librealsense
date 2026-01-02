@@ -181,7 +181,7 @@ function DownloadAndSync {
 			git -C ${LDK_SOURCE_DIR} checkout -b mybranch_$(date +%Y-%m-%d-%s) $TAG
 			echo -e "\e[32m$2 source sync'ed to tag $TAG successfully!\e[0m"
 		else
-			echo -e "Couldn't find tag $TAG\e[31m$2 source sync to tag $TAG failed!\e[0m"
+			echo -e "\e[31mCouldn't find tag $TAG. $2 source sync to tag $TAG failed!\e[0m"
 			false
 		fi
 	fi
