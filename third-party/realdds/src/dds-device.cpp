@@ -25,9 +25,9 @@ dds_device::dds_device( std::shared_ptr< dds_participant > const & participant, 
 }
 
 
-bool dds_device::is_ready( bool allow_partial_capabilities ) const
+bool dds_device::is_ready() const
 {
-    return _impl->is_ready() || ( allow_partial_capabilities && _impl->is_initializing() );
+    return _impl->is_ready();
 }
 
 
@@ -42,7 +42,7 @@ void dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabil
     if( is_ready() )
         return;
 
-    if( ! timeout_ms && ! allow_partial_capabilities )
+    if( ! timeout_ms )
         DDS_THROW( runtime_error, "device is " << ( is_online() ? "not ready" : "offline" ) );
 
     LOG_DEBUG( "[" << debug_name() << "] waiting until ready ..." );
@@ -53,7 +53,10 @@ void dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabil
         if( timer.has_expired() )
         {
             if( allow_partial_capabilities && _impl->is_initializing() )
+            {
+                _impl->set_state( impl::state_t::READY );
                 return;
+            }
             DDS_THROW( runtime_error, "[" << debug_name() << "] timeout waiting to get ready" );
         }
         std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
@@ -192,43 +195,43 @@ size_t dds_device::foreach_option( std::function< void( std::shared_ptr< dds_opt
 
 void dds_device::open( const dds_stream_profiles & profiles )
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     _impl->open( profiles );
 }
 
 void dds_device::close( const dds_stream_profiles & profiles )
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     _impl->close( profiles );
 }
 
 void dds_device::set_option_value( const std::shared_ptr< dds_option > & option, json new_value )
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     _impl->set_option_value( option, std::move( new_value ) );
 }
 
 json dds_device::query_option_value( const std::shared_ptr< dds_option > & option )
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     return _impl->query_option_value( option );
 }
 
 void dds_device::set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, const json& options_value)
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     _impl->set_embedded_filter(filter, options_value);
 }
 
 json dds_device::query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter)
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     return _impl->query_embedded_filter(filter);
 }
 
 void dds_device::send_control( json const & control, json * reply ) const
 {
-    wait_until_ready( 0, true );  // throw if not
+    wait_until_ready( 0 );  // throw if not
     _impl->write_control_message( control, reply );
 }
 

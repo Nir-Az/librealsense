@@ -222,7 +222,7 @@ void dds_device::impl::on_notification( json && j, dds_sample const & notificati
 
 void dds_device::impl::on_set_filter(rsutils::json const& j, dds_sample const&)
 {
-    if( ! is_ready() && ! is_initializing() )
+    if( ! is_ready() )
         return;
 
     // This is the handler for "set-filter", meaning someone sent a control request to set a
@@ -271,7 +271,7 @@ void dds_device::impl::on_set_filter(rsutils::json const& j, dds_sample const&)
 
 void dds_device::impl::on_query_filter(json const& j, dds_sample const&)
 {
-    if( ! is_ready() && ! is_initializing() )
+    if( ! is_ready() )
         return;
 
     // This is the notification for "query-filter", which can get sent as a reply to a control or independently by the
@@ -321,7 +321,7 @@ void dds_device::impl::on_query_filter(json const& j, dds_sample const&)
 
 void dds_device::impl::on_set_option( json const & j, dds_sample const & )
 {
-    if( ! is_ready() && ! is_initializing() )
+    if( ! is_ready() )
         return;
 
     // This is the handler for "set-option" or "query-option", meaning someone sent a control request to set/get an
@@ -370,7 +370,7 @@ void dds_device::impl::on_set_option( json const & j, dds_sample const & )
 
 void dds_device::impl::on_query_options( json const & j, dds_sample const & )
 {
-    if( ! is_ready() && ! is_initializing() )
+    if( ! is_ready() )
         return;
 
     // This is the notification for "query-options", which can get sent as a reply to a control or independently by the
@@ -964,7 +964,7 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
     }
 
     _stream_options_received[stream_name] = true;
-    LOG_DEBUG( "[" << debug_name() << "] ... stream " << stream_name << "' received with " << stream->options().size() << " options" );
+    LOG_DEBUG( "[" << debug_name() << "] ... stream '" << stream_name << "' received " << stream->options().size() << " options" );
     if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
         _device_options_received )
         set_state( state_t::READY );

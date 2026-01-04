@@ -252,7 +252,7 @@ std::vector< std::shared_ptr< device_info > > rsdds_device_factory::query_device
         _watcher_singleton->get_device_watcher()->foreach_device(
             [&]( std::shared_ptr< realdds::dds_device > const & dev ) -> bool
             {
-                if( ! dev->is_ready( true ) )
+                if( ! dev->is_ready() )
                 {
                     LOG_DEBUG( "device '" << dev->device_info().debug_name() << "' is not ready" );
                     return true;
