@@ -23,5 +23,8 @@ namespace librealsense
         static std::vector<std::shared_ptr<d400_info>> pick_d400_devices(
                 std::shared_ptr<context> ctx,
                 platform::backend_device_group& gproup);
+
+    private:
+        bool is_debug_mode_enabled() const;
     };
 }

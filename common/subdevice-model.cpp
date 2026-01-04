@@ -31,13 +31,14 @@ namespace rs2
                                             bool * options_invalidated,
                                             std::string & error_message )
     {
-        for (rs2::option_value option : s->get_supported_option_values())
-        {
-            options_metadata[option->id]
-                = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
-        }
         try
         {
+            for( rs2::option_value option : s->get_supported_option_values() )
+            {
+                options_metadata[option->id]
+                    = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
+            }
+
             s->on_options_changed( [this]( const options_list & list )
             {
                 for( auto changed_option : list )
