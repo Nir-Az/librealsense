@@ -23,6 +23,7 @@
 
 namespace librealsense
 {
+    class context;
     typedef float float_4[4];
 
     template<typename T>
@@ -597,5 +598,8 @@ namespace librealsense
         const std::vector<uint8_t> alternating_emitter_pattern{ 0x5, ALTERNATING_EMITTER_SUBPRESET_ID, 0, 0, 0x2,
             0x4, 0x1, 0, 0x1, 0, 0, 0, 0, 0,
             0x4, 0x1, 0, 0x1, 0, 0x1, 0, 0, 0 };
+
+        bool is_partial_device_enabled( const std::shared_ptr< context > & ctx );
+
     } // librealsense::ds
 } // namespace librealsense

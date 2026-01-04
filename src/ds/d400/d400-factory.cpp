@@ -1067,15 +1067,6 @@ namespace librealsense
 
     };
 
-    bool d400_info::is_debug_mode_enabled() const
-    {
-        // Access context methods using get_context()
-        auto ctx = get_context();
-        if( ! ctx )
-            return false;
-        auto settings = ctx->get_settings();
-        return settings.nested( "d400_debug_mode" ).default_value< bool >( false );
-    }
 
     std::shared_ptr< device_interface > d400_info::create_device()
     {
@@ -1150,11 +1141,12 @@ namespace librealsense
         }
         catch( const std::exception& e )
         {
-            if( is_debug_mode_enabled() )
+            auto ctx = get_context();
+            if( ctx && is_partial_device_enabled(ctx) )
             {
                 LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
                                                    << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
-                // Allow partial devices in debug mode
+                // Allow partial devices when partial device mode is enabled
                 return std::make_shared< rs400_device >( dev_info, register_device_notifications );
             }
             else
