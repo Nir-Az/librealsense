@@ -1071,6 +1071,8 @@ namespace librealsense
     {
         // Access context methods using get_context()
         auto ctx = get_context();
+        if( ! ctx )
+            return false;
         auto settings = ctx->get_settings();
         return settings.nested( "d400_debug_mode" ).default_value< bool >( false );
     }
