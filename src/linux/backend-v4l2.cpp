@@ -1113,7 +1113,7 @@ namespace librealsense
             ind = (ind - first_video_index) % camera_video_nodes; // offset from first mipi video node and assume 6 nodes per mipi camera
             if (ind == 0 || ind == 2 || ind == 4)
                 mi = 0; // video node indicator
-            else if (ind == 1 | ind == 3 || ind == 5)
+            else if (ind == 1 || ind == 3 || ind == 5)
                 mi = 3; // metadata node indicator
             else if (ind == 6)
                 mi = 4; // IMU node indicator
