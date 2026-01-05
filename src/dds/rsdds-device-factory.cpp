@@ -43,17 +43,18 @@ class rsdds_watcher_singleton
     signal _callbacks;
 
 public:
-    rsdds_watcher_singleton( std::shared_ptr< realdds::dds_participant > const & participant )
+    rsdds_watcher_singleton( std::shared_ptr< realdds::dds_participant > const & participant,
+                             bool partial_device_allowed = false )
         : _device_watcher( std::make_shared< realdds::dds_device_watcher >( participant ) )
     {
         assert( _device_watcher->is_stopped() );
 
         _device_watcher->on_device_added(
-            [this]( std::shared_ptr< realdds::dds_device > const & dev )
+            [this, partial_device_allowed]( std::shared_ptr< realdds::dds_device > const & dev )
             {
                 try
                 {
-                    if( ! dev->wait_until_ready( 5000, true ) ) // make sure handshake was (even partially) performed, might throw
+                    if( ! dev->wait_until_ready( 5000, partial_device_allowed ) )  // make sure handshake was (even partially) performed, might throw
                         LOG_ERROR( "Discovered DDS device " << dev->debug_name()
                                    << " failed to be ready within timeout, using partial capabilities." );
                     _callbacks.raise( dev, true );
@@ -153,7 +154,8 @@ rsdds_device_factory::rsdds_device_factory( std::shared_ptr< context > const & c
                                       << "A DDS participant '" << _participant->name() << "' already exists in domain "
                                       << domain_id << "; cannot create '" << participant_name << "'" );
         }
-        _watcher_singleton = domain.device_watcher.instance( _participant );
+        bool partial_capabilities_allowed = ctx->get_settings().nested( "partial-device-allowed" ).default_value< bool >( false );
+        _watcher_singleton = domain.device_watcher.instance( _participant, partial_capabilities_allowed );
         _subscription = _watcher_singleton->subscribe(
             [liveliness = std::weak_ptr< context >( ctx ),
              cb = std::move( cb )]( std::shared_ptr< realdds::dds_device > const & dev, bool added )
