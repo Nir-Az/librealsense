@@ -1067,6 +1067,7 @@ namespace librealsense
 
     };
 
+
     std::shared_ptr< device_interface > d400_info::create_device()
     {
         using namespace ds;
@@ -1079,60 +1080,77 @@ namespace librealsense
 
         auto pid = _group.uvc_devices.front().pid;
 
-        switch(pid)
+        try
         {
-        case RS400_PID:
-            return std::make_shared< rs400_device >( dev_info, register_device_notifications );
-        case RS405U_PID:
-            return std::make_shared< rs405u_device >( dev_info, register_device_notifications );
-        case RS410_PID:
-        case RS460_PID:
-            return std::make_shared< rs410_device >( dev_info, register_device_notifications );
-        case RS415_PID:
-            return std::make_shared< rs415_device >( dev_info, register_device_notifications );
-        case RS416_PID:
-            return std::make_shared< rs416_device >( dev_info, register_device_notifications );
-        case RS416_RGB_PID:
-            return std::make_shared< rs416_rgb_device >( dev_info, register_device_notifications );
-        case RS420_PID:
-            return std::make_shared< rs420_device >( dev_info, register_device_notifications );
-        case RS421_PID:
-            return std::make_shared< rs421_device >( dev_info, register_device_notifications );
-        case RS420_MM_PID:
-            return std::make_shared< rs420_mm_device >( dev_info, register_device_notifications );
-        case RS430_PID:
-            return std::make_shared< rs430_device >( dev_info, register_device_notifications );
-        case RS430I_PID:
-            return std::make_shared< rs430i_device >( dev_info, register_device_notifications );
-        case RS430_MM_PID:
-            return std::make_shared< rs430_mm_device >( dev_info, register_device_notifications );
-        case RS430_MM_RGB_PID:
-            return std::make_shared< rs430_rgb_mm_device >( dev_info, register_device_notifications );
-        case RS435_RGB_PID:
-            return std::make_shared< rs435_device >( dev_info, register_device_notifications );
-        case RS435I_PID:
-            return std::make_shared< rs435i_device >( dev_info, register_device_notifications );
-        case RS436_PID:
-            return std::make_shared< rs436_device >(dev_info, register_device_notifications);
-        case RS_USB2_PID:
-            return std::make_shared< rs410_device >( dev_info, register_device_notifications );
-        case RS400_IMU_PID:
-            return std::make_shared< rs400_imu_device >( dev_info, register_device_notifications );
-        case RS405_PID:
-            return std::make_shared< rs405_device >( dev_info, register_device_notifications );
-        case RS455_PID:
-            return std::make_shared< rs455_device >( dev_info, register_device_notifications );
-        case RS457_PID:
-            return std::make_shared< rs457_device >( dev_info, register_device_notifications );
-        case RS430_GMSL_PID:
-            return std::make_shared< rs430_gmsl_device >( dev_info, register_device_notifications );
-        case RS415_GMSL_PID:
-            return std::make_shared< rs415_gmsl_device >(dev_info, register_device_notifications);
-        case RS401_GMSL_PID:
-            return std::make_shared< rs401_gmsl_device >( dev_info, register_device_notifications );
-        default:
-            throw std::runtime_error( rsutils::string::from() << "Unsupported RS400 model! 0x" << std::hex
-                                                              << std::setw( 4 ) << std::setfill( '0' ) << (int)pid );
+            switch( pid )
+            {
+            case RS400_PID:
+                return std::make_shared< rs400_device >( dev_info, register_device_notifications );
+            case RS405U_PID:
+                return std::make_shared< rs405u_device >( dev_info, register_device_notifications );
+            case RS410_PID:
+            case RS460_PID:
+                return std::make_shared< rs410_device >( dev_info, register_device_notifications );
+            case RS415_PID:
+                return std::make_shared< rs415_device >( dev_info, register_device_notifications );
+            case RS416_PID:
+                return std::make_shared< rs416_device >( dev_info, register_device_notifications );
+            case RS416_RGB_PID:
+                return std::make_shared< rs416_rgb_device >( dev_info, register_device_notifications );
+            case RS420_PID:
+                return std::make_shared< rs420_device >( dev_info, register_device_notifications );
+            case RS421_PID:
+                return std::make_shared< rs421_device >( dev_info, register_device_notifications );
+            case RS420_MM_PID:
+                return std::make_shared< rs420_mm_device >( dev_info, register_device_notifications );
+            case RS430_PID:
+                return std::make_shared< rs430_device >( dev_info, register_device_notifications );
+            case RS430I_PID:
+                return std::make_shared< rs430i_device >( dev_info, register_device_notifications );
+            case RS430_MM_PID:
+                return std::make_shared< rs430_mm_device >( dev_info, register_device_notifications );
+            case RS430_MM_RGB_PID:
+                return std::make_shared< rs430_rgb_mm_device >( dev_info, register_device_notifications );
+            case RS435_RGB_PID:
+                return std::make_shared< rs435_device >( dev_info, register_device_notifications );
+            case RS435I_PID:
+                return std::make_shared< rs435i_device >( dev_info, register_device_notifications );
+            case RS436_PID:
+                return std::make_shared< rs436_device >( dev_info, register_device_notifications );
+            case RS_USB2_PID:
+                return std::make_shared< rs410_device >( dev_info, register_device_notifications );
+            case RS400_IMU_PID:
+                return std::make_shared< rs400_imu_device >( dev_info, register_device_notifications );
+            case RS405_PID:
+                return std::make_shared< rs405_device >( dev_info, register_device_notifications );
+            case RS455_PID:
+                return std::make_shared< rs455_device >( dev_info, register_device_notifications );
+            case RS457_PID:
+                return std::make_shared< rs457_device >( dev_info, register_device_notifications );
+            case RS430_GMSL_PID:
+                return std::make_shared< rs430_gmsl_device >( dev_info, register_device_notifications );
+            case RS415_GMSL_PID:
+                return std::make_shared< rs415_gmsl_device >( dev_info, register_device_notifications );
+            case RS401_GMSL_PID:
+                return std::make_shared< rs401_gmsl_device >( dev_info, register_device_notifications );
+            default:
+                throw std::runtime_error( rsutils::string::from()
+                                          << "Unsupported RS400 model! 0x" << std::hex << std::setw( 4 )
+                                          << std::setfill( '0' ) << (int)pid );
+            }
+        }
+        catch( const std::exception& e )
+        {
+            auto ctx = get_context();
+            if( ctx && is_partial_device_enabled(ctx) )
+            {
+                LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
+                                                   << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
+                // Allow partial devices when partial device mode is enabled
+                return std::make_shared< rs400_device >( dev_info, register_device_notifications );
+            }
+            else
+                throw; // rethrowing exception
         }
     }
 
@@ -1198,7 +1216,13 @@ namespace librealsense
 
     std::shared_ptr<matcher> rs400_device::create_matcher(const frame_holder& frame) const
     {
-        std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get()};
+        std::vector< stream_interface * > streams;
+        if( _depth_stream )
+            streams.push_back( _depth_stream.get() );
+        if( _left_ir_stream )
+            streams.push_back( _left_ir_stream.get() );
+        if( _right_ir_stream )
+            streams.push_back( _right_ir_stream.get() );
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 
