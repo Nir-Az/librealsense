@@ -53,7 +53,7 @@ public:
     // Flags to indicate received discovery messages
     std::map< std::string, bool > _stream_header_received;
     std::map< std::string, bool > _stream_options_received;
-    bool _device_options_received;
+    bool _device_options_received = false;
     // Data stores in case streams were received out of order
     std::map< std::string, dds_options > _stream_options_for_init;
     std::map< std::string, rsutils::json > _stream_intrinsics_for_init;
