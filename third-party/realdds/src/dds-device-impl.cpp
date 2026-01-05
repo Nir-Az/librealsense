@@ -72,6 +72,11 @@ void dds_device::impl::set_state( state_t new_state )
                 _metadata_reader->run( rqos );
             }
         }
+        // Remove stream if object not created (only stream options received, not stream header)
+        for( auto stream = _streams.begin(); stream != _streams.end(); stream++ )
+            if( ! stream->second )
+                stream = _streams.erase( stream );  
+
         LOG_DEBUG( "[" << debug_name() << "] device is ready" );
     }
 
@@ -817,6 +822,9 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
     auto & stream_type = j.at( topics::notification::stream_header::key::type ).string_ref();
     auto & stream_name = j.at( topics::notification::stream_header::key::name ).string_ref();
 
+    if( _stream_header_received.size() >= _n_streams_expected )
+        DDS_THROW( runtime_error, "more streams than expected (" << _n_streams_expected << ") received" );
+
     if( _stream_header_received[stream_name] )
     {
         LOG_WARNING( "[" << debug_name() << "] stream header for stream '" << stream_name << "' already received. Ignoring..." );
@@ -824,11 +832,7 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
     }
 
     auto & stream = _streams[stream_name];
-    if( _streams.size() > _n_streams_expected )
-        DDS_THROW( runtime_error, "more streams than expected (" << _n_streams_expected << ") received" );
-
     auto & sensor_name = j.at( topics::notification::stream_header::key::sensor_name ).string_ref();
-    size_t default_profile_index = j.at( "default-profile-index" ).get< size_t >();
     dds_stream_profiles profiles;
 
 #define TYPE2STREAM( S, P )                                                                                            \
@@ -855,6 +859,7 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
         stream->enable_metadata();  // Call before init_profiles
     }
 
+    size_t default_profile_index = j.at( "default-profile-index" ).get< size_t >();
     if( default_profile_index < profiles.size() )
         stream->init_profiles( profiles, default_profile_index );
     else
@@ -869,6 +874,11 @@ void dds_device::impl::on_stream_header( json const & j, dds_sample const & samp
     LOG_DEBUG( "[" << debug_name() << "] ... stream " << _streams.size() << "/" << _n_streams_expected << " '" << stream_name
                              << "' received with " << profiles.size() << " profiles"
                              << ( stream->metadata_enabled() ? " and metadata" : "" ) );
+
+    // Handle out of order stream-options message
+    init_stream_options_if_possible( stream_name, stream );
+    init_stream_filters_if_possible( stream_name, stream );
+    init_stream_intrinsics_if_possible( stream_name, stream );
 
     if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
         _device_options_received )
@@ -889,6 +899,10 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
         return;
     }
 
+    // Note - stream object is created when handling stream-header message.
+    // We try to handle out of order messages so we keep data in dedicated member than test if object exists before accessing it
+
+    size_t num_of_options = 0;
     if( auto options_j = j.nested( topics::notification::stream_options::key::options ) )
     {
         dds_options options;
@@ -902,46 +916,13 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
             }
             catch( std::exception const& e )
             {
-                LOG_ERROR( "[" << debug_name() << "] Invalid option for stream " << stream->name()
-                               << ". Error: " << e.what() << ", reading" << option_j );
+                LOG_ERROR( "[" << debug_name() << "] Invalid option for stream '" << stream_name
+                               << "'. Error: " << e.what() << ", reading" << option_j );
             }
         }
-        stream->init_options( options );
-    }
-
-    if( auto j_int = j.nested( topics::notification::stream_options::key::intrinsics ) )
-    {
-        if( auto video_stream = std::dynamic_pointer_cast< dds_video_stream >( stream ) )
-        {
-            try
-            {
-                std::set< video_intrinsics > intrinsics;
-                if( j_int.is_array() )
-                {
-                    // Multiple resolutions are provided, likely from legacy devices from the adapter
-                    for( auto & intr : j_int )
-                        intrinsics.insert( video_intrinsics::from_json( intr ) );
-                }
-                else
-                {
-                    // Single intrinsics that will get scaled
-                    intrinsics.insert( video_intrinsics::from_json( j_int ) );
-                }
-                video_stream->set_intrinsics( intrinsics );
-            }
-            catch( std::exception const & e )
-            {
-                LOG_ERROR( "[" << debug_name() << "] Invalid intrinsics for stream " << stream->name()
-                               << ". Error: " << e.what() << ", reading" << j_int );
-            }
-        }
-        else if( auto motion_stream = std::dynamic_pointer_cast< dds_motion_stream >( stream ) )
-        {
-            motion_stream->set_accel_intrinsics( motion_intrinsics::from_json(
-                j_int.at( topics::notification::stream_options::intrinsics::key::accel ) ) );
-            motion_stream->set_gyro_intrinsics( motion_intrinsics::from_json(
-                j_int.at( topics::notification::stream_options::intrinsics::key::gyro ) ) );
-        }
+        num_of_options = options.size();
+        _stream_options_for_init[stream_name] = std::move( options );
+        init_stream_options_if_possible( stream_name, stream );
     }
 
     if (auto embedded_filters_j = j.nested(topics::notification::stream_options::key::embedded_filters))
@@ -956,20 +937,98 @@ void dds_device::impl::on_stream_options( json const & j, dds_sample const & sam
             }
             catch (std::exception const& e)
             {
-                LOG_ERROR( "[" << debug_name() << "] Invalid embedded filter for stream " << stream->name()
-                               << ". Error: " << e.what() << ", reading" << embedded_filter_j );
+                LOG_ERROR( "[" << debug_name() << "] Invalid embedded filter for stream '" << stream_name
+                               << "'. Error: " << e.what() << ", reading" << embedded_filter_j );
             }            
         }
-        stream->init_embedded_filters(std::move(embedded_filters));
+        _stream_filters_for_init[stream_name] = std::move( embedded_filters );
+        init_stream_filters_if_possible( stream_name, stream );
     }
+    
+    _stream_intrinsics_for_init[stream_name] = j.nested( topics::notification::stream_options::key::intrinsics );
+    init_stream_intrinsics_if_possible( stream_name, stream );
 
     _stream_options_received[stream_name] = true;
-    LOG_DEBUG( "[" << debug_name() << "] ... stream '" << stream_name << "' received " << stream->options().size() << " options" );
+    LOG_DEBUG( "[" << debug_name() << "] ... stream '" << stream_name << "' received " << num_of_options << " options" );
+
     if( _stream_header_received.size() == _n_streams_expected && _stream_options_received.size() == _n_streams_expected &&
         _device_options_received )
         set_state( state_t::READY );
 }
 
+void dds_device::impl::init_stream_options_if_possible( const std::string & stream_name,
+                                                        std::shared_ptr< realdds::dds_stream > & stream )
+{
+    auto opt_it = _stream_options_for_init.find( stream_name );
+    if( opt_it != _stream_options_for_init.end() )
+    {
+        if( stream )
+        {
+            stream->init_options( opt_it->second );
+            _stream_options_for_init.erase( opt_it );
+        }
+    }
+}
+
+void dds_device::impl::init_stream_filters_if_possible( const std::string & stream_name,
+                                                        std::shared_ptr< realdds::dds_stream > & stream )
+{
+    auto filter_it = _stream_filters_for_init.find( stream_name );
+    if( filter_it != _stream_filters_for_init.end() )
+    {
+        if( stream )
+        {
+            stream->init_embedded_filters( std::move( filter_it->second ) );
+            _stream_filters_for_init.erase( filter_it );
+        }
+    }
+}
+
+void dds_device::impl::init_stream_intrinsics_if_possible( const std::string & stream_name,
+                                                           std::shared_ptr< realdds::dds_stream > & stream )
+{
+    auto intr_it = _stream_intrinsics_for_init.find( stream_name );
+    if( intr_it != _stream_intrinsics_for_init.end() )
+    {
+        rsutils::json_ref j_int = intr_it->second;
+        if( stream && j_int)
+        {
+            // Logic moved here from on_stream_options because it depends on stream dynamic type
+            if( auto video_stream = std::dynamic_pointer_cast< dds_video_stream >( stream ) )
+            {
+                try
+                {
+                    std::set< video_intrinsics > intrinsics;
+                    if( j_int.is_array() )
+                    {
+                        // Multiple resolutions are provided, likely from legacy devices from the adapter
+                        for( auto & intr : j_int )
+                            intrinsics.insert( video_intrinsics::from_json( intr ) );
+                    }
+                    else
+                    {
+                        // Single intrinsics that will get scaled
+                        intrinsics.insert( video_intrinsics::from_json( j_int ) );
+                    }
+                    video_stream->set_intrinsics( intrinsics );
+                }
+                catch( std::exception const & e )
+                {
+                    LOG_ERROR( "[" << debug_name() << "] Invalid intrinsics for stream '" << stream_name
+                                   << "'. Error: " << e.what() << ", reading" << j_int );
+                }
+            }
+            else if( auto motion_stream = std::dynamic_pointer_cast< dds_motion_stream >( stream ) )
+            {
+                motion_stream->set_accel_intrinsics( motion_intrinsics::from_json(
+                    j_int.at( topics::notification::stream_options::intrinsics::key::accel ) ) );
+                motion_stream->set_gyro_intrinsics( motion_intrinsics::from_json(
+                    j_int.at( topics::notification::stream_options::intrinsics::key::gyro ) ) );
+            }
+            _stream_intrinsics_for_init.erase( intr_it );
+        }
+    }
+}
 
 void dds_device::impl::on_calibration_changed( json const & j, dds_sample const & sample )
 {

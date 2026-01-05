@@ -56,7 +56,8 @@ public:
 
     // Wait until ready. Will throw if not ready within the timeout!
     // In case of network message loss, device may have partial capabilities for better user experience.
-    void wait_until_ready( size_t timeout_ms = 5000, bool allow_partial_capabilities = false ) const;
+    // Will return false if partial initialization allowed and waiting for initialization, true otherwise. 
+    bool wait_until_ready( size_t timeout_ms = 5000, bool allow_partial_capabilities = false ) const;
 
     // A device is offline when discovery is lost, and assumed online otherwise
     bool is_online() const;

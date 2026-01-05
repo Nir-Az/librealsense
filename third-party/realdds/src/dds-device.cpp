@@ -37,10 +37,10 @@ bool dds_device::is_online() const
 }
 
 
-void dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabilities ) const
+bool dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabilities ) const
 {
     if( is_ready() )
-        return;
+        return true;
 
     if( ! timeout_ms )
         DDS_THROW( runtime_error, "device is " << ( is_online() ? "not ready" : "offline" ) );
@@ -55,7 +55,7 @@ void dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabil
             if( allow_partial_capabilities && _impl->is_initializing() )
             {
                 _impl->set_state( impl::state_t::READY );
-                return;
+                return false;
             }
             DDS_THROW( runtime_error, "[" << debug_name() << "] timeout waiting to get ready" );
         }
@@ -69,6 +69,8 @@ void dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabil
             was_online = is_online();
     }
     while( ! is_ready() );
+
+    return true;
 }
 
 

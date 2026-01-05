@@ -53,8 +53,7 @@ public:
             {
                 try
                 {
-                    dev->wait_until_ready( 5000, true );  // make sure handshake was (even partially) performed, might throw
-                    if( ! dev->is_ready() )
+                    if( ! dev->wait_until_ready( 5000, true ) ) // make sure handshake was (even partially) performed, might throw
                         LOG_ERROR( "Discovered DDS device " << dev->debug_name()
                                    << " failed to be ready within timeout, using partial capabilities." );
                     _callbacks.raise( dev, true );
