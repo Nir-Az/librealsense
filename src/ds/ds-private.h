@@ -599,7 +599,7 @@ namespace librealsense
             0x4, 0x1, 0, 0x1, 0, 0, 0, 0, 0,
             0x4, 0x1, 0, 0x1, 0, 0x1, 0, 0, 0 };
 
-        bool is_partial_device_enabled( const std::shared_ptr< context > & ctx );
+        bool is_partial_device_allowed( const std::shared_ptr< context > & ctx );
 
     } // librealsense::ds
 } // namespace librealsense

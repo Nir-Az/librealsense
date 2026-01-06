@@ -34,9 +34,7 @@ public:
     {
         OFFLINE,                  // disconnected by device-watcher
         ONLINE,                   // default state, waiting for handshake (device-header)
-        WAIT_FOR_DEVICE_OPTIONS,  //   |
-        WAIT_FOR_STREAM_HEADER,   //   | handshake (initialization)
-        WAIT_FOR_STREAM_OPTIONS,  //   |
+        INITIALIZING,             // handshake with device
         READY                     // post handshake; streamable, controllable, etc.
     };
 
@@ -52,6 +50,14 @@ public:
     std::shared_ptr< dds_subscriber > _subscriber;
 
     std::map< std::string, std::shared_ptr< dds_stream > > _streams;
+    // Flags to indicate received discovery messages
+    std::map< std::string, bool > _stream_header_received;
+    std::map< std::string, bool > _stream_options_received;
+    bool _device_options_received = false;
+    // Data stores in case streams were received out of order
+    std::map< std::string, dds_options > _stream_options_for_init;
+    std::map< std::string, rsutils::json > _stream_intrinsics_for_init;
+    std::map< std::string, dds_embedded_filters > _stream_filters_for_init;
 
     std::mutex _replies_mutex;
     std::condition_variable _replies_cv;
@@ -77,6 +83,7 @@ public:
 
     bool is_offline() const { return state_t::OFFLINE == _state; }
     bool is_online() const { return ! is_offline(); }
+    bool is_initializing() const { return state_t::INITIALIZING == _state; }
     bool is_ready() const { return state_t::READY == _state; }
 
     void open( const dds_stream_profiles & profiles );
@@ -134,6 +141,9 @@ private:
     void on_device_options( rsutils::json const &, dds_sample const & );
     void on_stream_header( rsutils::json const &, dds_sample const & );
     void on_stream_options( rsutils::json const &, dds_sample const & );
+    void init_stream_options_if_possible( const std::string & stream_name, std::shared_ptr< realdds::dds_stream > & stream );
+    void init_stream_filters_if_possible( const std::string & stream_name, std::shared_ptr< realdds::dds_stream > & stream );
+    void init_stream_intrinsics_if_possible( const std::string & stream_name, std::shared_ptr< realdds::dds_stream > & stream );
     void on_calibration_changed( rsutils::json const &, dds_sample const & );
 
     void on_notification( rsutils::json &&, dds_sample const & );

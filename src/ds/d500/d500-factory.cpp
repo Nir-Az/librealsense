@@ -323,11 +323,11 @@ public:
         catch( const std::exception & e )
         {
             auto ctx = get_context();
-            if( ctx && is_partial_device_enabled( ctx ) )
+            if( ctx && is_partial_device_allowed( ctx ) )
             {
                 LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
                                                    << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
-                // Allow partial devices when partial device mode is enabled
+                // Create a device with partial capabilities when allowed instead of failing
                 return std::make_shared< rs500_device >( dev_info );
             }
             else
