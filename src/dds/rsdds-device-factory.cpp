@@ -54,7 +54,8 @@ public:
             {
                 try
                 {
-                    if( ! dev->wait_until_ready( 5000, partial_device_allowed ) )  // make sure handshake was (even partially) performed, might throw
+                    size_t default_timeout_ms = 5000; // Default timeout of wait_until_ready function
+                    if( ! dev->wait_until_ready( default_timeout_ms, partial_device_allowed ) )  // make sure handshake was (even partially) performed, might throw
                         LOG_ERROR( "Discovered DDS device " << dev->debug_name()
                                    << " failed to be ready within timeout, using partial capabilities." );
                     _callbacks.raise( dev, true );

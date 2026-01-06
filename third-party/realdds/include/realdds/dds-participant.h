@@ -141,6 +141,7 @@ public:
 
     // Common utility: a participant is usually used as the base for printing guids, to better abbreviate
     // prefixes and even completely remove the participant part of the GUID if it's a local one...
+    // Can choose to print only base (participant) or also entity id (reader/writer)
     //
     std::string print( dds_guid const & guid_to_print, bool print_entity = false ) const;
 
