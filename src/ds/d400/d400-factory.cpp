@@ -78,7 +78,7 @@ namespace librealsense
         };
     };
 
-    class rs401_gmsl_device : //public d400_color,
+    class rs401_gmsl_device : public d400_color,
                               public d400_nonmonochrome,
                               public d400_mipi_device,
                               public firmware_logger_device
@@ -88,7 +88,7 @@ namespace librealsense
             : device( dev_info, register_device_notifications )
             , backend_device( dev_info, register_device_notifications )
             , d400_device( dev_info )
-            //, d400_color( dev_info )
+            , d400_color( dev_info )
             , d400_nonmonochrome( dev_info )
             , d400_mipi_device()
             , firmware_logger_device( dev_info, d400_device::_hw_monitor, get_firmware_logs_command(), get_flash_logs_command() )
@@ -1228,7 +1228,7 @@ namespace librealsense
 
     std::shared_ptr<matcher> rs401_gmsl_device::create_matcher(const frame_holder& frame) const
     {
-        std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get() };
+        std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 
