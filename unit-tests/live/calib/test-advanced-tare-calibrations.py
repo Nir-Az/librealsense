@@ -241,6 +241,7 @@ if not is_mipi_device() and not is_d555():
                 test.check(_target_z > TARGET_Z_MIN and _target_z < TARGET_Z_MAX)
             image_width, image_height, fps = (256, 144, 90)
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
+            restore_calibration_table(calib_dev, None)
             calib_dev, saved_table = run_advanced_tare_calibration_test(host_assistance, config, pipeline, calib_dev, image_width, image_height, fps, _target_z)
         except Exception as e:
             log.e("Tare calibration with principal point modification failed: ", str(e))
@@ -248,7 +249,7 @@ if not is_mipi_device() and not is_d555():
         finally:
             if calib_dev is not None and getattr(test, 'test_failed', True):
                 log.i("Restoring calibration table after test failure")
-                restore_calibration_table(calib_dev, saved_table)
+                restore_calibration_table(calib_dev, None)
 
 """
 temprorary disabled on mipi devices to stabilize the lab
@@ -266,13 +267,14 @@ if is_mipi_device() and not is_d555():
             image_width, image_height, fps = (1280, 720, 30)
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
             calib_dev, saved_table = run_advanced_tare_calibration_test(host_assistance, config, pipeline, calib_dev, image_width, image_height, fps, _target_z)
+            restore_calibration_table(calib_dev, None)
         except Exception as e:
             log.e("Tare calibration with principal point modification failed: ", str(e))
             test.fail()
         finally:
             if calib_dev is not None and getattr(test, 'test_failed', True):
                 log.i("Restoring calibration table after test failure")
-                restore_calibration_table(calib_dev, saved_table)
+                restore_calibration_table(calib_dev, None)
 """
 test.print_results_and_exit()
 

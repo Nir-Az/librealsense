@@ -173,7 +173,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
                 if dist_post_gt_mm > dist_modified_gt_mm + DEPTH_CONVERGENCE_TOLERANCE_MM:
                     log.e("Post-calibration average depth did not converge toward ground truth")
                     depth_check_failed = True
-                    restore_calibration_table(calib_dev, saved_table)
+                    restore_calibration_table(calib_dev, None)
                 else:
                     improvement = dist_modified_gt_mm - dist_post_gt_mm
                     log.i(f"Post-calibration average depth converged toward ground truth (improvement={improvement:.1f} mm)")
@@ -205,6 +205,7 @@ if not is_mipi_device() and not is_d555():
             image_width, image_height, fps = (256, 144, 90)
             ground_truth_mm = None  # Example ground-truth depth (mm); adjust if known
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
+            restore_calibration_table(calib_dev, None)
             calib_dev, saved_table = run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_dev, image_width, image_height, fps, modify_ppy=True, ground_truth_mm=ground_truth_mm)
         except Exception as e:
             log.e("OCC calibration with principal point modification failed: ", str(e))
@@ -212,7 +213,7 @@ if not is_mipi_device() and not is_d555():
         finally:
             if calib_dev is not None and getattr(test, 'test_failed', True):
                 log.i("Restoring calibration table after test failure")
-                restore_calibration_table(calib_dev, saved_table)
+                restore_calibration_table(calib_dev, None)
 """
 temprorary disabled on mipi devices to stabilize the lab
 if is_mipi_device() and not is_d555():
@@ -225,6 +226,7 @@ if is_mipi_device() and not is_d555():
             image_width, image_height, fps = (1280, 720, 30)
             ground_truth_mm = None  # Example ground-truth depth (mm); adjust if known
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
+            restore_calibration_table(calib_dev, None)
             calib_dev, saved_table = run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_dev, image_width, image_height, fps, modify_ppy=True, ground_truth_mm=ground_truth_mm)
         except Exception as e:
             log.e("OCC calibration with principal point modification failed: ", str(e))
@@ -232,7 +234,7 @@ if is_mipi_device() and not is_d555():
         finally:
             if calib_dev is not None and getattr(test, 'test_failed', True):
                 log.i("Restoring calibration table after test failure")
-                restore_calibration_table(calib_dev, saved_table)
+                restore_calibration_table(calib_dev, None)
 """
 test.print_results_and_exit()
 
