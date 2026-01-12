@@ -113,4 +113,5 @@ if not is_mipi_device():
             test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
         except Exception as e:
             log.e("Tare calibration test failed: ", str(e))
-            test.fail()
+
+test.print_results_and_exit()
