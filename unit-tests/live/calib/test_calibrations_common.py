@@ -273,13 +273,12 @@ def save_calibration_table(device):
         return None
 
 
-def restore_calibration_table(device, saved_table=None, use_factory=False):
+def restore_calibration_table(device, saved_table=None):
     """Restore calibration table from saved data or factory reset.
     
     Args:
         device: auto_calibrated_device or regular device
         saved_table (bytes): Previously saved calibration table. If None, uses factory reset.
-        use_factory (bool): If True, perform factory reset regardless of saved_table
         
     Returns:
         bool: True if restoration successful, False otherwise
@@ -298,7 +297,7 @@ def restore_calibration_table(device, saved_table=None, use_factory=False):
             return False
 
         # Option 1: Factory reset
-        if use_factory or saved_table is None:
+        if saved_table is None:
             log.i("Restoring factory calibration")
             auto_calib_device.reset_to_factory_calibration()
             return True
