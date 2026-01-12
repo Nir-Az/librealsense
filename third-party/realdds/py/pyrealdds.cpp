@@ -1,16 +1,18 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-defines.h>
 #include <realdds/dds-participant.h>
 #include <realdds/topics/device-info-msg.h>
 #include <realdds/topics/flexible-msg.h>
 #include <realdds/topics/flexible/flexiblePubSubTypes.h>
+#include <realdds/topics/compressed-image-msg.h>
 #include <realdds/topics/image-msg.h>
 #include <realdds/topics/imu-msg.h>
 #include <realdds/topics/blob-msg.h>
 #include <realdds/topics/ros2/participant-entities-info-msg.h>
 #include <realdds/topics/blob/blobPubSubTypes.h>
+#include <realdds/topics/ros2/sensor_msgs/msg/CompressedImagePubSubTypes.h>
 #include <realdds/topics/ros2/sensor_msgs/msg/ImagePubSubTypes.h>
 #include <realdds/topics/ros2/sensor_msgs/msg/ImuPubSubTypes.h>
 #include <realdds/topics/ros2/rmw_dds_common/msg/ParticipantEntitiesInfoPubSubTypes.h>
@@ -178,9 +180,10 @@ PYBIND11_MODULE(NAME, m) {
                      []( std::string const & raw_guid ) { return realdds::guid_from_string( raw_guid ); } )
         .def( "__bool__", []( dds_guid const & self ) { return self != realdds::unknown_guid; } )
         .def( "__str__",
-              []( dds_guid const & self ) { return rsutils::string::from( realdds::print_guid( (self) ) ).str(); } )
+              []( dds_guid const & self )
+              { return rsutils::string::from( realdds::print_guid( self, realdds::unknown_guid, true ) ).str(); } )
         .def( "__repr__",
-              []( dds_guid const & self ) { return rsutils::string::from( realdds::print_raw_guid( ( self ) ) ).str(); } )
+              []( dds_guid const & self ) { return rsutils::string::from( realdds::print_raw_guid( self ) ).str(); } )
         // Following two (hash and ==) are needed if we want to be able to use guids as dictionary keys
         .def( "__hash__",
               []( dds_guid const & self )
@@ -560,7 +563,7 @@ PYBIND11_MODULE(NAME, m) {
               []( SampleIdentity const & self )
               {
                   std::ostringstream os;
-                  os << realdds::print_guid( self.writer_guid() );
+                  os << realdds::print_guid( self.writer_guid(), realdds::unknown_guid, true );
                   os << '.';
                   os << self.sequence_number();
                   return os.str();
@@ -578,7 +581,7 @@ PYBIND11_MODULE(NAME, m) {
                   std::ostringstream os;
                   os << "<sample #" << self.sample_identity.sequence_number();
                   os << " @ " << realdds::time_to_string( self.reception_timestamp );
-                  os << " from " << realdds::print_guid( self.sample_identity.writer_guid() );
+                  os << " from " << realdds::print_guid( self.sample_identity.writer_guid(), realdds::unknown_guid, true );
                   os << ">";
                   return os.str();
               } );
@@ -719,6 +722,50 @@ PYBIND11_MODULE(NAME, m) {
             py::call_guard< py::gil_scoped_release >() )
         /*.def("write_to", &image_msg::write_to, py::call_guard< py::gil_scoped_release >())*/;
 
+    using compressed_image_msg = realdds::topics::compressed_image_msg;
+    py::class_< compressed_image_msg, std::shared_ptr< compressed_image_msg > >( message, "compressed_image" )
+        .def( py::init<>() )
+        .def_static( "create_topic", &compressed_image_msg::create_topic )
+        .def_property(
+            "data",
+            []( compressed_image_msg const & self ) { return py::memoryview::from_memory( self.raw().data().data(), self.raw().data().size() ); },
+            []( compressed_image_msg & self, std::vector< uint8_t > bytes ) { self.raw().data( std::move( bytes ) ); } )
+        .def_property( "format", &compressed_image_msg::format, &compressed_image_msg::set_format )
+        .def_property( "timestamp", &compressed_image_msg::timestamp, &compressed_image_msg::set_timestamp )
+        .def_property( "frame_id", &compressed_image_msg::frame_id, &compressed_image_msg::set_frame_id )
+        .def( "__bool__", &compressed_image_msg::is_valid )
+        .def( "__repr__",
+              []( compressed_image_msg const & self )
+              {
+                  std::ostringstream os;
+                  os << "<" SNAME ".message.compressed_image";
+                  if( self.is_valid() )
+                  {
+                      if( ! self.frame_id().empty() )
+                          os << " " << self.frame_id();
+                      if( ! self.format().empty() )
+                          os << " '" << self.format() << "'";
+                  }
+                  os << " @ " << realdds::time_to_string( self.timestamp() );
+                  os << ">";
+                  return os.str();
+              } )
+        .def_static(
+            "take_next",
+            []( dds_topic_reader & reader, dds_sample * sample )
+            {
+                auto actual_type = reader.topic()->get()->get_type_name();
+                if( actual_type != compressed_image_msg::type().getName() )
+                    throw std::runtime_error( "can't initialize raw::compressed_image from " + actual_type );
+                compressed_image_msg data;
+                if( ! compressed_image_msg::take_next( reader, &data, sample ) )
+                    assert( ! data.is_valid() );
+                return data;
+            },
+            py::arg( "reader" ),
+            py::arg( "sample" ) = nullptr,
+            py::call_guard< py::gil_scoped_release >() )
+        /*.def("write_to", &compressed_image_msg::write_to, py::call_guard< py::gil_scoped_release >())*/;
 
     using participant_entities_info_msg = realdds::topics::ros2::participant_entities_info_msg;
     py::class_< participant_entities_info_msg, std::shared_ptr< participant_entities_info_msg > >( message, "participant_entities_info" )
@@ -733,7 +780,7 @@ PYBIND11_MODULE(NAME, m) {
                   os << "<" SNAME ".message.participant_entities_info";
                   if( self.is_valid() )
                   {
-                      os << " " << realdds::print_guid( self.gid() );
+                      os << " " << realdds::print_guid( self.gid(), realdds::unknown_guid, true );
                       if( ! self.nodes().empty() )
                           os << " ";
                       for( auto & node : self.nodes() )
@@ -905,6 +952,28 @@ PYBIND11_MODULE(NAME, m) {
                   return os.str();
               } );
 
+    using realdds::dds_embedded_filter;
+    py::class_< dds_embedded_filter, std::shared_ptr< dds_embedded_filter > > embedded_filter_base(m, "embedded_filter");
+    embedded_filter_base //
+        .def_static("from_json", &dds_embedded_filter::from_json)
+        .def("init", &dds_embedded_filter::init)
+        .def("init_options", &dds_embedded_filter::init_options)
+        .def("set_options", &dds_embedded_filter::set_options)
+        .def("to_json", &dds_embedded_filter::to_json)
+        .def("get_name", &dds_embedded_filter::get_name);
+
+    using realdds::dds_decimation_filter;
+    py::class_< dds_decimation_filter, dds_embedded_filter, std::shared_ptr< dds_decimation_filter > > decimation_embedded_filter(m, "decimation_embedded_filter");
+    decimation_embedded_filter //
+        .def_static("from_json", &dds_decimation_filter::from_json)
+        .def(py::init<>());
+
+    using realdds::dds_temporal_filter;
+    py::class_< dds_temporal_filter, dds_embedded_filter, std::shared_ptr< dds_temporal_filter > > temporal_embedded_filter(m, "temporal_embedded_filter");
+    temporal_embedded_filter //
+        .def_static("from_json", &dds_temporal_filter::from_json)
+        .def(py::init<>());
+
     using realdds::dds_video_encoding;
     py::class_< dds_video_encoding > video_encoding( m, "video_encoding" );
     video_encoding  //
@@ -966,6 +1035,7 @@ PYBIND11_MODULE(NAME, m) {
         .def( "enable_metadata", &dds_stream_base::enable_metadata )
         .def( "init_profiles", &dds_stream_base::init_profiles )
         .def( "init_options", &dds_stream_base::init_options )
+        .def( "init_embedded_filters", &dds_stream_base::init_embedded_filters)
         .def( "default_profile_index", &dds_stream_base::default_profile_index )
         .def( "default_profile", &dds_stream_base::default_profile )
         .def( "options", &dds_stream_base::options )
@@ -1089,9 +1159,9 @@ PYBIND11_MODULE(NAME, m) {
         .def( "get_intrinsics", &dds_video_stream::get_intrinsics )
         .def( FN_FWD( dds_video_stream,
                       on_data_available,
-                      ( dds_video_stream *, image_msg &&, dds_sample && ),
-                      ( image_msg && i, dds_sample && sample ),
-                      callback( self, std::move( i ), std::move( sample ) ); ) );
+                      ( dds_video_stream *, std::vector< uint8_t > && image_buffer, dds_time && image_time, dds_sample && ),
+                      ( std::vector< uint8_t > && i, dds_time && t, dds_sample && sample ),
+                      callback( self, std::move( i ), std::move( t ), std::move( sample ) ); ) );
 
     using realdds::dds_depth_stream;
     py::class_< dds_depth_stream, std::shared_ptr< dds_depth_stream > >( m, "depth_stream", video_stream_client_base )
@@ -1155,7 +1225,7 @@ PYBIND11_MODULE(NAME, m) {
         .def( "wait_until_ready",
               &dds_device::wait_until_ready,
               py::call_guard< py::gil_scoped_release >(),
-              "timeout-ms"_a = 5000 )
+              "timeout-ms"_a = 5000, py::arg_v( "allow_partial_capabilities", false, "False" ) )
         .def( "wait_until_online",
               &dds_device::wait_until_online,
               py::call_guard< py::gil_scoped_release >(),
@@ -1201,6 +1271,8 @@ PYBIND11_MODULE(NAME, m) {
               } )
         .def( "set_option_value", &dds_device::set_option_value )
         .def( "query_option_value", &dds_device::query_option_value )
+        .def( "set_filter_value", &dds_device::set_embedded_filter)
+        .def( "query_filter_value", &dds_device::query_embedded_filter)
         .def(
             "send_control",
             []( dds_device & self, json const & j, bool wait_for_reply )

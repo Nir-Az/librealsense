@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <rsutils/os/network-adapter-watcher.h>
 #include <rsutils/shared-ptr-singleton.h>
@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <poll.h>
+#include <thread>
 
 #endif
 #endif  // ! __APPLE__ && ! __ANDROID__

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include "dds-defines.h"
@@ -22,6 +22,7 @@ class device_info;
 
 
 class dds_participant;
+class dds_embedded_filter;
 
 
 // Represents a device via the DDS system. Such a device exists as of its identification by the device-watcher, and
@@ -54,7 +55,10 @@ public:
     bool is_ready() const;
 
     // Wait until ready. Will throw if not ready within the timeout!
-    void wait_until_ready( size_t timeout_ms = 5000 );
+    // In case of network message loss, device may have partial capabilities for better user experience.
+    // Will throw if allow_partial_capabilities is false and device is not fully initialized.
+    // Will return false if partial initialization allowed and initialization not fully done by timeout, true otherwise. 
+    bool wait_until_ready( size_t timeout_ms = 5000, bool allow_partial_capabilities = false ) const;
 
     // A device is offline when discovery is lost, and assumed online otherwise
     bool is_online() const;
@@ -77,11 +81,15 @@ public:
     size_t foreach_option( std::function< void( std::shared_ptr< dds_option > option ) > fn ) const;
 
     void open( const dds_stream_profiles & profiles );
+    void close( const dds_stream_profiles & profiles );
 
     void set_option_value( const std::shared_ptr< dds_option > & option, rsutils::json new_value );
     rsutils::json query_option_value( const std::shared_ptr< dds_option > & option );
 
-    void send_control( rsutils::json const &, rsutils::json * reply = nullptr );
+    void set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, const rsutils::json& options_value);
+    rsutils::json query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter);
+
+    void send_control( rsutils::json const &, rsutils::json * reply = nullptr ) const;
 
     bool has_extrinsics() const;
     std::shared_ptr< extrinsics > get_extrinsics( std::string const & from, std::string const & to ) const;
@@ -109,7 +117,7 @@ protected:
 
 private:
     class impl;
-    std::shared_ptr< impl > _impl;
+    mutable std::shared_ptr< impl > _impl;
 };
 
 

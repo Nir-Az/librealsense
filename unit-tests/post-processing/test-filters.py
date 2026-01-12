@@ -1,5 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #temporary fix to prevent the test from running on Win_SH_Py_DDS_CI
 #test:donotrun:dds
@@ -51,7 +51,7 @@ PP_Tests_List = [
 # Extensions for post-processing test files
 PP_Test_extensions_List = [".Input.raw", ".Input.csv", ".Output.raw", ".Output.csv"]
 
-PP_TESTS_URL = "https://librealsense.intel.com/rs-tests/post_processing_tests_2018_ww18/"
+PP_TESTS_URL = "https://librealsense.realsenseai.com/rs-tests/post_processing_tests_2018_ww18/"
 
 def get_sequence_length(contents):
     sequence_length = 1

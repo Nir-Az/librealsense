@@ -1,10 +1,11 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include "rs-dds-depth-sensor-proxy.h"
 #include "rs-dds-option.h"
 
 #include <realdds/topics/dds-topic-names.h>
+#include <src/dds/rs-dds-embedded-filter.h>
 
 #include <src/stream.h>
 #include <src/librealsense-exception.h>
@@ -12,7 +13,6 @@
 
 
 namespace librealsense {
-
 
 float dds_depth_sensor_proxy::get_depth_scale() const
 {
@@ -86,5 +86,40 @@ void dds_depth_sensor_proxy::add_frame_metadata( frame * const f, rsutils::json 
     super::add_frame_metadata( f, dds_md, streaming );
 }
 
+bool dds_depth_sensor_proxy::extend_to( rs2_extension extension_type, void ** ptr )
+{
+    if( extension_type == RS2_EXTENSION_DEPTH_SENSOR )
+    {
+        if( auto ext = As< librealsense::depth_sensor >( this ) )
+        {
+            *ptr = ext;
+            return true;
+        }
+    }
+    else if( extension_type == RS2_EXTENSION_DEPTH_STEREO_SENSOR )
+    {
+        if( auto ext = As< librealsense::depth_stereo_sensor >( this ) )
+        {
+            *ptr = ext;
+            return true;
+        }
+    }
+    return super::extend_to( extension_type, ptr );
+}
+
+embedded_filters dds_depth_sensor_proxy::get_supported_embedded_filters() const
+{
+    embedded_filters filters;
+    for (auto& embedded_filter : _embedded_filters)
+    {
+        filters.push_back(embedded_filter.second);
+    }
+    return filters;
+}
+
+void dds_depth_sensor_proxy::add_embedded_filter(std::shared_ptr< embedded_filter_interface > embedded_filter)
+{
+    _embedded_filters.insert(std::make_pair(embedded_filter->get_type(), embedded_filter));
+}
 
 }  // namespace librealsense

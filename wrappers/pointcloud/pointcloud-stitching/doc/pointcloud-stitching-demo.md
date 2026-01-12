@@ -24,9 +24,9 @@ The application assumes the calibration matrix between the devices is known and 
 1.	The application uses a precalculated calibration matrix. There is no real-time calibration. Therefore, the cameras should be fixed firmly in relation to each other.
 2.	Although the stitching process itself is invariant to the amount of overlapping between the cameras, the calibration process may be affected by it.
 3.	You can use your own mount. For the sake of this manual, we use the demonstration mount available in 2 parts here:
-[Part4-base](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/Part4-base.STL)
+[Part4-base](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/Part4-base.STL)
 and here:
-[Part1-D435stand](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/Part1-D435stand.STL)
+[Part1-D435stand](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/Part1-D435stand.STL)
 </br>
 
 For this demonstration we used 2 x D435i cameras. At VGA resolution it provides Depth FOV of 75x62 degrees and Color FOV of 69x42 degrees.</br>
@@ -191,18 +191,18 @@ For example:
 ```
 rs-pointcloud-stitching.exe C:\pc_stitching_ws calibration_60m.cfg
 ```
-![RealSensePointcloud-StitchingExample](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/rs-pointcloud-stitching.gif)
+![RealSensePointcloud-StitchingExample](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/rs-pointcloud-stitching.gif)
 </br>
-[Download Full Resolution video](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/rs-pointcloud-stitching.mp4)
+[Download Full Resolution video](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/rs-pointcloud-stitching.mp4)
 </br>
 You can now see live depth and color images as if taken from the virtual device.
 The application project the original images onto the virtual device. You can record this device and play it back using Intel's realsense-viewer app.
 Use the "Record" button to start and stop a recording session. It starts recording when its caption is changed to "Stop Recording" suggesting that the next press on it will stop the recording process.
-The file ["record.bag"](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/record.bag) is saved under the given working directory. In this example: `C:\pc_stitching_ws\record.bag`</br>
+The file ["record.bag"](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/record.bag) is saved under the given working directory. In this example: `C:\pc_stitching_ws\record.bag`</br>
 You can now open realsense-viewer, choose "Add source->Load recorded sequence" and choose `C:\pc_stitching_ws\record.bag`. Switch to 3D view and watch the pointcloud of the extended scene.
 </br>
-<img align="left" src="https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/RealSense-Viewer-cf2.gif">
+<img align="left" src="https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/RealSense-Viewer-cf2.gif">
 </br>
 </br>
 </br>
-[Download Full Resolution video](https://librealsense.intel.com/rs-tests/TestData/pc-stitching-demo-guide/RealSense-Viewer.mp4)
+[Download Full Resolution video](https://librealsense.realsenseai.com/rs-tests/TestData/pc-stitching-demo-guide/RealSense-Viewer.mp4)

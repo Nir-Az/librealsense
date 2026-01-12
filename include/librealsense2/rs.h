@@ -1,5 +1,5 @@
 /* License: Apache 2.0. See LICENSE file in root directory.
-   Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
+   Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 
 /** \file rs.h
 * \brief
@@ -22,10 +22,12 @@ extern "C" {
 #include "h/rs_processing.h"
 #include "h/rs_record_playback.h"
 #include "h/rs_sensor.h"
+#include "h/rs_safety_sensor.h"
+#include "h/rs_eth_config.h"
 
 #define RS2_API_MAJOR_VERSION    2
-#define RS2_API_MINOR_VERSION    56
-#define RS2_API_PATCH_VERSION    5
+#define RS2_API_MINOR_VERSION    57
+#define RS2_API_PATCH_VERSION    0
 #define RS2_API_BUILD_VERSION    0
 
 #ifndef STRINGIFY

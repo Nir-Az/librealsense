@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2019 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2019 RealSense, Inc. All Rights Reserved.
 #include <iomanip>
 #include "depth-quality-model.h"
 #include <librealsense2/rs_advanced_mode.hpp>
@@ -105,8 +105,13 @@ namespace rs2
                 auto dev = _pipe.get_active_profile().get_device();
                 if (dev.is<rs400::advanced_mode>())
                 {
+                    bool dev_is_dds = false;
+                    if( dev.supports( RS2_CAMERA_INFO_CONNECTION_TYPE ) &&
+                        strcmp( dev.get_info( RS2_CAMERA_INFO_CONNECTION_TYPE ), "DDS" ) == 0 )
+                        dev_is_dds = true;
+
                     auto advanced_mode = dev.as<rs400::advanced_mode>();
-                    if (!advanced_mode.is_enabled())
+                    if( !advanced_mode.is_enabled() && !dev_is_dds ) // DDS devices cannot be toggled
                     {
                         window.add_on_load_message("Toggling device into Advanced Mode...");
                         advanced_mode.toggle_advanced_mode(true);
@@ -177,7 +182,9 @@ namespace rs2
             if (!_roi_located.eval())
             {
                 draw_notification(win, viewer_rect, 450,
-                    u8"\n   \uf1b2  Please point the camera to a flat Wall / Surface!",
+                    std::string(rsutils::string::from()
+                        << "\n   " << textual_icons::cube
+                        << "  Please point the camera to a flat Wall / Surface!"),
                     "");
                 return false;
             }
@@ -209,7 +216,9 @@ namespace rs2
             if (_skew_right.eval())
             {
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n          \uf061  Rotate the camera slightly Right",
+                    std::string(rsutils::string::from()
+                        << "\n          " << textual_icons::arrow_right
+                        << "  Rotate the camera slightly Right"),
                     orientation_instruction);
                 return false;
             }
@@ -217,15 +226,20 @@ namespace rs2
             if (_skew_left.eval())
             {
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n           \uf060  Rotate the camera slightly Left",
+                    std::string(rsutils::string::from()
+                        << "\n          " << textual_icons::arrow_left
+                        << "  Rotate the camera slightly Left"),
                     orientation_instruction);
                 return false;
             }
 
             if (_skew_up.eval())
             {
+
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n            \uf062  Rotate the camera slightly Up",
+                    std::string(rsutils::string::from() 
+                        << "\n            " << textual_icons::arrow_up 
+                        << "  Rotate the camera slightly Up"),
                     orientation_instruction);
                 return false;
             }
@@ -233,7 +247,9 @@ namespace rs2
             if (_skew_down.eval())
             {
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n          \uf063  Rotate the camera slightly Down",
+                    std::string(rsutils::string::from()
+                        << "\n            " << textual_icons::arrow_down
+                        << "  Rotate the camera slightly Down"),
                     orientation_instruction);
                 return false;
             }
@@ -241,7 +257,9 @@ namespace rs2
             if (_too_close.eval())
             {
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n          \uf0b2  Move the camera further Away",
+                    std::string(rsutils::string::from()
+                        << "\n            " << textual_icons::up_down_left_right
+                        << "  Move the camera further Away"),
                     distance_instruction);
                 distance = true;
                 return true; // Show metrics even when too close/far
@@ -250,7 +268,9 @@ namespace rs2
             if (_too_far.eval())
             {
                 draw_notification(win, viewer_rect, 400,
-                    u8"\n        \uf066  Move the camera Closer to the wall",
+                    std::string(rsutils::string::from()
+                        << "\n            " << textual_icons::compress
+                        << "  Move the camera Closer to the wall"),
                     distance_instruction);
                 distance = true;
                 return true;
@@ -291,10 +311,6 @@ namespace rs2
 
             ImGui::PushStyleColor(ImGuiCol_Text,
                 blend(light_grey, any_guide ? 1.f : fade_factor));
-
-            //ImGui::PushFont(win.get_large_font());
-            //ImGui::Text(u8"\uf1e5 ");
-            //ImGui::PopFont();
 
             ImGui::PopStyleColor();
             ImGui::PushStyleColor(ImGuiCol_Text,
@@ -414,7 +430,9 @@ namespace rs2
                                     ImGui::SetCursorPos({ pos.x + 57, pos.y + bar_spacing * (i - j) + 14 });
                                     ImGui::PushStyleColor(ImGuiCol_Text,
                                         blend(blend(light_grey, alpha), distance_guide ? 1.f : fade_factor));
-                                    ImGui::Text(u8"\uf106");
+                                    std::string angle_right_str = std::string(rsutils::string::from()
+                            << textual_icons::angle_right);
+                                    ImGui::Text("%s", angle_right_str.c_str());
                                     ImGui::PopStyleColor();
                                 }
                             }
@@ -429,7 +447,8 @@ namespace rs2
                                     ImGui::SetCursorPos({ pos.x + 57, pos.y + bar_spacing * (i + j) + 14 });
                                     ImGui::PushStyleColor(ImGuiCol_Text,
                                         blend(blend(light_grey, alpha), distance_guide ? 1.f : fade_factor));
-                                    ImGui::Text(u8"\uf107");
+                                    std::string angle_left_str = std::string(rsutils::string::from() << textual_icons::angle_left);
+                                    ImGui::Text("%s", angle_left_str.c_str());
                                     ImGui::PopStyleColor();
                                 }
                             }
@@ -804,14 +823,14 @@ namespace rs2
                         ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, white);
                         if (_metrics_model.is_recording())
                         {
-                            if (ImGui::Button(u8"\uf0c7 Stop_record", { 140, 25 }))
+                            if (ImGui::Button(textual_icons::save, { 140, 25 }))
                             {
                                 _metrics_model.stop_record(_device_model.get());
                             }
                         }
                         else
                         {
-                            if (ImGui::Button(u8"\uf0c7 Start_record", { 140, 25 }))
+                            if (ImGui::Button(textual_icons::save, { 140, 25 }))
                             {
                                 if (_use_limit_capture)
                                 {
@@ -975,6 +994,7 @@ namespace rs2
                     _viewer_model.begin_stream(sub, profile);
                     _viewer_model.streams[profile.unique_id()].texture->colorize = sub->depth_colorizer;
                     _viewer_model.streams[profile.unique_id()].texture->yuy2rgb = sub->yuy2rgb;
+                    _viewer_model.streams[profile.unique_id()].texture->m420_to_rgb = sub->m420_to_rgb;
                     _viewer_model.streams[profile.unique_id()].texture->y411 = sub->y411;
 
                     if (profile.stream_type() == RS2_STREAM_DEPTH)
@@ -988,6 +1008,8 @@ namespace rs2
                                                            int(depth_profile.width() * (0.5f + 0.5f*_roi_percent)),
                                                            int(depth_profile.height() * (0.5f + 0.5f*_roi_percent)) },
                                                             _roi_percent);
+
+                        sub->streaming_map[RS2_STREAM_DEPTH] = true;
                     }
                 }
 
@@ -1223,7 +1245,9 @@ namespace rs2
                 auto col0 = ImGui::GetCursorPos();
                 ImGui::SetCursorPosX(left_x);
                 ImGui::PushFont(win.get_large_font());
-                ImGui::Text(u8"\uf102");
+                std::string angle_double_up_str = std::string(rsutils::string::from()
+                            << textual_icons::angle_double_up);
+                ImGui::Text("%s", angle_double_up_str.c_str());
                 if (ImGui::IsItemHovered())
                 {
                     RsImGui::CustomTooltip("This metric shows positive trend");
@@ -1239,7 +1263,9 @@ namespace rs2
                 auto col0 = ImGui::GetCursorPos();
                 ImGui::SetCursorPosX(left_x);
                 ImGui::PushFont(win.get_large_font());
-                ImGui::Text(u8"\uf103");
+                std::string angle_double_down_str = std::string(rsutils::string::from()
+                            << textual_icons::angle_double_down);
+                ImGui::Text("%s", angle_double_down_str.c_str());
                 if (ImGui::IsItemHovered())
                 {
                     RsImGui::CustomTooltip("This metric shows negative trend");

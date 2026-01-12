@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023-4 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023-4 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include "sid_index.h"
@@ -10,6 +10,8 @@
 
 #include <realdds/dds-defines.h>
 #include <realdds/dds-metadata-syncer.h>
+#include <realdds/dds-embedded-filter.h>
+#include <realdds/dds-stream-profile.h>
 
 #include <rsutils/json-fwd.h>
 #include <memory>
@@ -23,7 +25,6 @@ class dds_option;
 class dds_video_stream_profile;
 class dds_motion_stream_profile;
 namespace topics {
-class image_msg;
 class imu_msg;
 }  // namespace topics
 }  // namespace realdds
@@ -31,7 +32,7 @@ class imu_msg;
 
 namespace librealsense {
 
-
+class video_stream_profile;
 class dds_device_proxy;
 class roi_sensor_interface;
 
@@ -84,6 +85,7 @@ public:
     void add_option( std::shared_ptr< realdds::dds_option > option );
 
     void add_processing_block( std::string const & filter_name );
+    virtual void add_embedded_filter(std::shared_ptr< realdds::dds_embedded_filter > embedded_filter);
 
     const std::map< sid_index, std::shared_ptr< realdds::dds_stream > > & streams() const { return _streams; }
     void set_frames_callback( rs2_frame_callback_sptr callback ) override;
@@ -95,8 +97,9 @@ public:
     stream_profiles get_active_streams() const override;
 
 protected:
-    void register_basic_converters();
+    void register_converters();
     stream_profiles init_stream_profiles() override;
+    void log_bandwidth( const std::shared_ptr< librealsense::video_stream_profile > & vsp ) const;
 
     std::shared_ptr< realdds::dds_video_stream_profile >
     find_profile( sid_index sidx, realdds::dds_video_stream_profile const & profile ) const;
@@ -104,7 +107,10 @@ protected:
     std::shared_ptr< realdds::dds_motion_stream_profile >
     find_profile( sid_index sidx, realdds::dds_motion_stream_profile const & profile ) const;
 
-    void handle_video_data( realdds::topics::image_msg &&,
+    realdds::dds_stream_profiles find_dds_profiles( const librealsense::stream_profiles & source_profiles ) const;
+    
+    void handle_video_data( std::vector< uint8_t > &&,
+                            realdds::dds_time &&,
                             realdds::dds_sample &&,
                             const std::shared_ptr< stream_profile_interface > &,
                             streaming_impl & streaming );

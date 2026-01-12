@@ -1,5 +1,5 @@
 /* License: Apache 2.0. See LICENSE file in root directory.
-Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
+Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 
 #include "pyrealsense2.h"
 #include <librealsense2/hpp/rs_processing.hpp>
@@ -201,5 +201,18 @@ void init_processing(py::module &m) {
     sequence_id_filter.def(py::init<>())
         .def(py::init<float>(), "sequence_id"_a);
     // rs2::rates_printer
+
+    py::class_<rs2::embedded_filter, rs2::options> embedded_filter(m, "embedded_filter", "Define the embedded filter workflow.");
+    embedded_filter.def( BIND_DOWNCAST( embedded_filter, embedded_decimation_filter ) )
+        .def( BIND_DOWNCAST( embedded_filter, embedded_temporal_filter ) )
+        .def( "__bool__", &rs2::embedded_filter::operator bool )  // Called to implement truth value testing in Python 3
+        .def( "get_type", &rs2::embedded_filter::get_type, "Get the embedded filter type" );
+
+    py::class_<rs2::embedded_decimation_filter, rs2::embedded_filter> embedded_decimation_filter(m, "embedded_decimation_filter",
+        "Define the embedded decimation filter workflow.");
+
+    py::class_<rs2::embedded_temporal_filter, rs2::embedded_filter> embedded_temporal_filter(m, "embedded_temporal_filter",
+        "Define the embedded temporal filter workflow.");
+
     /** end rs_processing.hpp **/
 }

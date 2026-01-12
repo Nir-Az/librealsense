@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -43,14 +43,17 @@ struct print_guid
 {
     dds_guid const & _guid;
     dds_guid_prefix const & _base_prefix;
+    bool _print_entity;
 
-    explicit print_guid( dds_guid const & guid, dds_guid_prefix const & base_prefix = unknown_guid.guidPrefix )
+    explicit print_guid( dds_guid const & guid, dds_guid_prefix const & base_prefix = unknown_guid.guidPrefix,
+                         bool print_entity = false )
         : _guid( guid )
         , _base_prefix( base_prefix )
+        , _print_entity( print_entity )
     {
     }
-    explicit print_guid( dds_guid const & guid, dds_guid const & base_guid )
-        : print_guid( guid, base_guid.guidPrefix )
+    explicit print_guid( dds_guid const & guid, dds_guid const & base_guid, bool print_entity = false )
+        : print_guid( guid, base_guid.guidPrefix, print_entity )
     {
     }
 };

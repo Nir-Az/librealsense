@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2018-24 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2018-24 RealSense, Inc. All Rights Reserved.
 
 // Minimalistic command-line collect & analyze bandwidth/performance tool for Realsense Cameras.
 // The data is gathered and serialized in csv-compatible format for offline analysis.
@@ -141,9 +141,9 @@ void data_collector::save_data_to_file(const string& out_filename)
     }
 }
 
-void data_collector::collect_frame_attributes(rs2::frame f, std::chrono::time_point<std::chrono::high_resolution_clock> start_time)
+void data_collector::collect_frame_attributes(rs2::frame f)
 {
-    auto arrival_time = std::chrono::duration<double, std::milli>(chrono::high_resolution_clock::now() - start_time);
+    auto arrival_time = std::chrono::duration<double, std::milli>(chrono::high_resolution_clock::now() - _start_time);
     auto stream_uid = std::make_pair(f.get_profile().stream_type(), f.get_profile().stream_index());
 
     if (data_collection[stream_uid].size() < _max_frames)
@@ -173,13 +173,13 @@ void data_collector::collect_frame_attributes(rs2::frame f, std::chrono::time_po
     }
 }
 
-bool data_collector::collecting(std::chrono::time_point<std::chrono::high_resolution_clock> start_time)
+bool data_collector::collecting()
 {
     bool timed_out = false;
 
     if (_time_out_sec > 0)
     {
-        timed_out = (chrono::high_resolution_clock::now() - start_time) > std::chrono::seconds(_time_out_sec);
+        timed_out = (chrono::high_resolution_clock::now() - _start_time) > std::chrono::seconds(_time_out_sec);
         // When the timeout is the only option is specified, disregard frame number
         if (stop_on_timeout == _stop_cond)
             return !timed_out;
@@ -234,6 +234,7 @@ bool data_collector::parse_configuration(const std::string& line, const std::vec
 // Assign the user configuration to the selected device
 bool data_collector::configure_sensors()
 {
+    _start_time = chrono::high_resolution_clock::now();
     bool succeed = false;
     requests_to_go = user_requests;
     std::vector<rs2::stream_profile> matches;
@@ -278,6 +279,7 @@ bool data_collector::configure_sensors()
         {
             std::copy(matches.begin(), matches.end(), std::back_inserter(selected_stream_profiles));
             sensor.open(matches);
+            sensor.start([this](rs2::frame f) { collect_frame_attributes(f); }); // start right after open sensor, required on DDS to avoid reverting to default
             active_sensors.emplace_back(sensor);
             matches.clear();
         }
@@ -295,6 +297,7 @@ int main(int argc, char** argv) try
     cli::value<int>    max_frames('m', "MaxFrames_Number", "", 100, "Maximum number of frames-per-stream to receive");
     cli::value<string> out_file('f', "FullFilePath", "path", "", "the file where the data will be saved to");
     cli::value<string> config_file('c', "ConfigurationFile", "path", "", "Specify file path with the requested configuration");
+    cli::value<string> serial_number('s', "SerialNumber", "serial_number", "", "the device Serial Number");
 
     auto settings = cli( "librealsense rs-data-collect tool" )
                         .default_log_level( RS2_LOG_SEVERITY_WARN )
@@ -302,6 +305,7 @@ int main(int argc, char** argv) try
                         .arg( max_frames )
                         .arg( out_file )
                         .arg( config_file )
+                        .arg( serial_number )
                         .process( argc, argv );
 
     std::cout << "Running rs-data-collect: ";
@@ -332,34 +336,45 @@ int main(int argc, char** argv) try
             continue;
         }
 
-        auto dev = std::make_shared<rs2::device>(list.front());
+        std::shared_ptr<rs2::device> dev;
+        if (serial_number.isSet())
+        {
+            auto target_sn = serial_number.getValue();
+            for (const auto& d : list)
+            {
+                if (target_sn == d.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER))
+                {
+                    dev = std::make_shared<rs2::device>(d);
+                    break;
+                }
+            }
+            if (!dev)
+            {
+                std::cout << "The device not found! Serial Number: " << target_sn << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            dev = std::make_shared<rs2::device>(list.front());
+        }
 
         data_collector  dc(dev,timeout,max_frames);         // Parser and the data aggregator
 
         dc.parse_and_configure(config_file);
 
-        //data_collection buffer;
-        auto start_time = chrono::high_resolution_clock::now();
-
-        // Start streaming
-        for (auto&& sensor : dc.selected_sensors())
-            sensor.start([&dc,&start_time](rs2::frame f)
-        {
-            dc.collect_frame_attributes(f,start_time);
-        });
-
         std::cout << "\nData collection started.... \n" << std::endl;
 
-        while (dc.collecting(start_time))
+        while (dc.collecting())
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             std::cout << "Collecting data for "
-                    << chrono::duration_cast<chrono::seconds>(chrono::high_resolution_clock::now() - start_time).count()
+                    << dc.time_passed()
                     << " sec" << std::endl;
         }
 
         // Stop & flush all active sensors
-        for (auto&& sensor : dc.selected_sensors())
+        for (auto&& sensor : dc.active_sensors)
         {
             sensor.stop();
             sensor.close();

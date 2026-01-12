@@ -1,5 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2022-4 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2022-4 RealSense, Inc. All Rights Reserved.
 
 #test:donotrun:!dds
 #test:retries 2
@@ -37,6 +37,9 @@ with test.remote.fork( nested_indent=None ) as remote:
             color = dds.color_stream_server( 'Color', 'RGB Camera' )
             color.init_profiles( d455.color_stream_profiles(), 5 )
             color.init_options( [] )
+            depth = dds.depth_stream_server( 'depth', 'Depth Module' )
+            depth.init_profiles( d455.depth_stream_profiles(), 5 )
+            depth.init_options( [] )
 
             # Add only a single set of intrinsics for 1920x1080, from which we expect to scale to all resolutions:
             i = dds.video_intrinsics();
@@ -51,7 +54,7 @@ with test.remote.fork( nested_indent=None ) as remote:
             color.set_intrinsics( set( [i] ) )
 
             dev = dds.device_server( participant, d455.device_info.topic_root )
-            dev.init( [color], [], {} )
+            dev.init( [color, depth], [], {} ) # Color intrinsincs are defined for d455 so using it for this test, but depth sensor is also expected on our cameras
             return dev
 
         def close_server( instance ):
@@ -171,7 +174,7 @@ with test.remote.fork( nested_indent=None ) as remote:
         remote.run( 'instance = broadcast_device( build_scaled_intrinsics_server(), d455.device_info )' )
         dev = rs.wait_for_devices( context, rs.only_sw_devices, n=1. )
         sensors = dev.query_sensors()
-        test.check_equal( len(sensors), 1 )
+        test.check_equal( len(sensors), 2 )
         color = sensors[0]
         profiles = color.profiles
         resolutions = set()

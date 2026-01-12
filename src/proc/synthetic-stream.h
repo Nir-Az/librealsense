@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -219,6 +219,8 @@ struct rs2_options
     librealsense::options_interface* options;
 
     virtual ~rs2_options() = default;
+
+    rsutils::subscription subscription;
 };
 
 struct rs2_processing_block : public rs2_options

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include "device.h"
 #include "image.h"
@@ -8,6 +8,7 @@
 #include <src/core/matcher-factory.h>
 #include <src/proc/color-formats-converter.h>
 #include <src/core/advanced_mode.h>
+#include <src/eth-config-device.h>
 
 #include "d500-info.h"
 #include "d500-private.h"
@@ -16,6 +17,8 @@
 #include "d500-active.h"
 #include "d500-color.h"
 #include "d500-motion.h"
+#include "d500-safety.h"
+#include "d500-depth-mapping.h"
 #include "sync.h"
 #include <src/ds/ds-thermal-monitor.h>
 #include <src/ds/d500/d500-options.h>
@@ -38,14 +41,175 @@ using rsutils::string::hexdump;
 
 namespace librealsense
 {
+    // default d500 device
+    // used only as fallback for partial device creation when enabled by config
+    class rs500_device
+        : public d500_device
+        , public ds_advanced_mode_base
+        , public extended_firmware_logger_device
+    {
+    public:
+        rs500_device( std::shared_ptr< const d500_info > const & dev_info )
+            : device( dev_info )
+            , backend_device( dev_info )
+            , d500_device( dev_info )
+            , ds_advanced_mode_base()
+            , extended_firmware_logger_device( dev_info, d500_device::_hw_monitor, get_firmware_logs_command() )
+        {
+            ds_advanced_mode_base::initialize_advanced_mode( this );
+        }
 
+        std::shared_ptr< matcher > create_matcher( const frame_holder & frame ) const override;
 
+        std::vector< tagged_profile > get_profiles_tags() const override
+        {
+            std::vector< tagged_profile > tags;
+            auto usb_spec = get_usb_spec();
+            if( usb_spec >= platform::usb3_type || usb_spec == platform::usb_undefined )
+            {
+                tags.push_back( { RS2_STREAM_DEPTH, -1, 1280, 720, RS2_FORMAT_Z16, 30,profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+                tags.push_back( { RS2_STREAM_INFRARED, 1, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+                tags.push_back(
+                    { RS2_STREAM_INFRARED, 2, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET } );
+            }
+            else
+            {
+                tags.push_back( { RS2_STREAM_DEPTH, -1, 640, 480, RS2_FORMAT_Z16, 15, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+                tags.push_back( { RS2_STREAM_INFRARED, 1, 640, 480, RS2_FORMAT_RGB8, 15, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+                tags.push_back(
+                    { RS2_STREAM_INFRARED, 2, 640, 480, RS2_FORMAT_RGB8, 15, profile_tag::PROFILE_TAG_SUPERSET } );
+            }
+            return tags;
+        };
+    };
+
+    class rs_d585_device : public d500_active,
+        public d500_color,
+        public d500_motion,
+        public ds_advanced_mode_base,
+        public extended_firmware_logger_device
+    {
+    public:
+        rs_d585_device( std::shared_ptr< const d500_info > const & dev_info )
+            : device( dev_info )
+            , backend_device( dev_info )
+            , d500_device( dev_info )
+            , d500_active( dev_info )
+            , d500_color( dev_info, RS2_FORMAT_M420 )
+            , d500_motion( dev_info )
+            , ds_advanced_mode_base()
+            , extended_firmware_logger_device( dev_info,
+                                               d500_device::_hw_monitor,
+                                               get_firmware_logs_command() )
+        {
+            ds_advanced_mode_base::initialize_advanced_mode( this );
+        }
+
+        std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override;
+
+        std::vector<tagged_profile> get_profiles_tags() const override
+        {
+            std::vector<tagged_profile> tags;
+
+            tags.push_back({ RS2_STREAM_COLOR, -1, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_DEPTH, -1, 1280, 960, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_INFRARED, -1, 1280, 960, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET });
+            tags.push_back({ RS2_STREAM_GYRO, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_200, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_ACCEL, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_100, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            
+            return tags;
+        };
+
+        bool contradicts(const stream_profile_interface* a, const std::vector<stream_profile>& others) const override
+        {
+            if (auto vid_a = dynamic_cast<const video_stream_profile_interface*>(a))
+            {
+                for (auto request : others)
+                {
+                    if (a->get_framerate() != 0 && request.fps != 0 && (a->get_framerate() != request.fps))
+                        return true;
+                }
+            }
+            return false;
+        }
+    };
+    
+    class rs_d585s_device : public d500_active,
+        public d500_color,
+        public d500_safety,
+        public d500_depth_mapping,
+        public d500_motion,
+        public ds_advanced_mode_base,
+        public extended_firmware_logger_device
+    {
+    public:
+        rs_d585s_device( std::shared_ptr< const d500_info > const & dev_info )
+            : device( dev_info )
+            , backend_device( dev_info )
+            , d500_device( dev_info )
+            , d500_active( dev_info )
+            , d500_color( dev_info, RS2_FORMAT_M420 )
+            , d500_safety( dev_info )
+            , d500_depth_mapping( dev_info )
+            , d500_motion( dev_info )
+            , ds_advanced_mode_base()
+            , extended_firmware_logger_device( dev_info,
+                                               d500_device::_hw_monitor,
+                                               get_firmware_logs_command() )
+        {
+            ds_advanced_mode_base::initialize_advanced_mode( this );
+            set_advanced_mode_device( this );
+
+            std::map< int, std::string > versions;
+            versions[0] = get_info( RS2_CAMERA_INFO_FIRMWARE_VERSION );
+            versions[1] = get_info( RS2_CAMERA_INFO_SMCU_FW_VERSION );
+            set_expected_source_versions( std::move( versions ) );
+
+            auto emitter_always_on_opt = std::make_shared<emitter_always_on_option>(d500_device::_hw_monitor, ds::APM_STROBE_GET, ds::APM_STROBE_SET);
+            get_depth_sensor().register_option(RS2_OPTION_EMITTER_ALWAYS_ON, emitter_always_on_opt);
+
+            // Note - requirement to gate depth options was removed to allow validation checks. Gated by FW only.
+            // This should be last as we wish to protect the depth options setting when not in service safety mode
+            // d500_safety::gate_depth_options();
+        }
+
+        std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override;
+
+        std::vector<tagged_profile> get_profiles_tags() const override
+        {
+            std::vector<tagged_profile> tags;
+
+            tags.push_back({ RS2_STREAM_COLOR, -1, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_DEPTH, -1, 1280, 720, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_INFRARED, -1, 1280, 720, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET });
+            tags.push_back({ RS2_STREAM_GYRO, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_200, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_ACCEL, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_100, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_OCCUPANCY, -1, 256, 320, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+
+            return tags;
+        };
+
+        bool contradicts(const stream_profile_interface* a, const std::vector<stream_profile>& others) const override
+        {
+            if (auto vid_a = dynamic_cast<const video_stream_profile_interface*>(a))
+            {
+                for (auto request : others)
+                {
+                    if (a->get_framerate() != 0 && request.fps != 0 && (a->get_framerate() != request.fps))
+                        return true;
+                }
+            }
+            return false;
+        }
+    };
+    
 class d555_device
     : public d500_active
     , public d500_color
     , public d500_motion
     , public ds_advanced_mode_base
     , public extended_firmware_logger_device
+    , public eth_config_device
 {
 public:
     d555_device( std::shared_ptr< const d500_info > dev_info )
@@ -55,11 +219,12 @@ public:
         , d500_active( dev_info )
         , d500_color( dev_info, RS2_FORMAT_YUYV )
         , d500_motion( dev_info )
-        , ds_advanced_mode_base( d500_device::_hw_monitor, get_depth_sensor() )
-        , extended_firmware_logger_device( dev_info,
-                                           d500_device::_hw_monitor,
-                                           get_firmware_logs_command() )
+        , ds_advanced_mode_base()
+        , extended_firmware_logger_device( dev_info, d500_device::_hw_monitor, get_firmware_logs_command() )
     {
+        eth_config_device::init( static_cast< debug_interface * >( this ) );
+        ds_advanced_mode_base::initialize_advanced_mode( this );
+
         auto & depth_sensor = get_depth_sensor();
         group_multiple_fw_calls(depth_sensor, [&]()
         {
@@ -140,14 +305,34 @@ public:
         auto dev_info = std::dynamic_pointer_cast< const d500_info >( shared_from_this() );
 
         auto pid = _group.uvc_devices.front().pid;
-        switch( pid )
-        {
-        case ds::D555_PID:
-            return std::make_shared< d555_device >( dev_info );
 
-        default:
-            throw std::runtime_error( rsutils::string::from() << "unsupported D500 PID 0x" << hexdump( pid ) );
+        try
+        {
+            switch( pid )
+            {
+            case ds::D555_PID:
+                return std::make_shared< d555_device >( dev_info );
+            case ds::D585_PID:
+                return std::make_shared< rs_d585_device >( dev_info );
+            case ds::D585S_PID:
+                return std::make_shared< rs_d585s_device >( dev_info );
+            default:
+                throw std::runtime_error( rsutils::string::from() << "unsupported D500 PID 0x" << hexdump( pid ) );
+            }
         }
+        catch( const std::exception & e )
+        {
+            auto ctx = get_context();
+            if( ctx && is_partial_device_allowed( ctx ) )
+            {
+                LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
+                                                   << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
+                // Create a device with partial capabilities when allowed instead of failing
+                return std::make_shared< rs500_device >( dev_info );
+            }
+            else
+                throw;  // rethrowing exception
+        }        
     }
 
     std::vector<std::shared_ptr<d500_info>> d500_info::pick_d500_devices(
@@ -211,5 +396,36 @@ public:
     inline std::shared_ptr<matcher> create_composite_matcher(std::vector<std::shared_ptr<matcher>> matchers)
     {
         return std::make_shared<timestamp_composite_matcher>(matchers);
+    }
+
+    std::shared_ptr< matcher > rs500_device::create_matcher( const frame_holder & frame ) const
+    {
+        std::vector< stream_interface * > streams;
+        if( _depth_stream )
+            streams.push_back( _depth_stream.get() );
+        if( _left_ir_stream )
+            streams.push_back( _left_ir_stream.get() );
+        if( _right_ir_stream )
+            streams.push_back( _right_ir_stream.get() );
+        return matcher_factory::create( RS2_MATCHER_DEFAULT, streams );
+    }
+
+    std::shared_ptr<matcher> rs_d585_device::create_matcher(const frame_holder& frame) const
+    {
+        std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
+        std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(), 
+                                                      _ds_motion_common->get_gyro_stream().get()};
+        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
+    }
+
+    std::shared_ptr<matcher> rs_d585s_device::create_matcher(const frame_holder& frame) const
+    {
+        std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get(), 
+            _safety_stream.get(), _occupancy_stream.get(), _point_cloud_stream.get()};
+        std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
+                                                      _ds_motion_common->get_gyro_stream().get() };
+        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 }

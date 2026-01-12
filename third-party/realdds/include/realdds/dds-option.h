@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include <rsutils/json.h>
@@ -103,6 +103,9 @@ protected:
 
 typedef std::vector< std::shared_ptr< dds_option > > dds_options;
 
+rsutils::json dds_options_to_json(dds_options const& options);
+
+std::shared_ptr< dds_option > find_dds_option_by_name(const dds_options& options, const std::string& name);
 
 class dds_float_option : public dds_option
 {

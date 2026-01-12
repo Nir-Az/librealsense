@@ -1,11 +1,12 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-device.h>
 #include <realdds/dds-participant.h>
 #include <realdds/dds-topic-reader.h>
 #include <realdds/dds-topic-writer.h>
 #include <realdds/topics/dds-topic-names.h>
+#include <realdds/dds-embedded-filter.h>
 #include "dds-device-impl.h"
 
 #include <rsutils/time/timer.h>
@@ -36,10 +37,10 @@ bool dds_device::is_online() const
 }
 
 
-void dds_device::wait_until_ready( size_t timeout_ms )
+bool dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabilities ) const
 {
     if( is_ready() )
-        return;
+        return true;
 
     if( ! timeout_ms )
         DDS_THROW( runtime_error, "device is " << ( is_online() ? "not ready" : "offline" ) );
@@ -50,7 +51,14 @@ void dds_device::wait_until_ready( size_t timeout_ms )
     do
     {
         if( timer.has_expired() )
+        {
+            if( allow_partial_capabilities && _impl->is_initializing() )
+            {
+                _impl->set_state( impl::state_t::READY );
+                return false;
+            }
             DDS_THROW( runtime_error, "[" << debug_name() << "] timeout waiting to get ready" );
+        }
         std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
         if( was_online )
         {
@@ -61,6 +69,8 @@ void dds_device::wait_until_ready( size_t timeout_ms )
             was_online = is_online();
     }
     while( ! is_ready() );
+
+    return true;
 }
 
 
@@ -191,6 +201,12 @@ void dds_device::open( const dds_stream_profiles & profiles )
     _impl->open( profiles );
 }
 
+void dds_device::close( const dds_stream_profiles & profiles )
+{
+    wait_until_ready( 0 );  // throw if not
+    _impl->close( profiles );
+}
+
 void dds_device::set_option_value( const std::shared_ptr< dds_option > & option, json new_value )
 {
     wait_until_ready( 0 );  // throw if not
@@ -203,7 +219,19 @@ json dds_device::query_option_value( const std::shared_ptr< dds_option > & optio
     return _impl->query_option_value( option );
 }
 
-void dds_device::send_control( json const & control, json * reply )
+void dds_device::set_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter, const json& options_value)
+{
+    wait_until_ready( 0 );  // throw if not
+    _impl->set_embedded_filter(filter, options_value);
+}
+
+json dds_device::query_embedded_filter(const std::shared_ptr< dds_embedded_filter >& filter)
+{
+    wait_until_ready( 0 );  // throw if not
+    return _impl->query_embedded_filter(filter);
+}
+
+void dds_device::send_control( json const & control, json * reply ) const
 {
     wait_until_ready( 0 );  // throw if not
     _impl->write_control_message( control, reply );

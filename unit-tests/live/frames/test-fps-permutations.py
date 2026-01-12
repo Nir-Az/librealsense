@@ -1,8 +1,9 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
+# Currently, we exclude D457 and D555 as it's failing
 # test:device D400* !D457
-# Currently, we exclude D457 as it's failing
+
 # test:donotrun:!nightly
 # test:timeout 300
 # timeout - on the worst case we have 8 streams, so:
@@ -35,13 +36,18 @@ def get_sensors_and_profiles(device):
                 if res not in depth_resolutions:
                     depth_resolutions.append(res)
             for res in depth_resolutions:
+                # Skip 1280x800 resolution for infrared since it's Y16 calibration format
+                if res == (1280, 800):
+                    log.d(f"Skipping resolution {res} for infrared (calibration format)")
+                    continue
+                    
                 depth = fps_helper.get_profile(sensor, rs.stream.depth, res)
                 irs = fps_helper.get_profiles(sensor, rs.stream.infrared, res)
                 ir = next(irs)
                 while ir is not None and ir.stream_index() != 1:
                     ir = next(irs)
                 if ir and depth:
-                    print(ir, depth)
+                    log.d(f"{ir}, {depth}")
                     sensor_profiles_arr.append((sensor, depth))
                     sensor_profiles_arr.append((sensor, ir))
                     break
@@ -50,10 +56,16 @@ def get_sensors_and_profiles(device):
                 sensor.set_option(rs.option.enable_auto_exposure, 1)
             if sensor.supports(rs.option.auto_exposure_priority):
                 sensor.set_option(rs.option.auto_exposure_priority, 0)  # AE priority should be 0 for constant FPS
-            profile = fps_helper.get_profile(sensor, rs.stream.color)
+            profile = fps_helper.get_profile(sensor, rs.stream.color, HD_RESOLUTION)
         elif sensor.is_motion_sensor():
-            sensor_profiles_arr.append((sensor, fps_helper.get_profile(sensor, rs.stream.accel)))
-            sensor_profiles_arr.append((sensor, fps_helper.get_profile(sensor, rs.stream.gyro)))
+            connection_type = "USB"
+            if dev.supports(rs.camera_info.connection_type):
+                connection_type = dev.get_info(rs.camera_info.connection_type)
+            if connection_type == "DDS":
+                sensor_profiles_arr.append((sensor, fps_helper.get_profile(sensor, rs.stream.motion)))
+            else:
+                sensor_profiles_arr.append((sensor, fps_helper.get_profile(sensor, rs.stream.accel)))
+                sensor_profiles_arr.append((sensor, fps_helper.get_profile(sensor, rs.stream.gyro)))
 
         if profile is not None:
             sensor_profiles_arr.append((sensor, profile))

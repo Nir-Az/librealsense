@@ -5,13 +5,16 @@ plugins {
 android {
     namespace 'com.intel.realsense.camera'
     compileSdk defaultCompileSdkVersion
-
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "com.intel.realsense.camera"
         minSdk defaultMinSdkVersion
         targetSdk defaultTargetSdkVersion
-        versionCode 5
-        versionName "0.0.5"
+        versionCode 6
+        versionName "0.0.6"
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildTypes {
@@ -20,6 +23,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
 }
 
 def getFwVersion(String productLine) {
@@ -41,7 +45,7 @@ task downloadFirmware() {
     def d4xxFile = new File("$projectDir/src/main/res/raw/fw_d4xx.bin")
     if (!d4xxFile.exists()) {
         println("downloading D4xx fw: " + d4xxFwVersion)
-        new URL('https://librealsense.intel.com/Releases/RS4xx/FW/D4XX_FW_Image-' + d4xxFwVersion + '.bin').withInputStream{ i -> d4xxFile.withOutputStream{ it << i }}
+        new URL('https://librealsense.realsenseai.com/Releases/RS4xx/FW/D4XX_FW_Image-' + d4xxFwVersion + '.bin').withInputStream{ i -> d4xxFile.withOutputStream{ it << i }}
     }
 }
 

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include <core/roi.h>
@@ -44,6 +44,7 @@ namespace librealsense
         std::shared_ptr< const device_info > get_device_info() const override;
         std::pair<uint32_t, rs2_extrinsics> get_extrinsics(const stream_interface& stream) const override;
         bool is_valid() const override;
+        bool is_in_recovery_mode() const override;
 
         std::vector<tagged_profile> get_profiles_tags() const override { return m_device->get_profiles_tags(); };
         void tag_profiles(stream_profiles profiles) const override { m_device->tag_profiles(profiles); }

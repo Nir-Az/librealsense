@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -382,7 +382,12 @@ public:
         }
     }
 
-    bool is_platform_jetson() const override { return false; }
+    bool is_platform_jetson() const override
+    {
+        if(_dev.size() > 0 && _dev[0])
+            return _dev[0]->is_platform_jetson();
+        return false;
+    }
 
 private:
     uint32_t get_dev_index_by_profiles( const stream_profile & profile ) const

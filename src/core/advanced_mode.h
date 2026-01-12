@@ -1,14 +1,15 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 #pragma once
 
+#include <serializable-interface.h>
+#include <option.h>
+#include <core/device-interface.h>
+#include <core/debug.h>
 #include "ds/ds-private.h"
-#include "hw-monitor.h"
-#include "option.h"
-#include "ds/advanced_mode/presets.h"
+#include <ds/advanced_mode/presets.h>
+#include <platform/stream-profile.h>
 #include <librealsense2/h/rs_advanced_mode_command.h>
-#include "serializable-interface.h"
-#include <rsutils/lazy.h>
 
 
 typedef enum
@@ -60,8 +61,7 @@ namespace librealsense
         virtual void toggle_advanced_mode(bool enable) = 0;
 
         virtual void apply_preset(const std::vector<platform::stream_profile>& configuration,
-                                  rs2_rs400_visual_preset preset, uint16_t device_pid,
-                                  const firmware_version& fw_version) = 0;
+                                  rs2_rs400_visual_preset preset, uint16_t device_pid) = 0;
 
         virtual void get_depth_control_group(STDepthControlGroup* ptr, int mode = 0) const = 0;
         virtual void get_rsm(STRsm* ptr, int mode = 0) const = 0;
@@ -101,16 +101,13 @@ namespace librealsense
     class ds_advanced_mode_base : public ds_advanced_mode_interface
     {
     public:
-        explicit ds_advanced_mode_base(std::shared_ptr<hw_monitor> hwm,
-            synthetic_sensor& depth_sensor);
-
         virtual ~ds_advanced_mode_base() = default;
+        virtual void initialize_advanced_mode( device_interface * dev );
 
         bool is_enabled() const override;
         void toggle_advanced_mode(bool enable) override;
         void apply_preset(const std::vector<platform::stream_profile>& configuration,
-                          rs2_rs400_visual_preset preset, uint16_t device_pid,
-                          const firmware_version& fw_version) override;
+                          rs2_rs400_visual_preset preset, uint16_t device_pid) override;
 
         void get_depth_control_group(STDepthControlGroup* ptr, int mode = 0) const override;
         void get_rsm(STRsm* ptr, int mode = 0) const override;
@@ -143,21 +140,21 @@ namespace librealsense
         std::vector<uint8_t> serialize_json() const override;
         void load_json(const std::string& json_content) override;
 
-        void register_to_visual_preset_option();
-        void unregister_from_visual_preset_option();
-
         static const uint16_t HW_MONITOR_COMMAND_SIZE = 1000;
         static const uint16_t HW_MONITOR_BUFFER_SIZE = 1024;
 
         void block( const std::string & exception_message );
         void unblock();
 
-    private:
+    protected:
+        virtual void device_specific_initialization();
+
         friend class auto_calibrated;
-        void set_exposure(synthetic_sensor& sensor, const exposure_control& val);
-        void set_auto_exposure(synthetic_sensor& sensor, const auto_exposure_control& val);
-        void get_exposure(synthetic_sensor& sensor, exposure_control* ptr) const;
-        void get_auto_exposure(synthetic_sensor& sensor, auto_exposure_control* ptr) const;
+
+        void set_exposure( sensor_base * sensor, const exposure_control & val );
+        void set_auto_exposure( sensor_base * sensor, const auto_exposure_control & val );
+        void get_exposure( sensor_base * sensor, exposure_control * ptr ) const;
+        void get_auto_exposure( sensor_base * sensor, auto_exposure_control * ptr ) const;
 
         void get_laser_power(laser_power_control* ptr) const;
         void get_laser_state(laser_state_control* ptr) const;
@@ -178,6 +175,7 @@ namespace librealsense
         void get_color_white_balance(white_balance_control* ptr) const;
         void get_color_auto_white_balance(auto_white_balance_control* ptr) const;
         void get_color_power_line_frequency(power_line_frequency_control* ptr) const;
+        void get_hdr_preset(hdr_preset::hdr_preset* ptr) const;
 
         void set_laser_power(const laser_power_control& val);
         void set_laser_state(const laser_state_control& val);
@@ -199,14 +197,15 @@ namespace librealsense
         void set_color_auto_white_balance(const auto_white_balance_control& val);
         void set_color_power_line_frequency(const power_line_frequency_control& val);
 
-        bool supports_option(const synthetic_sensor& sensor, rs2_option opt) const;
+        bool supports_option( const sensor_base * sensor, rs2_option opt ) const;
 
-        std::shared_ptr<hw_monitor> _hw_monitor;
-        synthetic_sensor& _depth_sensor;
-        rsutils::lazy< synthetic_sensor * > _color_sensor;
-        rsutils::lazy< bool > _enabled;
+        device_interface * _dev;
+        debug_interface * _debug_interface;
+        sensor_base * _depth_sensor = nullptr;
+        sensor_base * _color_sensor = nullptr;
+        bool _enabled = false;
         std::shared_ptr<advanced_mode_preset_option> _preset_opt;
-        rsutils::lazy< bool > _amplitude_factor_support;
+        bool _amplitude_factor_support = false;
         bool _blocked = false;
         std::string _block_message;
 
@@ -215,8 +214,13 @@ namespace librealsense
         void set_all_depth( const preset & p );
         void set_all_rgb( const preset & p );
         bool should_set_rgb_preset() const;
+        bool should_set_hdr_preset(const preset& p);
+        void set_hdr_preset(const preset& p);
 
-        std::vector<uint8_t> send_receive(const std::vector<uint8_t>& input) const;
+        virtual std::vector<uint8_t> send_receive(const std::vector<uint8_t>& input) const;
+
+        void register_to_visual_preset_option();
+        void unregister_from_visual_preset_option();
 
         template<class T>
         void set(const T& strct, EtAdvancedModeRegGroup cmd) const
@@ -258,14 +262,20 @@ namespace librealsense
                                             uint32_t p4 = 0,
                                             std::vector<uint8_t> data = std::vector<uint8_t>()) const;
 
-
+        enum res_type
+        {
+            low_resolution,
+            medium_resolution,
+            high_resolution
+        };
+        res_type get_res_type( uint32_t width, uint32_t height ) const;
     };
 
 
     class advanced_mode_preset_option : public option_base
     {
     public:
-        advanced_mode_preset_option(ds_advanced_mode_base& advanced, synthetic_sensor& ep,
+        advanced_mode_preset_option(ds_advanced_mode_base& advanced, sensor_base& ep,
                                     const option_range& opt_range);
 
         static rs2_rs400_visual_preset to_preset(float x);
@@ -276,12 +286,12 @@ namespace librealsense
         const char* get_value_description(float val) const override;
 
     private:
-        uint16_t get_device_pid(const uvc_sensor& sensor) const;
-        firmware_version get_firmware_version(const uvc_sensor& sensor) const;
+        uint16_t get_device_pid(const sensor_base& sensor) const;
 
         std::mutex _mtx;
-        synthetic_sensor& _ep;
+        sensor_base & _ep;
         ds_advanced_mode_base& _advanced;
         rs2_rs400_visual_preset _last_preset;
+        std::vector< platform::stream_profile > _sensor_profiles;
     };
 }

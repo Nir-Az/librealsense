@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 #include <realdds/dds-device-watcher.h>
 #include <realdds/dds-topic.h>
@@ -68,9 +68,11 @@ dds_device_watcher::dds_device_watcher( std::shared_ptr< dds_participant > const
                             }
                             continue;
                         }
-                        else if( device.alive )
+                        else if( device.alive && guid == device.writer_guid)
                         {
                             // We already know about this device; likely this was a broadcast meant for someone else
+                            // If guid mismatches the device was reset without us getting a subscription 
+                            // lost callback in time - handle like old device coming back to life
                             continue;
                         }
                         else if( device.alive = device.in_use.lock() )

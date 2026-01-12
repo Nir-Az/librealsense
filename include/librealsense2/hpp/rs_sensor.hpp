@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #ifndef LIBREALSENSE_RS2_SENSOR_HPP
 #define LIBREALSENSE_RS2_SENSOR_HPP
@@ -8,6 +8,7 @@
 #include "rs_frame.hpp"
 #include "rs_processing.hpp"
 #include "rs_options.hpp"
+
 namespace rs2
 {
 
@@ -293,6 +294,41 @@ namespace rs2
             }
 
             return results;
+        }
+
+        std::vector<embedded_filter> query_embedded_filters() const
+        {
+            rs2_error* e = nullptr;
+            std::shared_ptr<rs2_embedded_filter_list> list(
+                rs2_query_embedded_filters(_sensor.get(), &e),
+                rs2_delete_embedded_filter_list);
+            error::handle(e);
+
+            auto size = rs2_get_embedded_filters_count(list.get(), &e);
+            error::handle(e);
+
+            std::vector<embedded_filter> results;
+            for (auto i = 0; i < size; i++)
+            {
+                std::shared_ptr<rs2_embedded_filter> ef(
+                    rs2_create_embedded_filter(list.get(), i, &e),
+                    rs2_delete_embedded_filter);
+                error::handle(e);
+
+                embedded_filter rs2_ef(ef);
+                results.push_back(rs2_ef);
+            }
+            return results;
+        }
+
+        template<class T>
+        T get_embedded_filter() const
+        {
+            for (auto&& ef : query_embedded_filters())
+            {
+                if (auto t = ef.as<T>()) return t;
+            }
+            throw rs2::error("Could not find requested embedded filter type!");
         }
 
         sensor& operator=(const std::shared_ptr<rs2_sensor> other)
@@ -734,5 +770,22 @@ namespace rs2
             return results;
         }
     };
+
+    class depth_mapping_sensor : public sensor
+    {
+    public:
+        depth_mapping_sensor(sensor s)
+            : sensor(s.get())
+        {
+            rs2_error* e = nullptr;
+            if (rs2_is_sensor_extendable_to(_sensor.get(), RS2_EXTENSION_DEPTH_MAPPING_SENSOR, &e) == 0 && !e)
+            {
+                _sensor.reset();
+            }
+            error::handle(e);
+        }
+        operator bool() const { return _sensor.get() != nullptr; }
+    };
+
 }
 #endif // LIBREALSENSE_RS2_SENSOR_HPP

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015-24 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015-24 RealSense, Inc. All Rights Reserved.
 
 #include "uvc-sensor.h"
 
@@ -493,7 +493,10 @@ void log_callback_end( uint32_t fps,
         }
         catch (...)
         {
-            LOG_WARNING("Failed to add " << rs2_option_to_string(id)<< " control for " << this->get_info(RS2_CAMERA_INFO_NAME));
+            std::string device_name = "";
+            if( _owner && _owner->supports_info( RS2_CAMERA_INFO_NAME ) )
+                device_name = _owner->get_info( RS2_CAMERA_INFO_NAME );
+            LOG_WARNING( device_name << " failed to add " << rs2_option_to_string( id ) << " control for " << this->get_info( RS2_CAMERA_INFO_NAME ) );
         }
         return res;
     }

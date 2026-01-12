@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 #include <atomic>
@@ -51,6 +51,7 @@ namespace librealsense
         std::pair<uint32_t, rs2_extrinsics> get_extrinsics(const stream_interface& stream) const override;
         static bool try_extend_snapshot(std::shared_ptr<extension_snapshot>& e, rs2_extension extension_type, void** ext);
         bool is_valid() const override;
+        bool is_in_recovery_mode() const override;
 
         std::vector<tagged_profile> get_profiles_tags() const override { return std::vector<tagged_profile>(); };//no hard-coded default streams for playback
         void tag_profiles(stream_profiles profiles) const override

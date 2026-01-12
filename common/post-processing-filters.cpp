@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 #include "viewer.h"
 #include "post-processing-filters.h"
@@ -130,6 +130,10 @@ void post_processing_filters::map_id_frameset_to_frameset(rs2::frameset first, r
         if (f.get_profile().stream_type() == RS2_STREAM_INFRARED)
         {
             second_f = second.get_infrared_frame(f.get_profile().stream_index());
+        }
+        else if( f.get_profile().stream_type() == RS2_STREAM_COLOR )
+        {
+            second_f = second.get_color_frame( f.get_profile().stream_index() );
         }
         else
         {

@@ -1,7 +1,8 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2021 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2021 RealSense, Inc. All Rights Reserved.
 
 //#cmake:dependencies rsutils
+//#test:donotrun:!nightly
 
 #include <rsutils/string/chrono.h>  // must be before catch.h!
 #include <unit-tests/catch.h>
@@ -166,5 +167,5 @@ TEST_CASE( "Not invoked flush timeout expected" )
 
     INFO( wait_time.count() );
     INFO( timeout.count() );
-    REQUIRE((wait_time >= timeout || to_string(wait_time) == to_string(timeout))); // timeout can occur slightly before what’s specified (1.9999975s) but as long as it translates to ‘2s’ we’re fine
+    REQUIRE((wait_time >= timeout || to_string(wait_time) == to_string(timeout))); // timeout can occur slightly before whats specified (1.9999975s) but as long as it translates to 2s were fine
 }

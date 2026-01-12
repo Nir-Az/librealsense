@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 //#cmake:dependencies rsutils
 
@@ -21,7 +21,7 @@ using bytearray = std::vector< byte >;
 namespace {
 
 
-constexpr bool is_little_endian()
+bool is_little_endian()
 {
     // Only since C++20
     //return ( std::endian::native == std::endian::little );

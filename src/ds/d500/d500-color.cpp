@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022-4 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2022-4 RealSense, Inc. All Rights Reserved.
 
 #include <cstddef>
 #include "metadata.h"
@@ -26,6 +26,7 @@ namespace librealsense
          {fourcc('Y','U','Y','V'), RS2_FORMAT_YUYV},
          {fourcc('U','Y','V','Y'), RS2_FORMAT_UYVY},
          {fourcc('M','J','P','G'), RS2_FORMAT_MJPEG},
+         {fourcc('R','W','1','6'), RS2_FORMAT_RAW16},
          {fourcc('B','Y','R','2'), RS2_FORMAT_RAW16},
          {fourcc('M','4','2','0'), RS2_FORMAT_M420}
     };
@@ -33,6 +34,7 @@ namespace librealsense
         {fourcc('Y','U','Y','2'), RS2_STREAM_COLOR},
         {fourcc('Y','U','Y','V'), RS2_STREAM_COLOR},
         {fourcc('U','Y','V','Y'), RS2_STREAM_COLOR},
+        {fourcc('R','W','1','6'), RS2_STREAM_COLOR},
         {fourcc('B','Y','R','2'), RS2_STREAM_COLOR},
         {fourcc('M','J','P','G'), RS2_STREAM_COLOR},
         {fourcc('M','4','2','0'), RS2_STREAM_COLOR}

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015-24 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015-24 RealSense, Inc. All Rights Reserved.
 #pragma once
 
 #include "core/sensor-interface.h"
@@ -75,7 +75,7 @@ namespace librealsense
         bool is_streaming() const override;
         virtual bool is_opened() const;
         virtual void register_metadata(rs2_frame_metadata_value metadata, std::shared_ptr<md_attribute_parser_base> metadata_parser) const;
-        void register_on_open(on_open callback)
+        virtual void register_on_open(on_open callback)
         {
             _on_open = callback;
         }
@@ -90,6 +90,7 @@ namespace librealsense
         {
             return {};
         }
+        embedded_filters get_supported_embedded_filters() const override { return embedded_filters(); };
 
         // Sometimes it is more efficient to prepare for large or repeating operations. Depending on the actual sensor
         // type we might want to change power state or encapsulate small transactions into a large one.
@@ -262,6 +263,8 @@ namespace librealsense
 
         void prepare_for_bulk_operation() override { _raw_sensor->prepare_for_bulk_operation(); }
         void finished_bulk_operation() override { _raw_sensor->finished_bulk_operation(); }
+
+        void register_on_open( on_open callback ) override { _raw_sensor->register_on_open( callback ); }
 
     private:
         void register_processing_block_options(const processing_block& pb);

@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2015-2024 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2015-2024 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -105,17 +105,10 @@ namespace librealsense
             bool try_lock();
 
         private:
-            void acquire();
-            void release();
-
             std::string _device_path;
             uint32_t _timeout;
             int _fildes;
-            static std::recursive_mutex _init_mutex;
-            static std::map<std::string, std::recursive_mutex> _dev_mutex;
-            static std::map<std::string, int> _dev_mutex_cnt;
-            int _object_lock_counter;
-            std::mutex _mutex;
+            std::atomic< int > _lock_counter;
         };
         static int xioctl(int fh, unsigned long request, void *arg);
 
@@ -310,6 +303,8 @@ namespace librealsense
             double _kpi_frames_drops_pct;
         };
 
+        typedef std::pair<uvc_device_info,std::string> node_info;
+
         class v4l_uvc_device : public uvc_device, public v4l_uvc_interface
         {
         public:
@@ -317,7 +312,6 @@ namespace librealsense
                     std::function<void(const uvc_device_info&,
                                        const std::string&)> action);
 
-            static std::vector<std::string> get_video_paths();
             static std::vector<std::string> get_mipi_dfu_paths();
 
             static bool is_usb_path_valid(const std::string& usb_video_path, const std::string &dev_name,
@@ -325,7 +319,7 @@ namespace librealsense
 
             static bool is_usb_device_path(const std::string& video_path);
 
-            static uvc_device_info get_info_from_usb_device_path(const std::string& video_path, const std::string& name);
+            static uvc_device_info get_info_from_usb_device_path(const std::string& video_path, const std::string& dev_name, const std::string& name, const std::vector<std::pair <std::string, std::string>>& sys_to_dev_video_paths);
 
             static uvc_device_info get_info_from_mipi_device_path(const std::string& video_path, const std::string& name);
 
@@ -408,7 +402,35 @@ namespace librealsense
             virtual inline std::shared_ptr<buffer> get_video_buffer(__u32 index) const {return _buffers[index];}
             virtual inline std::shared_ptr<buffer> get_md_buffer(__u32 index) const {return nullptr;}
 
-            static bool get_devname_from_video_path(const std::string& real_path, std::string& devname, bool is_for_dfu = false);
+            struct identifier
+            {
+                unsigned int major;
+                unsigned int minor;
+
+                bool operator== (const identifier& other) const { return major == other.major && minor == other.minor;}
+            };
+
+            struct path_and_identifier
+            {
+                std::string path;
+                identifier key;
+            };
+
+            static std::vector<path_and_identifier> collect_v4l_video_path_and_identifier();
+            static bool get_identifier_from_v4l_video_path(const std::string& v4l_video_path, identifier& key);
+            static bool get_devname_from_v4l_video_path(const std::string& v4l_video_path, std::string& devname,
+                                                    const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
+            static bool get_devname_from_mipi_dfu_path(const path_and_identifier& dfu_path, std::string& dev_name);
+
+            static std::vector<std::pair <std::string, std::string>> generate_v4l_to_dev_video_paths(const std::vector<path_and_identifier>& v4l_videos,
+                                                                                                     const std::vector<path_and_identifier>& dev_videos);
+            static std::vector<node_info> get_mipi_rs_enum_nodes();
+            static std::vector<node_info> collect_uvc_nodes(const std::vector<path_and_identifier>& v4l_videos, const std::vector<node_info>& mipi_rs_enum_nodes,
+                                                            const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
+            static std::vector<node_info> match_video_with_metadata_nodes(const std::vector<node_info>& uvc_nodes);
+            static bool get_info_from_v4l_video_path(const std::string& v4l_video_path, const std::string& dev_name, uvc_device_info& info, bool is_mipi_rs_enum_nodes_empty,
+                                                 const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
+            static std::vector<path_and_identifier> collect_dev_video_path_and_identifier();
 
             power_state _state = D3;
             std::string _name = "";
@@ -472,6 +494,19 @@ namespace librealsense
             v4l2_buf_type _md_type = LOCAL_V4L2_BUF_TYPE_META_CAPTURE;
 
             std::vector<std::shared_ptr<buffer>> _md_buffers;
+        };
+
+
+        const uint16_t D457_PID      = 0xABCD;
+        const uint16_t D430_GMSL_PID = 0xABCE;
+        const uint16_t D415_GMSL_PID = 0xABCF;
+        const uint16_t D401_GMSL_PID = 0xABCC;
+
+        static const std::set<std::uint16_t> mipi_devices_pid = {
+            D457_PID,
+            D430_GMSL_PID,
+            D415_GMSL_PID,
+            D401_GMSL_PID
         };
 
         // D457 Development. To be merged into underlying class

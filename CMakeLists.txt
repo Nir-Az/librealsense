@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 
 set( LRS_TARGET realsense2 )
 project( ${LRS_TARGET} LANGUAGES CXX C )
@@ -71,18 +71,11 @@ include(third-party/CMakeLists.txt)
 target_link_libraries( ${LRS_TARGET} PUBLIC rsutils )
 
 if(BUILD_WITH_DDS)
-    if (CMAKE_SYSTEM MATCHES "Windows" OR CMAKE_SYSTEM MATCHES "Linux")
-        
-        message(STATUS "Building with FastDDS")
-        include(CMake/external_foonathan_memory.cmake)
-        include(CMake/external_fastdds.cmake)
+    message(STATUS "Building with FastDDS")
+	include(CMake/external_foonathan_memory.cmake)
+	include(CMake/external_fastdds.cmake)
 
-        target_link_libraries( ${LRS_TARGET} PRIVATE realdds )
-
-    else()
-        MESSAGE(STATUS "Turning off `BUILD_WITH_DDS` as it's only supported on Windows & Linux and not on ${CMAKE_SYSTEM}")
-        set(BUILD_WITH_DDS OFF)
-    endif()
+	target_link_libraries( ${LRS_TARGET} PRIVATE realdds )
 endif()
 
 # configure the project according to OS specific requirments

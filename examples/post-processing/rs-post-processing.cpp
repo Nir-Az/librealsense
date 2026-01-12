@@ -1,5 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
+// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
 #include "example.hpp"          // Include short list of convenience functions for rendering
@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <array>
 
 #include <imgui.h>
 #include "imgui_impl_glfw.h"

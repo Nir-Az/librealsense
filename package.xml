@@ -6,16 +6,18 @@
 <package format="2">
   <name>librealsense2</name>
   <!-- The version tag needs to be updated with each new release of librealsense -->
-  <version>2.56.5</version>
+  <version>2.57.0</version>
   <description>
   Library for controlling and capturing data from the Intel(R) RealSense(TM) D400 devices.
   </description>
 
-  <maintainer email="librs.ros@intel.com">LibRealSense ROS Team</maintainer>
+  <maintainer email="rsswsdk@realsensecloud.onmicrosoft.com">LibRealSense ROS Team</maintainer>
+  <maintainer email="ashraf.kattoura@realsenseai.com">Ashraf Kattoura</maintainer>
+  <maintainer email="nir.azkiel@realsenseai.com">Nir Azkiel</maintainer>
 
   <url type="website">https://github.com/realsenseai/librealsense/</url>
 
-  <author email="librs.ros@intel.com">LibRealSense ROS Team</author>
+  <author email="rsswsdk@realsensecloud.onmicrosoft.com">LibRealSense ROS Team</author>
 
   <license>Apache License, Version 2.0</license>
 

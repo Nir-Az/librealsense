@@ -7,9 +7,9 @@
 #
 # Define a function for easy downloading the pre-built model files at CMake time:
 if(OPENVINO2019)
-set(OPENVINO_MODEL_SRC_URL "https://librealsense.intel.com/rs-tests/OpenVINO_data")
+set(OPENVINO_MODEL_SRC_URL "https://librealsense.realsenseai.com/rs-tests/OpenVINO_data")
 else()
-set(OPENVINO_MODEL_SRC_URL "https://librealsense.intel.com/rs-tests/OpenVINO_data/2020.1.033")
+set(OPENVINO_MODEL_SRC_URL "https://librealsense.realsenseai.com/rs-tests/OpenVINO_data/2020.1.033")
 endif()
 
 function(dl_vino_model filename sha1)
