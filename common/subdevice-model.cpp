@@ -1510,11 +1510,21 @@ namespace rs2
     void subdevice_model::pause()
     {
         _pause = true;
+        auto playback_dev = dev.as<rs2::playback>();
+        if (playback_dev && playback_dev.current_status() == RS2_PLAYBACK_STATUS_PLAYING)
+        {
+            playback_dev.pause();
+        }
     }
 
     void subdevice_model::resume()
     {
         _pause = false;
+        auto playback_dev = dev.as<rs2::playback>();
+        if (playback_dev && playback_dev.current_status() == RS2_PLAYBACK_STATUS_PAUSED)
+        {
+            playback_dev.resume();
+        }
     }
 
     //The function decides if specific frame should be sent to the syncer
