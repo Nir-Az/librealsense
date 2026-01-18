@@ -187,7 +187,7 @@ int main(int argc, char** argv) try
     cli::value<string> hex_cmd_arg('s', "send", "hex-data", "", "Hexadecimal raw data");
     cli::value<string> hex_script_arg('r', "raw", "path", "", "Full file path of hexadecimal raw data script");
     cli::value<string> commands_script_arg('c', "cmd", "path", "", "Full file path of commands script");
-    cli::flag verbose_arg('v', "verbose", "Print received raw data buffer");
+    cli::flag verbose_arg('v', "verbose", "Print raw data buffers");
     cmd.add(xml_arg);
     cmd.add(device_id_arg);
     cmd.add(specific_SN_arg);
