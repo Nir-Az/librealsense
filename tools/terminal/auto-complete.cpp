@@ -234,7 +234,7 @@ string auto_complete::get_line(std::function <bool()> to_stop)
 
             cout << ch;
         }
-        else if (ch == BACKSPACE)
+        else if( ch == BACKSPACE || ch == BACKSPACE_ALT )
         {
             _finds_vec.clear();
             _tab_index = 0;
