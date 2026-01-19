@@ -424,31 +424,20 @@ inline void update_format_type_to_lambda(std::map<std::string, xml_parser_functi
     }));
 
     format_type_to_lambda.insert(std::make_pair("Integer", [&](const uint8_t* data_offset, const section& sec, std::stringstream& tempStr) {
-        if (sec.size == 1) {
-            check_section_size(sec.size, sizeof(uint8_t), sec.name.c_str(), "Integer");
-            uint8_t val = *(data_offset + sec.offset);
-            tempStr << static_cast<int>(val);
-        }
-        else if (sec.size == 2) {
-            check_section_size(sec.size, sizeof(uint16_t), sec.name.c_str(), "Integer");
-            uint16_t val;
-            memcpy(&val, data_offset + sec.offset, sizeof(uint16_t));
-            tempStr << val;
-        }
-        else if (sec.size == 4) {
-            check_section_size(sec.size, sizeof(uint32_t), sec.name.c_str(), "Integer");
-            uint32_t val;
-            memcpy(&val, data_offset + sec.offset, sizeof(uint32_t));
-            tempStr << val;
-        }
-        else if (sec.size == 8) {
-            check_section_size(sec.size, sizeof(uint64_t), sec.name.c_str(), "Integer");
-            uint64_t val;
-            memcpy(&val, data_offset + sec.offset, sizeof(uint64_t));
-            tempStr << val;
-        }
-        else {
-            throw std::runtime_error("Unsupported Integer size: " + std::to_string(sec.size) + " for section: " + sec.name);
+        auto read_integer = [&](auto dummy) {
+            using T = decltype(dummy);
+            check_section_size(sec.size, sizeof(T), sec.name.c_str(), "Integer");
+            T val;
+            memcpy(&val, data_offset + sec.offset, sizeof(T));
+            return val;
+        };
+
+        switch (sec.size) {
+            case 1: tempStr << static_cast<int>(read_integer(uint8_t{})); break;
+            case 2: tempStr << read_integer(uint16_t{}); break;
+            case 4: tempStr << read_integer(uint32_t{}); break;
+            case 8: tempStr << read_integer(uint64_t{}); break;
+            default: throw std::runtime_error("Unsupported Integer size: " + std::to_string(sec.size) + " for section: " + sec.name);
         }
     }));
 
