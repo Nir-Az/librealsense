@@ -426,22 +426,25 @@ inline void update_format_type_to_lambda(std::map<std::string, xml_parser_functi
     format_type_to_lambda.insert(std::make_pair("Integer", [&](const uint8_t* data_offset, const section& sec, std::stringstream& tempStr) {
         if (sec.size == 1) {
             check_section_size(sec.size, sizeof(uint8_t), sec.name.c_str(), "Integer");
-            uint8_t val = *reinterpret_cast<const uint8_t*>(data_offset + sec.offset);
+            uint8_t val = *(data_offset + sec.offset);
             tempStr << static_cast<int>(val);
         }
         else if (sec.size == 2) {
             check_section_size(sec.size, sizeof(uint16_t), sec.name.c_str(), "Integer");
-            uint16_t val = *reinterpret_cast<const uint16_t*>(data_offset + sec.offset);
+            uint16_t val;
+            memcpy(&val, data_offset + sec.offset, sizeof(uint16_t));
             tempStr << val;
         }
         else if (sec.size == 4) {
             check_section_size(sec.size, sizeof(uint32_t), sec.name.c_str(), "Integer");
-            uint32_t val = *reinterpret_cast<const uint32_t*>(data_offset + sec.offset);
+            uint32_t val;
+            memcpy(&val, data_offset + sec.offset, sizeof(uint32_t));
             tempStr << val;
         }
         else if (sec.size == 8) {
             check_section_size(sec.size, sizeof(uint64_t), sec.name.c_str(), "Integer");
-            uint64_t val = *reinterpret_cast<const uint64_t*>(data_offset + sec.offset);
+            uint64_t val;
+            memcpy(&val, data_offset + sec.offset, sizeof(uint64_t));
             tempStr << val;
         }
         else {
