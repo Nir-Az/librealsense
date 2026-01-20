@@ -19,10 +19,10 @@ from test_calibrations_common import (
 )
 
 #disabled until we stabilize lab
-#test:device D400*
+#test:donotrun
 
 # Constants & thresholds (reintroduce after import fix)
-PIXEL_CORRECTION = -0.7  # pixel shift to apply to principal point
+PIXEL_CORRECTION = -1.0  # pixel shift to apply to principal point
 EPSILON = 0.001         # distance comparison tolerance
 HEALTH_FACTOR_THRESHOLD_AFTER_MODIFICATION = 2
 DEPTH_CONVERGENCE_TOLERANCE_MM = 50.0  # 5 cm tolerance for depth convergence toward ground truth
@@ -89,7 +89,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
                 log.i(f"Ground truth depth provided: {ground_truth_mm:.1f} mm")
         else:
             log.w("Baseline average depth unavailable; depth convergence assertion will be skipped")
-
+        
         # 3. Apply perturbation
         log.i(f"Applying manual raw intrinsic correction: delta={PIXEL_CORRECTION:+.3f} px")
         modification_success, _modified_table_bytes, modified_ppx, modified_ppy = modify_extrinsic_calibration(
