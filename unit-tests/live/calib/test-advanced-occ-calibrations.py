@@ -197,8 +197,6 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
     except Exception as e:
         log.e("OCC calibration failed: ", str(e))
         test.fail()
-    finally:
-        pipeline.stop()
 
     return calib_dev, saved_table
 
