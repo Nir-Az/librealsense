@@ -159,8 +159,24 @@ def wait_until_all_ports_disabled( timeout = 5 ):
 
 def map_unknown_ports():
     """
-    Fill in unknown ports in devices by enabling one port at a time, finding out which device
-    is there.
+    Discover which hub port each device is connected to by probing ports one at a time.
+    
+    This function is needed because direct USB location → hub port mapping often fails,
+    especially on Windows where the USB location string format (e.g., "0000.000d.0000.003...")
+    doesn't match what the Acroname hub can parse. When hub.get_port_by_location() fails,
+    devices end up with port=None.
+    
+    The discovery process:
+    1. Identify devices with unknown ports (port=None)
+    2. Identify hub ports that are active but not mapped to any known device
+    3. If only one unknown port exists, directly assign it to the unknown device
+    4. Otherwise, disable all ports, then enable one port at a time:
+       - Wait for a device to appear
+       - Record which device serial number is on that port
+       - Disable the port and repeat for the next unknown port
+    
+    After this function completes, all devices should have their `port` property set,
+    enabling `enable_only()` to properly isolate devices by controlling specific hub ports.
     """
     if not hub:
         return

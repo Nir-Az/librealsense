@@ -434,6 +434,46 @@ When migrating a test file:
 3. **Migrate more tests**: Follow the migration steps above
 4. **Update CI/CD**: Update build pipelines to use pytest commands
 
+## Device Exclusion
+
+You can exclude devices from test runs using either markers or CLI options.
+
+### Using Markers (in code)
+
+```python
+# Exclude D457 devices from this test
+@pytest.mark.device_exclude("D457")
+def test_something(test_device):
+    ...
+
+# Module-level exclusion
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_exclude("D457"),
+    pytest.mark.device_exclude("D405"),
+]
+```
+
+### Using CLI (at runtime)
+
+```bash
+# Exclude D455 devices from test run
+py -3.13 -m pytest --device-exclude D455
+
+# Exclude multiple device types
+py -3.13 -m pytest --device-exclude D455 --device-exclude D457
+
+# Combine with other options
+py -3.13 -m pytest live/frames/pytest-t2ff-pipeline.py -v --device-exclude D455
+```
+
+The CLI `--device-exclude` option is useful for:
+- Temporarily excluding a malfunctioning device
+- Running tests on a subset of connected devices without modifying test code
+- CI/CD pipelines where certain devices should be skipped
+
+**Note:** CLI exclusions are merged with marker-based exclusions. If a test has `@pytest.mark.device_exclude("D457")` and you run with `--device-exclude D455`, both D457 and D455 will be excluded.
+
 ## Command Reference
 
 | Task | Command |
@@ -447,6 +487,8 @@ When migrating a test file:
 | Debug mode (full device logs) | `py -3.13 -m pytest -s -v --log-cli-level=DEBUG` |
 | Run only nightly tests | `py -3.13 -m pytest -m nightly` |
 | Run all including nightly | `py -3.13 -m pytest -m "nightly or not nightly"` |
+| Exclude device type | `py -3.13 -m pytest --device-exclude D455` |
+| Exclude multiple devices | `py -3.13 -m pytest --device-exclude D455 --device-exclude D457` |
 | Override timeout | `py -3.13 -m pytest --timeout=300` |
 | Disable timeout | `py -3.13 -m pytest --timeout=0` |
 | Validate setup | `py -3.13 validate-pytest-migration.py` |

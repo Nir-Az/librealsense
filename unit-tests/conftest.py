@@ -58,6 +58,18 @@ def is_jetson_platform():
 # Pytest Hooks
 # ============================================================================
 
+def pytest_addoption(parser):
+    """
+    Add custom command-line options for device filtering.
+    """
+    parser.addoption(
+        "--device-exclude",
+        action="append",
+        default=[],
+        help="Exclude devices matching pattern (e.g., --device-exclude D455). Can be used multiple times."
+    )
+
+
 def pytest_configure(config):
     """
     Register custom markers for device-based testing.
@@ -99,6 +111,9 @@ def pytest_configure(config):
     # hub_reset=True will discover and reset the hub (just like old run-unit-tests.py)
     try:
         devices.query(hub_reset=True)
+        # Map unknown ports - required to associate devices with hub ports
+        # Without this, device.port will be None and enable_only won't work correctly
+        devices.map_unknown_ports()
     except Exception as e:
         log.w(f"Failed to query devices during configuration: {e}")
 
@@ -118,9 +133,13 @@ def pytest_generate_tests(metafunc):
         # Collect all matching devices from device_each markers
         all_serials = []
         
-        # Get exclusion patterns
+        # Get exclusion patterns from markers
         exclude_markers = [m for m in metafunc.definition.iter_markers("device_exclude")]
         exclude_patterns = [m.args[0] for m in exclude_markers if m.args]
+        
+        # Also get exclusion patterns from CLI --device-exclude option
+        cli_excludes = metafunc.config.getoption("--device-exclude", default=[])
+        exclude_patterns.extend(cli_excludes)
         
         for marker in device_each_markers:
             if marker.args:
@@ -141,7 +160,6 @@ def pytest_generate_tests(metafunc):
             # Add a custom fixture that will be requested automatically
             metafunc.fixturenames.append('_test_device_serial')
             metafunc.parametrize("_test_device_serial", all_serials, ids=ids, scope="function")
-
 
 def pytest_collection_modifyitems(config, items):
     """
@@ -343,15 +361,16 @@ def module_device_setup(request):
     serial_number = None
     
     # Check if test was parametrized with _test_device_serial
-    # The parametrization adds it to fixturenames, so we can try to get it
-    try:
-        serial_number = request.getfixturevalue('_test_device_serial')
+    # The parametrization from pytest_generate_tests adds it to the test's callspec
+    # We can access it via the node's callspec params
+    if hasattr(request.node, 'callspec') and '_test_device_serial' in request.node.callspec.params:
+        serial_number = request.node.callspec.params['_test_device_serial']
         log.d(f"Test using parametrized device: {serial_number}")
-    except (LookupError, pytest.FixtureLookupError):
+    else:
         # Not parametrized, fall back to marker-based detection (for device() marker)
         device_markers = []
         for marker in request.node.iter_markers():
-            if marker.name in ['device', 'device_exclude']:
+            if marker.name in ['device', 'device_each', 'device_exclude']:
                 device_markers.append(marker)
         
         if not device_markers:
