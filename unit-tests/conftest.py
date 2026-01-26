@@ -16,6 +16,7 @@ import pytest
 import sys
 import os
 import re
+import warnings
 from typing import List
 
 # Add py directory to path for rspy imports
@@ -77,6 +78,14 @@ def pytest_configure(config):
     # Configure test file discovery pattern
     config.addinivalue_line("python_files", "pytest-*.py")
     
+    # Configure asyncio default fixture loop scope to silence pytest-asyncio warning
+    config.inicfg["asyncio_default_fixture_loop_scope"] = "function"
+    
+    # Suppress paramiko and cryptography deprecation warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
+    warnings.filterwarnings("ignore", message=".*TripleDES.*")
+    warnings.filterwarnings("ignore", message=".*Blowfish.*")
+    
     config.addinivalue_line(
         "markers", "device(pattern): mark test to run on devices matching pattern (e.g., D400*, D455)"
     )
@@ -90,21 +99,13 @@ def pytest_configure(config):
         "markers", "live: tests requiring live devices"
     )
     
-    # Suppress paramiko debug logs and warnings
-    import logging
-    import warnings
-    logging.getLogger("paramiko").setLevel(logging.WARNING)
-    
-    # Suppress paramiko deprecation warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
-    warnings.filterwarnings("ignore", message=".*CryptographyDeprecationWarning.*")
-    warnings.filterwarnings("ignore", message=".*TripleDES.*")
-    warnings.filterwarnings("ignore", message=".*Blowfish.*")
-    
     # Enable rspy debug logging if pytest log level is DEBUG
     log_cli_level = config.getoption('--log-cli-level', default=None)
     if log_cli_level and log_cli_level.upper() == 'DEBUG':
         log.debug_on()
+        # Suppress verbose debug logging from third-party libraries
+        import logging
+        logging.getLogger('paramiko').setLevel(logging.WARNING)
     
     # Query devices early for test parametrization
     # This needs to happen during configure phase so pytest_generate_tests can access them
