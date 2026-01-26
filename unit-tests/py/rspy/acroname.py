@@ -319,7 +319,14 @@ class Acroname(device_hub.device_hub):
                     # We don't know how to get the port from these yet!
                     return None  # int(match.group(2))
                 else:
-                    split_location = [int(x) for x in usb_location.split('.')]
+                    # Windows USB location uses hex values (e.g., "0000.000d.0000.003.002.002.003.002.000")
+                    # Try parsing as hex first, fall back to decimal for backward compatibility
+                    split_location = []
+                    for x in usb_location.split('.'):
+                        try:
+                            split_location.append(int(x, 16))  # Parse as hex
+                        except ValueError:
+                            split_location.append(int(x))  # Fall back to decimal
                     # lambda helper to return the last 2 non-zero numbers, used when connecting using an additional hub
                     # ex: laptop -> hub -> acroname
                     get_last_two_digits = lambda array: tuple(
