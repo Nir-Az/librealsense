@@ -172,6 +172,8 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
         register_info( RS2_CAMERA_INFO_FIRMWARE_VERSION, str );
     if( j.nested( "product-line" ).get_ex( str ) )
         register_info( RS2_CAMERA_INFO_PRODUCT_LINE, str );
+    if( j.nested( "imu-type" ).get_ex( str ) )
+        register_info( RS2_CAMERA_INFO_IMU_TYPE, str );
     register_info( RS2_CAMERA_INFO_CAMERA_LOCKED, j.nested( "locked" ).default_value( true ) ? "YES" : "NO" );
     register_info(RS2_CAMERA_INFO_CONNECTION_TYPE, "DDS" );
     ds_advanced_mode_base::_enabled = j.nested( "advanced-mode" ).default_value( false );
