@@ -104,6 +104,12 @@ def pytest_configure(config):
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
     warnings.filterwarnings("ignore", message=".*TripleDES.*")
     warnings.filterwarnings("ignore", message=".*Blowfish.*")
+    # Suppress CryptographyDeprecationWarning from paramiko
+    try:
+        from cryptography.utils import CryptographyDeprecationWarning
+        warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    except ImportError:
+        pass
     
     config.addinivalue_line(
         "markers", "device(pattern): mark test to run on devices matching pattern (e.g., D400*, D455)"
