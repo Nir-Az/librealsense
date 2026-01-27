@@ -175,5 +175,6 @@ namespace librealsense
 
     // Update device name according capability in it.
     void update_device_name(std::string& device_name, const ds::ds_caps cap);
+    void update_d405_device_name(std::string& device_name, bool is_d401);
 
  }

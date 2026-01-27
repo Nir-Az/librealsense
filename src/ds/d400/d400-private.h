@@ -223,6 +223,7 @@ namespace librealsense
             constexpr size_t fisheye_sensor_lb = 112;
             constexpr size_t fisheye_sensor_hb = 113;
             constexpr size_t imu_acc_chip_id = 124;
+            constexpr size_t hw_type_offset = 158;
             constexpr size_t ip65_sealed_offset = 161;
             constexpr size_t ir_filter_offset = 164;
             constexpr size_t depth_sensor_type = 166;

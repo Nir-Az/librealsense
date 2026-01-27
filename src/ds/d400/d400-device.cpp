@@ -753,6 +753,16 @@ namespace librealsense
                 update_device_name(device_name, ds_caps::CAP_IP65);
             }
 
+            if(_pid == RS405_PID)
+            {
+                bool is_d401 = false;
+                uint8_t gvd_hw_type = gvd_buff[d400_gvd_offsets::hw_type_offset];
+                constexpr uint8_t d400_gvd_hw_types_401_usb = 7;
+                if( gvd_hw_type == d400_gvd_hw_types_401_usb )
+                    is_d401 = true;
+                update_d405_device_name( device_name, is_d401 );
+            }
+
             std::shared_ptr<option> exposure_option = nullptr;
             std::shared_ptr<option> gain_option = nullptr;
             std::shared_ptr<hdr_option> hdr_enabled_option = nullptr;
@@ -1239,6 +1249,15 @@ namespace librealsense
         default:
             throw invalid_value_exception("capability '" + ds::ds_capabilities_names.at(cap) + "' is not supported for device name update");
             break;
+        }
+    }
+
+    // Needed because D401 and D405 share the same PID
+    void update_d405_device_name(std::string& device_name, bool is_d401)
+    {
+        if (is_d401)
+        {
+            device_name = std::regex_replace(device_name, std::regex("D405"), "D401"); // Change device name from D405 to D401.
         }
     }
 
