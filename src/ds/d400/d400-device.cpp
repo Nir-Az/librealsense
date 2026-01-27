@@ -755,11 +755,8 @@ namespace librealsense
 
             if(_pid == RS405_PID)
             {
-                uint8_t gvd_hw_type = gvd_buff[d400_gvd_offsets::hw_type_offset];
-                // Per D400 GVD specification, HW type value 7 identifies D401 USB devices
-                constexpr uint8_t D401_USB_HW_TYPE = 7;
-                bool is_d401 = (gvd_hw_type == D401_USB_HW_TYPE);
-                update_d405_device_name( device_name, is_d401 );
+                if( is_d401_usb_device( gvd_buff[d400_gvd_offsets::hw_type_offset] ) )
+                    update_d405_device_name( device_name );                   
             }
 
             std::shared_ptr<option> exposure_option = nullptr;
@@ -1252,12 +1249,9 @@ namespace librealsense
     }
 
     // Needed because D401 and D405 share the same PID
-    void update_d405_device_name(std::string& device_name, bool is_d401)
+    void update_d405_device_name(std::string& device_name)
     {
-        if (is_d401)
-        {
-            device_name = std::regex_replace(device_name, std::regex("D405"), "D401"); // Change device name from D405 to D401.
-        }
+        device_name = std::regex_replace( device_name, std::regex( "D405" ), "D401" ); 
     }
 
     platform::usb_spec d400_device::get_usb_spec() const
@@ -1408,4 +1402,10 @@ namespace librealsense
         fwv = _hw_monitor->get_firmware_version_string< uint8_t >( gvd_buff, camera_fw_version_offset );
     }
 
+    bool d400_device::is_d401_usb_device( uint8_t gvd_hw_type ) const
+    {
+        // Per D400 GVD specification, HW type value 7 identifies D401 USB devices
+        constexpr uint8_t D401_USB_HW_TYPE = 7;
+        return gvd_hw_type == D401_USB_HW_TYPE;
+    }
 }
