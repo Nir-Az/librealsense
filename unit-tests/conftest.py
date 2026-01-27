@@ -101,19 +101,14 @@ def pytest_configure(config):
     config.inicfg["asyncio_default_fixture_loop_scope"] = "function"
     
     # Suppress paramiko and cryptography deprecation warnings via pytest's filterwarnings
-    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:paramiko.*")
-    config.addinivalue_line("filterwarnings", "ignore:.*TripleDES.*")
-    config.addinivalue_line("filterwarnings", "ignore:.*Blowfish.*")
-    config.addinivalue_line("filterwarnings", "ignore:.*has been moved to cryptography.hazmat.decrepit.*")
-    # Try to suppress CryptographyDeprecationWarning if available
+    # Format: action:message:category:module:lineno
+    # Ignore all CryptographyDeprecationWarning
     config.addinivalue_line("filterwarnings", "ignore::cryptography.utils.CryptographyDeprecationWarning")
-    
-    # Also set Python warnings module filters as fallback
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
-    warnings.filterwarnings("ignore", message=".*TripleDES.*")
-    warnings.filterwarnings("ignore", message=".*Blowfish.*")
-    warnings.filterwarnings("ignore", module="paramiko.*")
-    warnings.filterwarnings("ignore", message=".*has been moved to cryptography.hazmat.decrepit.*")
+    # Ignore DeprecationWarning from paramiko
+    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:paramiko")
+    # Also catch by message pattern
+    config.addinivalue_line("filterwarnings", "ignore:TripleDES has been moved")
+    config.addinivalue_line("filterwarnings", "ignore:Blowfish has been moved")
     
     config.addinivalue_line(
         "markers", "device(pattern): mark test to run on devices matching pattern (e.g., D400*, D455)"
@@ -257,7 +252,6 @@ def pytest_runtest_protocol(item, nextitem):
     Hook called for each test to add visual separators and indentation.
     """
     # Visual separator and test start
-    log.i("")
     log.i("-" * 80)
     log.i(f"Test: {item.nodeid}")
     log.i("-" * 80)
@@ -267,8 +261,6 @@ def pytest_runtest_protocol(item, nextitem):
     outcome = yield
     
     log.debug_unindent()
-    print()  # Plain newline without log prefix
-    log.i("-" * 80)
 
 
 @pytest.hookimpl(hookwrapper=True)

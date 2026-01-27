@@ -5,7 +5,7 @@ yepkit-pykush==0.3.5
 brainstem==2.11.1
 
 # Unifi hub
-paramiko==3.4.0
+paramiko>=3.5.0
 
 # REST API testing
 fastapi==0.120.1
