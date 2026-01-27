@@ -755,11 +755,10 @@ namespace librealsense
 
             if(_pid == RS405_PID)
             {
-                bool is_d401 = false;
                 uint8_t gvd_hw_type = gvd_buff[d400_gvd_offsets::hw_type_offset];
-                constexpr uint8_t d400_gvd_hw_types_401_usb = 7;
-                if( gvd_hw_type == d400_gvd_hw_types_401_usb )
-                    is_d401 = true;
+                // Per D400 GVD specification, HW type value 7 identifies D401 USB devices
+                constexpr uint8_t D401_USB_HW_TYPE = 7;
+                bool is_d401 = (gvd_hw_type == D401_USB_HW_TYPE);
                 update_d405_device_name( device_name, is_d401 );
             }
 
