@@ -69,12 +69,31 @@ def pytest_addoption(parser):
         default=[],
         help="Exclude devices matching pattern (e.g., --device-exclude D455). Can be used multiple times."
     )
+    parser.addoption(
+        "--context",
+        action="store",
+        default="",
+        help="Context for test configuration (e.g., --context nightly). Space-separated list."
+    )
+
+
+# Global context variable to match old LibCI behavior
+# Tests can access this via test_context_var fixture or directly import it
+context_list = []
 
 
 def pytest_configure(config):
     """
     Register custom markers for device-based testing.
     """
+    global context_list
+    
+    # Parse and store context (e.g., --context "nightly gha")
+    context_str = config.getoption("--context", default="")
+    if context_str:
+        context_list = context_str.split()
+        log.i(f"Test context: {context_list}")
+    
     # Configure test file discovery pattern
     config.addinivalue_line("python_files", "pytest-*.py")
     
@@ -550,6 +569,17 @@ def test_device(test_context):
 
 
 @pytest.fixture
+def test_context_var(request):
+    """
+    Provides the test context list (e.g., ['nightly', 'gha']).
+    
+    This matches the old LibCI test.context behavior.
+    Tests can check: if 'nightly' in test_context_var: ...
+    """
+    return context_list
+
+
+@pytest.fixture
 def test_wrapper_info(request):
     """
     Provides test metadata for logging and reporting.
@@ -563,7 +593,8 @@ def test_wrapper_info(request):
     info = {
         'name': test_name,
         'file': test_file,
-        'node': request.node
+        'node': request.node,
+        'context': context_list  # Add context to info dict for compatibility
     }
     
     yield info
