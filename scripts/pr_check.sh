@@ -10,7 +10,7 @@ ok=0
 fixed=0
 
 function check_folder {
-    for filename in $(find $1 -type f \( -iname \*.cpp -o -iname \*.h -o -iname \*.hpp -o -iname \*.js -o -iname \*.bat -o -iname \*.sh -o -iname \*.txt \)); do
+    for filename in $(find $1 -type f \( -iname \*.cpp -o -iname \*.h -o -iname \*.c -o -iname \*.hpp -o -iname \*.js -o -iname \*.bat -o -iname \*.sh -o -iname \*.txt \)); do
           if [[ $(grep -oP "Software License Agreement" $filename | wc -l) -ne 0 ]]; then
                echo "[WARNING] $filename contains 3rd-party license agreement"
           else
