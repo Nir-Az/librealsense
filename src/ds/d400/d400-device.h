@@ -130,6 +130,7 @@ namespace librealsense
         void set_imu_type();
         void get_fw_details( const std::vector< uint8_t > & gvd_buff, std::string & optic_serial,
                              std::string & asic_serial, std::string & fwv ) const;
+        bool is_d401_usb_device( uint8_t gvd_hw_type ) const;
 
         friend class d400_depth_sensor;
 
@@ -175,5 +176,6 @@ namespace librealsense
 
     // Update device name according capability in it.
     void update_device_name(std::string& device_name, const ds::ds_caps cap);
+    void update_d405_device_name( std::string & device_name );
 
  }
