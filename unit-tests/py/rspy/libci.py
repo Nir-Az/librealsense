@@ -87,6 +87,7 @@ class TestConfig( ABC ):  # Abstract Base Class
         self._configurations = list()
         self._priority = 1000
         self._tags = set()
+        self._types = set()  # usage: test:type <type> or test:type !<type>
         self._flags = set()
         self._timeout = 200
         self._retries = 0
@@ -129,6 +130,10 @@ class TestConfig( ABC ):  # Abstract Base Class
     @property
     def tags( self ):
         return self._tags
+
+    @property
+    def types( self ):
+        return self._types
 
     @property
     def flags( self ):
@@ -239,6 +244,8 @@ class TestConfigFromText( TestConfig ):
                            params )
             elif directive == 'tag':
                 self._tags.update( map( str.lower, params ))  # tags are case-insensitive
+            elif directive == 'type':
+                self._types.update( map( str.lower, params ))
             elif directive == 'flag':
                 self._flags.update( params )
             elif directive == 'donotrun':

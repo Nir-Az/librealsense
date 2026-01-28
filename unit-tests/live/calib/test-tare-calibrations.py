@@ -5,7 +5,7 @@ import sys
 import time
 import pyrealsense2 as rs
 from rspy import test, log
-from test_calibrations_common import calibration_main, is_mipi_device
+from test_calibrations_common import calibration_main, get_calibration_device, is_mipi_device
 
 #disabled until we stabilize lab
 #test:donotrun
@@ -22,12 +22,6 @@ def tare_calibration_json(tare_json_file, host_assistance):
         log.i('Using default parameters for Tare calibration.')
         tare_json = '{\n  '+\
                     '"host assistance": ' + str(int(host_assistance)) + ',\n'+\
-                    '"speed": 3,\n'+\
-                    '"scan parameter": 0,\n'+\
-                    '"step count": 20,\n'+\
-                    '"apply preset": 1,\n'+\
-                    '"accuracy": 2,\n'+\
-                    '"depth": 0,\n'+\
                     '"resize factor": 1\n'+\
                     '}'
     return tare_json
@@ -83,21 +77,23 @@ HEALTH_FACTOR_THRESHOLD = 0.25
 TARGET_Z_MIN = 600
 TARGET_Z_MAX = 1500
 _target_z = None
+if is_mipi_device():
+    with test.closure("Tare calibration test with host assistance"):
+        try:
+            host_assistance = True
+            if (_target_z is None):
+                _target_z = calculate_target_z()
+                test.check(_target_z > TARGET_Z_MIN and _target_z < TARGET_Z_MAX)
+            
+            tare_json = tare_calibration_json(None, host_assistance)
+            image_width, image_height, fps = 1280, 720, 30
+            config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
+            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, return_table=True)
 
-with test.closure("Tare calibration test with host assistance"):
-    try:
-        host_assistance = True
-        if (_target_z is None):
-            _target_z = calculate_target_z()
-            test.check(_target_z > TARGET_Z_MIN and _target_z < TARGET_Z_MAX)
-        
-        tare_json = tare_calibration_json(None, host_assistance)
-        health_factor = calibration_main(host_assistance, False, tare_json, _target_z)
-
-        test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
-    except Exception as e:
-        log.e("Tare calibration test with host assistance failed: ", str(e))
-        test.fail()
+            test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
+        except Exception as e:
+            log.e("Tare calibration test with host assistance failed: ", str(e))
+            test.fail()
 
 if not is_mipi_device():
 # mipi devices do not support OCC calibration without host assistance  
@@ -109,39 +105,11 @@ if not is_mipi_device():
                 test.check(_target_z > TARGET_Z_MIN and _target_z < TARGET_Z_MAX)
 
             tare_json = tare_calibration_json(None, host_assistance)
-            health_factor = calibration_main(host_assistance, False, tare_json, _target_z)
+            image_width, image_height, fps = 256, 144, 90
+            config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
+            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, return_table=True)
             
             test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
         except Exception as e:
             log.e("Tare calibration test failed: ", str(e))
             test.fail()
-
-# for step 2 -  not in use for now
-"""
-# This test performs Tare calibration with calibration table backup and modification.
-# It demonstrates backing up the calibration table, running the calibration, and restoring the table if needed.
-# The test checks that the health factor after calibration is within the allowed threshold.
-with test.closure("Tare calibration with table backup and modification"):
-    try:
-        host_assistance = False
-        target_z = calculate_target_z()
-        test.check(target_z > TARGET_Z_MIN and target_z < TARGET_Z_MAX)
-        tare_json = tare_calibration_json(None, host_assistance)
-        
-        log.i("Starting Tare calibration with calibration table backup/restore demonstration")
-        health_factor = perform_calibration_with_table_backup(host_assistance, False, tare_json, target_z)
-        
-        if health_factor is not None:
-            test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
-            log.i("Tare calibration with table manipulation completed successfully")
-        else:
-            log.e("Tare calibration with table backup failed")
-            test.fail()
-            
-    except Exception as e:
-        log.e("Tare calibration with table backup failed: ", str(e))
-        test.fail()
-    log.i("Done\n")
-
-test.print_results_and_exit()
-"""

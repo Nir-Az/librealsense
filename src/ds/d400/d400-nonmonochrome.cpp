@@ -35,7 +35,7 @@ namespace librealsense
 
         if ((_fw_version >= firmware_version("5.5.8.0")) && (!val_in_range(pid, { RS_USB2_PID })))
         {
-            if (!val_in_range(pid, { RS405_PID, RS455_PID }))
+            if (!val_in_range(pid, { RS405_PID, RS455_PID, RS401_GMSL_PID }))
             {
                 depth_ep.register_option(RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE,
                     std::make_shared<uvc_xu_option<uint8_t>>(get_raw_depth_sensor(),

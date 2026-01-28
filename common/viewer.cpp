@@ -2946,15 +2946,30 @@ namespace rs2
                         }
                     }
 
+                                        
                     ImGui::Separator();
+                    ImGui::PopStyleColor();
+                    std::string excl_icon_str = rsutils::string::from() << textual_icons::exclamation_triangle
+                                                << " The following changes will take effect only after restarting the application";
+                    ImGui::Text( "%s", excl_icon_str.c_str() );
+                    bool allow_partial_device = temp_cfg.get_nested< bool >( "context.partial-device-allowed", false );
+                    if( ImGui::Checkbox( "Allow partial device initialization", &allow_partial_device ) )
+                    {
+                        temp_cfg.set_nested( "context.partial-device-allowed", allow_partial_device );
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        RsImGui::CustomTooltip( "%s", "In case of incomplete device initalization\n"
+                                                "allow a device with partial capabilities to be used" );
+                    }
                     bool enable_dds = temp_cfg.get_nested<bool>("context.dds.enabled" , false);
-                    int domain_id = temp_cfg.get_nested<int>("context.dds.domain" , 0);
                     if( ImGui::Checkbox( "Enable DDS", &enable_dds ) )
                     {
                         temp_cfg.set_nested("context.dds.enabled", enable_dds);
                     }
                     if( enable_dds )
                     {
+                        int domain_id = temp_cfg.get_nested< int >( "context.dds.domain", 0 );
                         ImGui::SameLine();
                         ImGui::SetCursorPosX( ImGui::GetCursorPosX() + 50 );
                         ImGui::PushItemWidth( 150.0f );
@@ -2970,13 +2985,6 @@ namespace rs2
                         }
                     }
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 0.8f));
-                    
-                    std::string excl_icon_str = std::string(rsutils::string::from() 
-                        << textual_icons::exclamation_triangle 
-                        << " DDS changes will take effect only after restarting the application");
-                    ImGui::Text("%s", excl_icon_str.c_str());
-                    ImGui::PopStyleColor();
-
                 }
 
                 if (tab == 3)
