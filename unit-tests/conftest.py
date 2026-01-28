@@ -134,8 +134,10 @@ def pytest_configure(config):
     # Query devices early for test parametrization
     # This needs to happen during configure phase so pytest_generate_tests can access them
     # hub_reset=True will discover and reset the hub (just like old run-unit-tests.py)
+    # Enable DDS if context contains 'dds'
     try:
-        devices.query(hub_reset=True)
+        enable_dds = 'dds' in context_list
+        devices.query(hub_reset=True, disable_dds=not enable_dds)
         # Map unknown ports - required to associate devices with hub ports
         # Without this, device.port will be None and enable_only won't work correctly
         devices.map_unknown_ports()
