@@ -56,6 +56,91 @@ def is_jetson_platform():
 
 
 # ============================================================================
+# Logging Setup
+# ============================================================================
+
+def _find_build_dir():
+    """
+    Find the build directory by searching upward from current directory.
+    Matches the logic in run-unit-tests.py.
+    
+    Returns:
+        Path to build directory, or None if not found
+    """
+    search_dir = current_dir
+    while True:
+        cmake_cache = os.path.join(search_dir, 'CMakeCache.txt')
+        if os.path.isfile(cmake_cache):
+            log.d(f'Found build dir: {search_dir}')
+            return search_dir
+        parent = os.path.dirname(search_dir)
+        if parent == search_dir:
+            # Reached root, try repo.build as fallback
+            if hasattr(repo, 'build') and repo.build:
+                log.d(f'Using repo.build: {repo.build}')
+                return repo.build
+            break
+        search_dir = parent
+    
+    log.d('Could not find build directory, using default')
+    return None
+
+
+def _setup_test_logging(config):
+    """
+    Set up test logging to match run-unit-tests.py behavior.
+
+    Logs are written to: <build_dir>/<CONFIGURATION>/unit-tests/
+    where CONFIGURATION is the CMAKE_BUILD_TYPE (Release, Debug, etc.)
+    - pytest-results.xml: JUnit XML format for CI/CD integration
+    - Individual test logs via pytest's native logging
+    """
+    # Find build directory
+    build_dir = _find_build_dir()
+
+    # Create log directory (matching run-unit-tests.py)
+    if build_dir:
+        # Try to read CMAKE_BUILD_TYPE from CMakeCache.txt
+        cmake_cache_path = os.path.join(build_dir, 'CMakeCache.txt')
+        configuration = None
+        
+        try:
+            with open(cmake_cache_path, 'r') as f:
+                for line in f:
+                    # Look for CMAKE_BUILD_TYPE:STRING=<value>
+                    if line.startswith('CMAKE_BUILD_TYPE:'):
+                        # Extract value after the '='
+                        parts = line.split('=', 1)
+                        if len(parts) == 2:
+                            configuration = parts[1].strip()
+                            log.d(f'Found CMAKE_BUILD_TYPE: {configuration}')
+                            break
+        except Exception as e:
+            log.d(f'Could not read CMAKE_BUILD_TYPE from CMakeCache.txt: {e}')
+        
+        # Construct log directory path
+        if configuration:
+            logdir = os.path.join(build_dir, configuration, 'unit-tests')
+        else:
+            # Fallback to original behavior if CMAKE_BUILD_TYPE not found
+            logdir = os.path.join(build_dir, 'unit-tests')
+    else:
+        # Fallback to current directory if build not found
+        logdir = os.path.join(current_dir, 'logs')
+
+    os.makedirs(logdir, exist_ok=True)
+    log.d(f'Test logs directory: {logdir}')
+
+    # Configure JUnit XML output (unless user specified their own)
+    if not config.getoption('--junitxml', default=None):
+        junit_xml_path = os.path.join(logdir, 'pytest-results.xml')
+        config.option.xmlpath = junit_xml_path
+        log.i(f'JUnit XML results: {junit_xml_path}')
+
+    # Store logdir for potential use by tests
+    config._test_logdir = logdir
+
+# ============================================================================
 # Pytest Hooks
 # ============================================================================
 
@@ -93,6 +178,9 @@ def pytest_configure(config):
     if context_str:
         context_list = context_str.split()
         log.i(f"Test context: {context_list}")
+    
+    # Set up test log directory (matching run-unit-tests.py behavior)
+    _setup_test_logging(config)
     
     # Configure test file discovery pattern
     config.addinivalue_line("python_files", "pytest-*.py")
