@@ -23,7 +23,8 @@ if(CHECK_FOR_UPDATES)
         GIT_REPOSITORY "https://github.com/curl/curl.git"
         GIT_TAG "curl-8_8_0"
         SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/third-party/libcurl
-        CMAKE_ARGS  -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+        CMAKE_ARGS  --no-warn-unused-cli
+                    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
                     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
                     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                     -DCMAKE_C_FLAGS_DEBUG=${CMAKE_C_FLAGS_DEBUG}

@@ -45,7 +45,7 @@ task downloadFirmware() {
     def d4xxFile = new File("$projectDir/src/main/res/raw/fw_d4xx.bin")
     if (!d4xxFile.exists()) {
         println("downloading D4xx fw: " + d4xxFwVersion)
-        new URL('https://librealsense.intel.com/Releases/RS4xx/FW/D4XX_FW_Image-' + d4xxFwVersion + '.bin').withInputStream{ i -> d4xxFile.withOutputStream{ it << i }}
+        new URL('https://librealsense.realsenseai.com/Releases/RS4xx/FW/D4XX_FW_Image-' + d4xxFwVersion + '.bin').withInputStream{ i -> d4xxFile.withOutputStream{ it << i }}
     }
 }
 

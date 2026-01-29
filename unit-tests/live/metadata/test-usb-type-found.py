@@ -2,8 +2,9 @@
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 
-#test:device each(D400*) !D457
-#test:device each(D500*) !D555
+#test:device each(D400*)
+#test:device each(D500*)
+#test:type USB
 
 
 import pyrealsense2 as rs

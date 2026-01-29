@@ -503,7 +503,7 @@ namespace librealsense
 
         std::unique_ptr< frame_timestamp_reader > timestamp_reader_backup( new ds_timestamp_reader() );
         frame_timestamp_reader* timestamp_reader_from_metadata;
-        if (!val_in_range(all_device_infos.front().pid, { RS457_PID, RS430_GMSL_PID, RS415_GMSL_PID }))
+        if (!(ds::d400_mipi_device_pid.count(all_device_infos.front().pid) > 0))
             timestamp_reader_from_metadata = new ds_timestamp_reader_from_metadata(std::move(timestamp_reader_backup));
         else
             timestamp_reader_from_metadata = new ds_timestamp_reader_from_metadata_mipi(std::move(timestamp_reader_backup));
@@ -552,7 +552,7 @@ namespace librealsense
         auto raw_sensor = get_raw_depth_sensor();
         _pid = group.uvc_devices.front().pid;
 
-        _is_mipi_device = val_in_range(_pid, { RS457_PID, RS430_GMSL_PID, RS415_GMSL_PID });
+        _is_mipi_device = (ds::d400_mipi_device_pid.count(_pid) > 0);
 
         _color_calib_table_raw = [this]()
         {

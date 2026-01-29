@@ -117,6 +117,10 @@ class Device:
         return self._product_line
 
     @property
+    def connection_type( self ):
+        return self._connection_type
+
+    @property
     def physical_port( self ):
         return self._physical_port
 

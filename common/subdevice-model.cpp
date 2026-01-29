@@ -31,13 +31,14 @@ namespace rs2
                                             bool * options_invalidated,
                                             std::string & error_message )
     {
-        for (rs2::option_value option : s->get_supported_option_values())
-        {
-            options_metadata[option->id]
-                = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
-        }
         try
         {
+            for( rs2::option_value option : s->get_supported_option_values() )
+            {
+                options_metadata[option->id]
+                    = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
+            }
+
             s->on_options_changed( [this]( const options_list & list )
             {
                 for( auto changed_option : list )
@@ -826,11 +827,6 @@ namespace rs2
     {
         bool res = false;
 
-        if (!ui.is_multiple_resolutions)
-        {
-            return false;
-        }
-
         std::vector<rs2_stream> relevant_streams = { RS2_STREAM_DEPTH, RS2_STREAM_INFRARED };
         for (auto&& stream_type : relevant_streams)
         {
@@ -867,7 +863,7 @@ namespace rs2
         auto col0 = ImGui::GetCursorPosX();
         auto col1 = 9.f * (float)config_file::instance().get( configurations::window::font_size );
 
-        if (ui.is_multiple_resolutions && !strcmp(s->get_info(RS2_CAMERA_INFO_NAME), "Stereo Module"))
+        if (ui.is_multiple_resolutions)
         {
             if (draw_fps_selector)
             {
