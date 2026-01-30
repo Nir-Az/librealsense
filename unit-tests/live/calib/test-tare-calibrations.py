@@ -95,7 +95,7 @@ if is_mipi_device():
             tare_json = tare_calibration_json(None, host_assistance)
             image_width, image_height, fps = 1280, 720, 30
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
-            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, return_table=True)
+            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, host_assistance, return_table=True)
 
             test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
         except Exception as e:
@@ -114,7 +114,7 @@ if not is_mipi_device():
             tare_json = tare_calibration_json(None, host_assistance)
             image_width, image_height, fps = 256, 144, 90
             config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
-            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, return_table=True)
+            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, False, tare_json, _target_z, host_assistance, return_table=True)
             
             test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD)
         except Exception as e:

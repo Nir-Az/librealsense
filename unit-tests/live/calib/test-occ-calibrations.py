@@ -37,7 +37,7 @@ def on_chip_calibration_json(occ_json_file, host_assistance):
     return occ_json
 
 # Health factor threshold for calibration success
-# 1.5 is temprorary W/A for our cameras places in very low position in the lab. the proper value for good calibration is 0.25
+# 1.5 is temporarily W/A for our cameras places in very low position in the lab. the proper value for good calibration is 0.25
 HEALTH_FACTOR_THRESHOLD = 1.5
 NUM_ITERATIONS = 1
  
@@ -67,7 +67,7 @@ if is_mipi_device():
                 image_width, image_height, fps = 1280, 720, 30
                 occ_json = on_chip_calibration_json(None, host_assistance)
                 config, pipeline, calib_dev = get_calibration_device(image_width, image_height, fps)
-                health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, True, occ_json, None, return_table=True)
+                health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, True, occ_json, None, host_assistance=host_assistance, return_table=True)
                 test.check(abs(health_factor) < HEALTH_FACTOR_THRESHOLD or new_calib_bytes is None)
                 log.i(f"Completed OCC calibration iteration {iteration}/{NUM_ITERATIONS} - Health factor: {health_factor}")   
             except Exception as e:

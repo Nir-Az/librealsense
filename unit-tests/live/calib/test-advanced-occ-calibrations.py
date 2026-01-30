@@ -120,7 +120,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
         mod_left_pp, mod_right_pp, mod_offsets = modified_principal_points_result
         modified_axis_val = mod_right_pp[1]
         returned_modified_axis_val = modified_ppy if modify_ppy else modified_ppx
-        if abs(modified_axis_val - returned_modified_axis_val) > EPSILON: # verify that we fix at least 1/2 of modification
+        if abs(modified_axis_val - returned_modified_axis_val) > DIFF_THRESHOLD: # verify that we fix at least 1/2 of modification
             log.e(f"Modification mismatch for ppy. Expected {returned_modified_axis_val:.6f} got {modified_axis_val:.6f}")
             test.fail()
 
@@ -136,7 +136,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
         occ_json = on_chip_calibration_json(None, host_assistance)
         new_calib_bytes = None
         try:
-            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, True, occ_json, None, return_table=True)
+            health_factor, new_calib_bytes = calibration_main(config, pipeline, calib_dev, True, occ_json, None, host_assistance, return_table=True)
         except Exception as e:
             log.e(f"Calibration_main failed: {e}")
             health_factor = None
