@@ -12,10 +12,10 @@ import ctypes
 
 # Constants for calibration
 CALIBRATION_TIMEOUT_SECONDS = 30
-OCC_TIMEOUT_MS = 5200
-TARE_TIMEOUT_MS = 6000
+OCC_TIMEOUT_MS = 6000
+TARE_TIMEOUT_MS = 7000
 OCC_TIMEOUT_MS_HA = 9000
-TARE_TIMEOUT_MS = 10000
+TARE_TIMEOUT_MS_HA = 9000
 FRAME_PROCESSING_TIMEOUT_MS = 5000
 HARDWARE_RESET_DELAY_SECONDS = 3
 
@@ -87,11 +87,11 @@ def calibration_main(config, pipeline, calib_dev, occ_calib, json_config, ground
     try:
         if occ_calib:    
             log.i("Starting on-chip calibration")
-            timeout = OCC_TIMEOUT_MS
+            timeout = OCC_TIMEOUT_MS_HA if host_assistance else OCC_TIMEOUT_MS
             new_calib, health = calib_dev.run_on_chip_calibration(json_config, on_calib_cb, timeout)
         else:    
             log.i("Starting tare calibration")
-            timeout = TARE_TIMEOUT_MS            
+            timeout = TARE_TIMEOUT_MS_HA if host_assistance else TARE_TIMEOUT_MS            
             new_calib, health = calib_dev.run_tare_calibration(ground_truth, json_config, on_calib_cb, timeout)
 
         calib_done = len(new_calib) > 0
