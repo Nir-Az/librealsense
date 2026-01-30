@@ -23,6 +23,7 @@ from test_calibrations_common import (
 
 # Constants & thresholds (reintroduce after import fix)
 PIXEL_CORRECTION = -1.0  # pixel shift to apply to principal point
+SHORT_DISTANCE_PIXEL_CORRECTION = -1.3
 EPSILON = 0.5         # half of PIXEL_CORRECTION tolerance
 DIFF_THRESHOLD = 0.001  # minimum change expected after OCC calibration
 HEALTH_FACTOR_THRESHOLD_AFTER_MODIFICATION = 2
@@ -101,9 +102,12 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
             log.w("Baseline average depth unavailable; depth convergence assertion will be skipped")
         
         # 3. Apply perturbation
-        log.i(f"Applying manual raw intrinsic correction: delta={PIXEL_CORRECTION:+.3f} px")
+        pixel_correction = PIXEL_CORRECTION
+        if ground_truth_mm < 1300.0:
+            pixel_correction = SHORT_DISTANCE_PIXEL_CORRECTION
+        log.i(f"Applying manual raw intrinsic correction: delta={pixel_correction:+.3f} px")
         modification_success, _modified_table_bytes, modified_ppx, modified_ppy = modify_extrinsic_calibration(
-            calib_dev, PIXEL_CORRECTION, modify_ppy=modify_ppy)
+            calib_dev, pixel_correction, modify_ppy=modify_ppy)
         if not modification_success:
             log.e("Failed to modify calibration table")
             test.fail()
@@ -127,7 +131,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
         else:
             log.e("Average depth after modification unavailable")
             test.fail()
-
+        
         # 6. Run OCC
         occ_json = on_chip_calibration_json(None, host_assistance)
         new_calib_bytes = None
@@ -179,11 +183,11 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
         if (ground_truth_mm is not None and
             modified_avg_depth_m is not None and
             post_avg_depth_m is not None):
-            dist_modified_gt_mm = abs(modified_avg_depth_m * 1000.0 - ground_truth_mm)
             dist_post_gt_mm = abs(post_avg_depth_m * 1000.0 - ground_truth_mm)
+            dist_modified_gt_mm = abs(modified_avg_depth_m * 1000.0 - ground_truth_mm)
             log.i(f"Depth to ground truth (mm): modified={dist_modified_gt_mm:.1f} post={dist_post_gt_mm:.1f} (ground truth={ground_truth_mm:.1f} mm)")
             # verify convergence toward ground truth, allow tolerance in case of too small modification in depth due to small distance change
-            if dist_post_gt_mm > dist_modified_gt_mm + DEPTH_CONVERGENCE_TOLERANCE_MM and dist_modified_gt_mm > DEPTH_MODIF_THRESHOLD_MM:
+            if dist_post_gt_mm > dist_modified_gt_mm + DEPTH_CONVERGENCE_TOLERANCE_MM:
                 log.e("Post-calibration average depth did not converge toward ground truth")
                 test.fail()
             else:
@@ -226,7 +230,7 @@ if not is_mipi_device() and not is_d555():
         finally:
             restore_calibration_table(calib_dev, None)
 
-# temprorary disabled on mipi devices to stabilize the lab
+# temporarily disabled on mipi devices to stabilize the lab
 if is_mipi_device() and not is_d555():
     with test.closure("Advanced OCC calibration test with host assistance"):
         calib_dev = None
