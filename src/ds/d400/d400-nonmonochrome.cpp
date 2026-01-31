@@ -58,9 +58,9 @@ namespace librealsense
             depth_ep.register_processing_block( processing_block_factory::create_pbf_vector< uyvy_converter >(
                 RS2_FORMAT_YUYV,
                 map_supported_color_formats( RS2_FORMAT_YUYV, false ),
-                RS2_STREAM_COLOR ) );
+                RS2_STREAM_INFRARED ) );
             depth_ep.register_processing_block( { { RS2_FORMAT_YUYV } },
-                                                { { RS2_FORMAT_YUYV, RS2_STREAM_COLOR } },
+                                                { { RS2_FORMAT_YUYV, RS2_STREAM_INFRARED } },
                                                 []() { return std::make_shared< uyvy_to_yuyv >(); } );
         }
         else
