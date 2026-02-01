@@ -120,7 +120,7 @@ def run_advanced_occ_calibration_test(host_assistance, config, pipeline, calib_d
         mod_left_pp, mod_right_pp, mod_offsets = modified_principal_points_result
         modified_axis_val = mod_right_pp[1]
         returned_modified_axis_val = modified_ppy if modify_ppy else modified_ppx
-        if abs(modified_axis_val - returned_modified_axis_val) > DIFF_THRESHOLD: # verify that we fix at least 1/2 of modification
+        if abs(modified_axis_val - returned_modified_axis_val) > DIFF_THRESHOLD:
             log.e(f"Modification mismatch for ppy. Expected {returned_modified_axis_val:.6f} got {modified_axis_val:.6f}")
             test.fail()
 
@@ -230,7 +230,6 @@ if not is_mipi_device() and not is_d555():
         finally:
             restore_calibration_table(calib_dev, None)
 
-# temporarily disabled on mipi devices to stabilize the lab
 if is_mipi_device() and not is_d555():
     with test.closure("Advanced OCC calibration test with host assistance"):
         calib_dev = None
