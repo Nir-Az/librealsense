@@ -21,6 +21,7 @@
 #include "proc/auto-exposure-processor.h"
 #include <src/metadata-parser.h>
 #include <src/hid-sensor.h>
+#include <src/ds/features/gyro-sensitivity-feature.h>
 
 #include <rsutils/type/fourcc.h>
 using rsutils::type::fourcc;
@@ -283,6 +284,13 @@ namespace librealsense
 
         // Add fisheye endpoint
         _fisheye_device_idx = add_sensor(fisheye_ep);
+    }
+
+    void d400_motion::register_gyro_sensitivity()
+    {
+        if( _fw_version >= firmware_version( 5, 16, 0, 0 ) && !_has_motion_module_failed)
+                register_feature(
+                    std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
     }
 
     void d400_motion::register_fisheye_options()

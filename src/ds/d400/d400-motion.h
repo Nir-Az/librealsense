@@ -57,6 +57,7 @@ namespace librealsense
         friend class ds_fisheye_sensor;
         friend class ds_motion_sensor;
 
+        void register_gyro_sensitivity();
 
     private:
         void register_fisheye_options();

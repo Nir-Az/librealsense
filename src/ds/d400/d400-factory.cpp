@@ -34,7 +34,6 @@
 
 #include <src/ds/features/auto-exposure-limit-feature.h>
 #include <src/ds/features/gain-limit-feature.h>
-#include <src/ds/features/gyro-sensitivity-feature.h>
 
 namespace librealsense
 {
@@ -848,9 +847,7 @@ namespace librealsense
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
 #if !defined(__APPLE__) // Motion sensors not supported on macOS
-            if( _fw_version >= firmware_version( 5, 16, 0, 0 ) && !_has_motion_module_failed)
-                register_feature(
-                    std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
+            register_gyro_sensitivity();
 #endif
         }
 
@@ -898,8 +895,7 @@ namespace librealsense
             , firmware_logger_device( dev_info, d400_device::_hw_monitor, get_firmware_logs_command(), get_flash_logs_command())
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
-            if(!_has_motion_module_failed)
-                register_feature(std::make_shared< gyro_sensitivity_feature >(get_raw_motion_sensor(), get_motion_sensor()));
+            register_gyro_sensitivity();
         }
 
 
@@ -1062,9 +1058,7 @@ namespace librealsense
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
 #if !defined(__APPLE__) // Motion sensors not supported on macOS
-            if( _fw_version >= firmware_version( 5, 16, 0, 0 ) && !_has_motion_module_failed)
-                register_feature(
-                    std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
+            register_gyro_sensitivity();
 #endif
         }
 
