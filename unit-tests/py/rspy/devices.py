@@ -35,7 +35,7 @@ from rspy import repo
 pyrs_dir = repo.find_pyrs_dir()
 sys.path.insert( 1, pyrs_dir )
 
-MAX_ENUMERATION_TIME = 17  # [sec]
+MAX_ENUMERATION_TIME = 20  # [sec]
 
 # We need both pyrealsense2 and hub. We can work without hub, but
 # without pyrealsense2 no devices at all will be returned.
@@ -199,9 +199,12 @@ def map_unknown_ports():
             log.d( 'enabling port', port )
             hub.enable_ports( [port], disable_other_ports=True )
             sn = None
+            port_enable_time = timestamp()
             for retry in range( MAX_ENUMERATION_TIME ):
                 if len( enabled() ) == 1:
                     sn = list( enabled() )[0]
+                    detection_time = timestamp() - port_enable_time
+                    log.d( f"Device {sn} detected on port {port} after {detection_time:.2f} seconds" )
                     break
                 time.sleep( 1 )
             if not sn:
@@ -244,7 +247,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
             hub.connect(hub_reset)
         if recycle_ports:
             hub.disable_ports( sleep_on_change = 5 )
-            hub.enable_ports( sleep_on_change = MAX_ENUMERATION_TIME )
+            hub.enable_ports()  # Enable without sleeping - we'll poll ourselves
     #
     # Get all devices, and store by serial-number
     global _device_by_sn, _context, _port_to_sn
@@ -253,31 +256,50 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
         settings['dds']['enabled'] = False
     _context = rs.context( settings )
     _device_by_sn = dict()
+    query_start_time = timestamp()
+    detected_sns = set()
     try:
         log.debug_indent()
-        for retry in range(3):
+        # Poll for devices appearing over time
+        for retry in range(MAX_ENUMERATION_TIME):
             try:
                 devices = _context.query_devices()
-                break
+                for dev in devices:
+                    try:
+                        sn = dev.get_info( rs.camera_info.firmware_update_id )
+                    except RuntimeError as e:
+                        log.e( f'Found device but trying to get fw-update-id failed: {e}' )
+                        continue
+                    
+                    if sn not in detected_sns:
+                        # New device detected
+                        detected_sns.add(sn)
+                        device = Device( sn, dev )
+                        _device_by_sn[sn] = device
+                        detection_time = timestamp() - query_start_time
+                        log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, f'(detected after {detection_time:.2f}s)' )
+                
+                # If we have devices and haven't seen a new one in a while, we might be done
+                if detected_sns and retry > 3:
+                    # Give it a few more seconds to be sure
+                    all_stable = True
+                    for _ in range(3):
+                        time.sleep(1)
+                        retry += 1
+                        if retry >= MAX_ENUMERATION_TIME:
+                            break
+                        new_devices = _context.query_devices()
+                        if len(new_devices) > len(detected_sns):
+                            all_stable = False
+                            break
+                    if all_stable or retry >= MAX_ENUMERATION_TIME:
+                        break
+                        
             except RuntimeError as e:
                 log.d( 'FAILED to query devices:', e )
-                if retry > 1:
-                    log.e( 'FAILED to query devices', retry + 1, 'times!' )
-                    raise
-                else:
-                    time.sleep( 1 )
-        for dev in devices:
-            # The FW update ID is always available, it seems, and is the ASIC serial number
-            # whereas the Serial Number is the OPTIC serial number and is only available in
-            # non-recovery devices. So we use the former...
-            try:
-                sn = dev.get_info( rs.camera_info.firmware_update_id )
-            except RuntimeError as e:
-                log.e( f'Found device with S/N {sn} but trying to get fw-update-id failed: {e}' )
-                continue
-            device = Device( sn, dev )
-            _device_by_sn[sn] = device
-            log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev )
+            
+            if retry < MAX_ENUMERATION_TIME - 1:
+                time.sleep( 1 )
     finally:
         log.debug_unindent()
     #
