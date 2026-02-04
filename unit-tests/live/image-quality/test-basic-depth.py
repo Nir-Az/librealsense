@@ -2,7 +2,7 @@
 # Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
 
 # test:device each(D400*)
-# test:timeout 500  # extra time for page detection
+# test:timeout 220  # extra time for page detection
 
 import pyrealsense2 as rs
 from rspy import log, test
@@ -12,11 +12,11 @@ import time
 from iq_helper import find_roi_location, get_roi_from_frame, WIDTH, HEIGHT
 
 NUM_FRAMES = 100  # Number of frames to check
-DEPTH_TOLERANCE = 80  # Acceptable deviation from expected depth in meters
+DEPTH_TOLERANCE = 80  # Acceptable deviation from expected depth in mm
 FRAMES_PASS_THRESHOLD = 0.75  # Percentage of frames that needs to pass
 DEBUG_MODE = False
 
-EXPECTED_DEPTH_DIFF = 110  # Expected difference in meters between background and cube
+EXPECTED_DEPTH_DIFF = 110  # Expected difference in mm between background and cube
 SAMPLE_REGION_SIZE = 10  # Size of the square region for depth sampling
 
 dev, ctx = test.find_first_device_or_exit()
@@ -55,7 +55,7 @@ def sample_region(image, x, y, size=SAMPLE_REGION_SIZE):
     y_max = min(y + half + 1, h)
     region = image[y_min:y_max, x_min:x_max]
     # log.d(f"Sampled region at ({x},{y}), size={size}:", region)
-    filtered = region[region > 600]
+    filtered = region[region > 600] # filter out invalid depth values (0) and values that are too close (under 60cm)
     if filtered.size == 0:
         log.w("No valid depth samples in region at ({x},{y})".format(x=x, y=y))
         return 0.0
