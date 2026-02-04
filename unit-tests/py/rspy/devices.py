@@ -256,7 +256,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
         settings['dds']['enabled'] = False
     _context = rs.context( settings )
     #if '--rslog' in sys.argv: #For now we always enable to see what happens when D555 is not found
-        rs.log_to_console(rs.log_severity.debug) # enable debug logging to see device removal/addition
+    rs.log_to_console(rs.log_severity.debug) # enable debug logging to see device removal/addition
     _device_by_sn = dict()
     query_start_time = timestamp()
     detected_sns = set()
@@ -303,7 +303,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
             if retry < MAX_ENUMERATION_TIME - 1:
                 time.sleep( 1 )
         #if '--rslog' in sys.argv:
-            rs.log_to_console(rs.log_severity.none) # disable debug logging
+        rs.log_to_console(rs.log_severity.none) # disable debug logging
     finally:
         log.debug_unindent()
     #
