@@ -254,58 +254,43 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
     settings = {'dds' : { 'enabled' : True }}  # explicitly enable dds in case there's an issue with the config file
     if disable_dds:
         settings['dds']['enabled'] = False
-    _context = rs.context( settings )
-    if '--debug' in sys.argv: # change --debug to --rslog in the future once D555 discovery is stable
+    
+    if log.is_debug_on(): # change to check --rslog in the future once D555 discovery is stable
         rs.log_to_console(rs.log_severity.debug) # enable debug logging to see device removal/addition
+        
+    _context = rs.context( settings )
     _device_by_sn = dict()
     query_start_time = timestamp()
     detected_sns = set()
-    try:
-        log.debug_indent()
-        # Poll for devices appearing over time
-        for retry in range(MAX_ENUMERATION_TIME):
-            try:
-                devices = _context.query_devices()
-                for dev in devices:
-                    try:
-                        sn = dev.get_info( rs.camera_info.firmware_update_id )
-                    except RuntimeError as e:
-                        log.e( f'Found device but trying to get fw-update-id failed: {e}' )
-                        continue
-                    
-                    if sn not in detected_sns:
-                        # New device detected
-                        detected_sns.add(sn)
-                        device = Device( sn, dev )
-                        _device_by_sn[sn] = device
-                        detection_time = timestamp() - query_start_time
-                        log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, f'(detected after {detection_time:.2f}s)' )
+
+    log.debug_indent()
+    # Poll for devices appearing over time
+    while (timestamp() - query_start_time) < MAX_ENUMERATION_TIME:
+        try:
+            devices = _context.query_devices()
+            for dev in devices:
+                try:
+                    sn = dev.get_info( rs.camera_info.firmware_update_id )
+                except RuntimeError as e:
+                    log.e( f'Found device but trying to get fw-update-id failed: {e}' )
+                    continue
                 
-                # If we have devices and haven't seen a new one in a while, we might be done
-                if detected_sns and retry > 3:
-                    # Give it a few more seconds to be sure
-                    all_stable = True
-                    for _ in range(3):
-                        time.sleep(1)
-                        retry += 1
-                        if retry >= MAX_ENUMERATION_TIME:
-                            break
-                        new_devices = _context.query_devices()
-                        if len(new_devices) > len(detected_sns):
-                            all_stable = False
-                            break
-                    if all_stable or retry >= MAX_ENUMERATION_TIME:
-                        break
-                        
-            except RuntimeError as e:
-                log.d( 'FAILED to query devices:', e )
+                if sn not in detected_sns:
+                    # New device detected
+                    detected_sns.add(sn)
+                    device = Device( sn, dev )
+                    _device_by_sn[sn] = device
+                    detection_time = timestamp() - query_start_time
+                    log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, f'(detected after {detection_time:.2f}s)' )
             
-            if retry < MAX_ENUMERATION_TIME - 1:
-                time.sleep( 1 )
-        if '--debug' in sys.argv: # change --debug to --rslog in the future once D555 discovery is stable
-            rs.log_to_console(rs.log_severity.none) # disable debug logging
-    finally:
-        log.debug_unindent()
+        except RuntimeError as e:
+            log.d( 'FAILED to query devices:', e )
+        
+        time.sleep( 1 )
+    if log.is_debug_on(): # change to check --rslog in the future once D555 discovery is stable
+        rs.log_to_console(rs.log_severity.none) # disable debug logging
+
+    log.debug_unindent()
     #
     if monitor_changes:
         _context.set_devices_changed_callback( _device_change_callback )
