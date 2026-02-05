@@ -745,7 +745,7 @@ void dds_sensor_proxy::add_local_options()
     auto global_timestamp_option = _options_by_id.find( RS2_OPTION_GLOBAL_TIME_ENABLED );
     if( global_timestamp_option == _options_by_id.end() )
     {
-        auto global_timestamp_option = std::make_shared< global_time_option >();
+        auto global_timestamp_option = std::make_shared< global_time_option >(); // Default to enabled
         register_option( RS2_OPTION_GLOBAL_TIME_ENABLED, global_timestamp_option );
         // options_watcher registration not needed for this option as it's local only
         _handle_global_timestamp_locally = true;
