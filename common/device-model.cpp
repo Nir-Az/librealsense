@@ -1367,7 +1367,7 @@ namespace rs2
                     const bool is_advanced_mode_enabled = adv.is_enabled();
                     bool selected = is_advanced_mode_enabled;
                     // D500 cannot toggle Advanced Mode
-                    if( ! _is_d500_device && ImGui::MenuItem( "Advanced Mode", nullptr, &selected ) )
+                    if( ! _is_d500_device && ImGui::MenuItem( "Advanced Mode", nullptr, &selected, !is_streaming ) )
                     {
                         show_advanced_mode_popup = true;
 
