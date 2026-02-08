@@ -159,7 +159,7 @@ product_name = device.get_info( rs.camera_info.name )
 log.d( 'product line:', product_line )
 ###############################################################################
 #
-if (device.supports(rs.camera_info.firmware_version)):
+if device.supports(rs.camera_info.firmware_version):
     current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
     log.d( 'current FW version:', current_fw_version )
 
@@ -198,8 +198,11 @@ if device.is_in_recovery_mode():
                 if result.returncode != 0:
                     log.w("Failed to remove d4xx module (may require passwordless sudo):", result.stderr)
                 else:
-                    subprocess.run(['sudo', '-n', 'modprobe', 'd4xx'], 
-                                 capture_output=True, text=True, check=False)
+                    load_result = subprocess.run(['sudo', '-n', 'modprobe', 'd4xx'], 
+                                              capture_output=True, text=True, check=False)
+                    if load_result.returncode != 0:
+                        log.w("Failed to load d4xx module (may require passwordless sudo):",
+                              f"returncode={load_result.returncode}, stderr={load_result.stderr}")
             except Exception as driver_error:
                 log.w("Could not reload d4xx driver (passwordless sudo may not be configured):", driver_error)
     except Exception as e:
