@@ -159,9 +159,9 @@ product_name = device.get_info( rs.camera_info.name )
 log.d( 'product line:', product_line )
 ###############################################################################
 #
-
-current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
-log.d( 'current FW version:', current_fw_version )
+if (device.supports(rs.camera_info.firmware_version)):
+    current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
+    log.d( 'current FW version:', current_fw_version )
 
 # Determine which firmware to use based on product
 bundled_fw_version = rsutils.version("")
