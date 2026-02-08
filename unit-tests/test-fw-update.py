@@ -191,8 +191,17 @@ if device.is_in_recovery_mode():
         if 'jetson' in test.context:
             # Reload d4xx mipi driver on Jetson
             log.d("Reloading d4xx driver on Jetson...")
-            subprocess.run(['sudo', 'modprobe', '-r', 'd4xx'], check=True) # force remove
-            subprocess.run(['sudo', 'modprobe', 'd4xx'], check=True) # load
+            try:
+                # Try to reload the driver, but don't fail if sudo requires a password
+                result = subprocess.run(['sudo', '-n', 'modprobe', '-r', 'd4xx'], 
+                                      capture_output=True, text=True)
+                if result.returncode != 0:
+                    log.w("Failed to remove d4xx module (may require passwordless sudo):", result.stderr)
+                else:
+                    subprocess.run(['sudo', '-n', 'modprobe', 'd4xx'], 
+                                 capture_output=True, text=True, check=False)
+            except Exception as driver_error:
+                log.w("Could not reload d4xx driver (passwordless sudo may not be configured):", driver_error)
     except Exception as e:
         test.unexpected_exception()
         log.f( "Unexpected error while trying to recover device:", e )
