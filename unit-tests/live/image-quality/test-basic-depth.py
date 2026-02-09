@@ -2,7 +2,7 @@
 # Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
 
 # test:device each(D400*)
-# test:timeout 220  # extra time for page detection
+# test:timeout 400  # extra time for page detection
 
 import pyrealsense2 as rs
 from rspy import log, test
@@ -35,6 +35,7 @@ def detect_roi_with_exposure(marker_ids):
         try:
             find_roi_location(pipeline, marker_ids, DEBUG_MODE,
                               timeout=15)  # extended timeout for some cases like low fps
+            log.d("Page found within ", time.time() - start_time)
             return True
         except Exception as e:
             log.d("Got an exception:", str(e), "within", time.time() - start_time)
