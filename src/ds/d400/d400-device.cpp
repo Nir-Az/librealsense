@@ -219,7 +219,7 @@ namespace librealsense
 
     rs2_intrinsics d400_depth_sensor::get_color_intrinsics( const stream_profile & profile ) const
     {
-        if( _owner->_pid == ds::RS405_PID )
+        if( _owner->_pid == ds::RS405_PID || _owner->_pid == ds::RS401_GMSL_PID )
             return ds::get_d405_color_stream_intrinsic( *_owner->_color_calib_table_raw,
                                                         profile.width,
                                                         profile.height );
