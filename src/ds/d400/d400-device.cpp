@@ -1006,7 +1006,8 @@ namespace librealsense
         firmware_version fw_ver = firmware_version( get_info( RS2_CAMERA_INFO_FIRMWARE_VERSION ) );
         auto pid = get_pid();
 
-        if( (_is_mipi_device || pid == ds::RS455_PID) && fw_ver >= firmware_version( 5, 14, 0, 0 ) )
+        if( val_in_range( _pid, { ds::RS455_PID, ds::RS457_PID } )
+            && fw_ver >= firmware_version( 5, 14, 0, 0 ) )
             register_feature( std::make_shared< emitter_frequency_feature >( get_depth_sensor() ) );
 
         if( fw_ver >= firmware_version( 5, 11, 9, 0 ) )
