@@ -886,7 +886,7 @@ namespace rs2
     }
 
 
-    bool device_model::draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message, const bool is_streaming)
+    bool device_model::draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message, bool is_streaming)
     {
         bool was_set = false;
 
@@ -913,7 +913,7 @@ namespace rs2
                     }
                     else if (is_streaming)
                     {
-                        ImGui::TextColored( redish, "Advanced mode cannot be enabled \n when streaming" );
+                        ImGui::TextColored( redish, "Advanced mode cannot be enabled\nwhen streaming" );
                     }
                     else
                     {
