@@ -947,7 +947,7 @@ namespace librealsense
             {
                 float default_depth_units = 0.001f; //meters
                 // default depth units is different for D405
-                if (_pid == RS405_PID)
+                if (_pid == RS405_PID || _pid == RS401_GMSL_PID)
                     default_depth_units = 0.0001f;  //meters
                 depth_sensor.register_option(RS2_OPTION_DEPTH_UNITS, std::make_shared<const_value_option>("Number of meters represented by a single depth unit",
                         rsutils::lazy< float >( [default_depth_units]() { return default_depth_units; } ) ) );
