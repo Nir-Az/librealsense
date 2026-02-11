@@ -196,12 +196,12 @@ if device.is_in_recovery_mode():
                 result = subprocess.run(['sudo', '-n', 'modprobe', '-r', 'd4xx'], 
                                       capture_output=True, text=True)
                 if result.returncode != 0:
-                    log.w("Failed to remove d4xx module (may require passwordless sudo):", result.stderr)
+                    log.e("Failed to remove d4xx module (may require passwordless sudo):", result.stderr)
                 else:
                     load_result = subprocess.run(['sudo', '-n', 'modprobe', 'd4xx'], 
                                               capture_output=True, text=True, check=False)
                     if load_result.returncode != 0:
-                        log.w("Failed to load d4xx module (may require passwordless sudo):",
+                        log.e("Failed to load d4xx module (may require passwordless sudo):",
                               f"returncode={load_result.returncode}, stderr={load_result.stderr}")
             except Exception as driver_error:
                 log.w("Could not reload d4xx driver (passwordless sudo may not be configured):", driver_error)
