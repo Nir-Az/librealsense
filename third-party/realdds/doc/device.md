@@ -55,10 +55,10 @@ The above overrides the default reply timeout to 2 seconds and makes the metadat
 ```
 
 When a device-info sample is received, announcing a device is available on the network, an appropriate `dds-device` object is created in the SDK.
-`dds-device` needs some handshaking with the device to determine the device's capabilities. The `device-initialization-timeout-ms` setting determines how long the SDK will wait for this handshake to complete. This initialization usually take less than 2 seconds, but for a multi-camera multi-host scenario the network might be congested and this might take more time.
+`dds-device` needs some handshaking with the device to determine the device's capabilities. The `device-initialization-timeout-ms` setting determines how long the SDK will wait for this handshake to complete. This initialization usually takes less than 2 seconds, but for a multi-camera multi-host scenario the network might be congested and this might take more time.
 
-When the user queries for devices we want to return as quickly as possible. However for a scenario in which a context is created and imediattely `query_devices` is called, DDS devices don't have enough time to complete initialization.
-The first `query_devices` call will block to give DDS devices a chance to be initialized.It will wait for `query-devices-min` seconds and if a remote participant is discoverd during that time, the wait time will increase to let the device initialize, up to a maximum of `query-devices-max` seconds.
+When the user queries for devices we want to return as quickly as possible. However for a scenario in which a context is created and immediately `query_devices` is called, DDS devices don't have enough time to complete initialization.
+The first `query_devices` call will block to give DDS devices a chance to be initialized. It will wait for `query-devices-min` seconds and if a remote participant is discovered during that time, the wait time will increase to let the device initialize, up to a maximum of `query-devices-max` seconds.
 
 #### Standard topic QoS settings
 
