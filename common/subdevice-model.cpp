@@ -1780,7 +1780,8 @@ namespace rs2
                     break;
                 }
             }
-            _extrinsics_from_depth = depth_profile.get_extrinsics_to(lpc_profile);
+            if (depth_profile && lpc_profile)
+                _extrinsics_from_depth = depth_profile.get_extrinsics_to(lpc_profile);
         }
     }
 
