@@ -17,7 +17,7 @@
 
 #include <common/cli.h>
 
-#define WAIT_FOR_DEVICE_TIMEOUT 15
+#define WAIT_FOR_DEVICE_TIMEOUT 17
 
 #if _WIN32
 #include <io.h>
@@ -534,7 +534,9 @@ try
             }
             else
             {
-                return update_signed_fw(d, fw_image);
+                int result = update_signed_fw(d, fw_image);
+                if (result != EXIT_SUCCESS)
+                    return result;
             }
         }
     }
