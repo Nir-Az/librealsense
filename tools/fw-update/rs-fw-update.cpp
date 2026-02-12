@@ -17,7 +17,7 @@
 
 #include <common/cli.h>
 
-#define WAIT_FOR_DEVICE_TIMEOUT 17
+#define WAIT_FOR_DEVICE_TIMEOUT 15
 
 #if _WIN32
 #include <io.h>
