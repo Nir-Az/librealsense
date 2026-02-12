@@ -9,6 +9,7 @@
 #include <atomic>
 #include <functional>
 #include <cassert>
+#include <memory>
 
 const int QUEUE_MAX_SIZE = 10;
 // Simplest implementation of a blocking concurrent queue for thread messaging
@@ -93,6 +94,8 @@ public:
     // Return true if an item was removed -- otherwise, false
     bool dequeue( T * item, unsigned int timeout_ms )
     {
+        if( ! item )
+            return false;
         std::unique_lock<std::mutex> lock(_mutex);
         if( ! _deq_cv.wait_for( lock,
                                 std::chrono::milliseconds( timeout_ms ),
@@ -115,6 +118,8 @@ public:
     // Return true if an item was removed -- otherwise, false
     bool try_dequeue(T* item)
     {
+        if( ! item )
+            return false;
         std::lock_guard< std::mutex > lock( _mutex );
         if( _queue.empty() )
             return false;
@@ -345,22 +350,25 @@ public:
     template<class T>
     void invoke_and_wait(T item, std::function<bool()> exit_condition, bool is_blocking = false)
     {
-        bool done = false;
+        // Use shared_ptr so the 'done' flag survives even if this function returns
+        // early (e.g., exit_condition fires before the lambda executes), preventing
+        // a use-after-free on the captured reference.
+        auto done = std::make_shared< bool >( false );
 
         //action
         auto func = std::move(item);
-        invoke([&, func](dispatcher::cancellable_timer c)
+        invoke([this, done, func](dispatcher::cancellable_timer c)
         {
             std::lock_guard<std::mutex> lk(_blocking_invoke_mutex);
             func(c);
 
-            done = true;
+            *done = true;
             _blocking_invoke_cv.notify_one();
         }, is_blocking);
 
         //wait
         std::unique_lock<std::mutex> lk(_blocking_invoke_mutex);
-        _blocking_invoke_cv.wait(lk, [&](){ return done || exit_condition(); });
+        _blocking_invoke_cv.wait(lk, [&](){ return *done || exit_condition(); });
     }
 
     // Stops the dispatcher. This is not a pause: it will clear out the queue, losing any pending
@@ -462,11 +470,16 @@ public:
     {
         _watcher = std::make_shared<active_object<>>([this](dispatcher::cancellable_timer cancellable_timer)
         {
-            if(cancellable_timer.try_sleep( std::chrono::milliseconds( _timeout_ms )))
+            uint64_t local_timeout;
             {
+                std::lock_guard<std::mutex> lk(_m);
+                local_timeout = _timeout_ms;
+            }
+            if(cancellable_timer.try_sleep( std::chrono::milliseconds( local_timeout )))
+            {
+                std::lock_guard<std::mutex> lk(_m);
                 if(!_kicked)
                     _operation();
-                std::lock_guard<std::mutex> lk(_m);
                 _kicked = false;
             }
         });

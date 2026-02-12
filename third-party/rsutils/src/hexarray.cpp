@@ -68,6 +68,9 @@ uint8_t * hex_to_bytes( char const * pch, char const * const end, uint8_t * pb )
             return nullptr;
         ++pch;
 
+        if( pch >= end )
+            return nullptr;  // odd number of hex characters
+
         if( *pch >= '0' && *pch <= '9' )
             *pb += (*pch - '0');
         else if( *pch >= 'a' && *pch <= 'f' )

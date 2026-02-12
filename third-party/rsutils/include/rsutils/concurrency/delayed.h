@@ -5,6 +5,7 @@
 #include <rsutils/concurrency/event.h>
 #include <rsutils/time/timer.h>
 #include <functional>
+#include <mutex>
 #include <thread>
 
 
@@ -40,6 +41,7 @@ private:
     rsutils::concurrency::event _done;
     rsutils::time::timer _timer;
     std::thread _th;
+    std::mutex _th_mutex;  // protects _th against concurrent access from call_in() and ~delayed()
 
     using duration = rsutils::time::clock::duration;
 
@@ -53,6 +55,7 @@ public:
     }
     ~delayed()
     {
+        std::lock_guard< std::mutex > lock( _th_mutex );
         if( _th.joinable() )
         {
             _done.set();
@@ -65,6 +68,7 @@ public:
         _timer.reset( timeout );
         if( _done.clear() )  // was set, i.e. no thread
         {
+            std::lock_guard< std::mutex > lock( _th_mutex );
             if( _th.joinable() )
                 _th.join();
             _th = std::thread(

@@ -7,6 +7,7 @@
 #include <rsutils/number/crc32.h>
 #include <rsutils/string/hexdump.h>
 #include <rsutils/string/from.h>
+#include <cstring>
 
 
 
@@ -104,54 +105,58 @@ eth_config::eth_config( eth_config_v5 const & v5 )
 
 eth_config::eth_config( std::vector< uint8_t > const & hwm_response )
 {
-    auto header = reinterpret_cast< eth_config_header const * >( hwm_response.data() );
-    if( hwm_response.size() < sizeof( *header ) )
+    eth_config_header header_copy;
+    if( hwm_response.size() < sizeof( header_copy ) )
         throw std::runtime_error( rsutils::string::from()
                                   << "HWM response size (" << hwm_response.size() << ") does not fit header (size "
-                                  << sizeof( *header ) << ")" );
+                                  << sizeof( header_copy ) << ")" );
+    std::memcpy( &header_copy, hwm_response.data(), sizeof( header_copy ) );
 
-    if( hwm_response.size() != sizeof( *header ) + header->size )
+    if( hwm_response.size() != sizeof( header_copy ) + header_copy.size )
         throw std::runtime_error( rsutils::string::from()
                                   << "HWM response size (" << hwm_response.size() << ") does not fit header ("
-                                  << sizeof( *header ) << ") + header size (" << header->size << ")" );
+                                  << sizeof( header_copy ) << ") + header size (" << header_copy.size << ")" );
 
-    auto const crc = rsutils::number::calc_crc32( hwm_response.data() + sizeof( *header ), header->size );
-    if( header->crc != crc )
+    auto const crc = rsutils::number::calc_crc32( hwm_response.data() + sizeof( header_copy ), header_copy.size );
+    if( header_copy.crc != crc )
         throw std::runtime_error( rsutils::string::from()
-                                  << "Eth config table CRC (" << header->crc << ") does not match response " << crc );
+                                  << "Eth config table CRC (" << header_copy.crc << ") does not match response " << crc );
 
-    switch( header->version )
+    switch( header_copy.version )
     {
     case 3: {
-        if( header->size != sizeof( eth_config_v3 ) - sizeof( *header ) )
+        if( header_copy.size != sizeof( eth_config_v3 ) - sizeof( header_copy ) )
             throw std::runtime_error( rsutils::string::from()
-                                      << "Invalid Eth config table v3 size (" << header->size << "); expecting "
-                                      << sizeof( eth_config_v3 ) << "-" << sizeof( *header ) );
-        auto config = reinterpret_cast< eth_config_v3 const * >( hwm_response.data() );
-        *this = *config;
+                                      << "Invalid Eth config table v3 size (" << header_copy.size << "); expecting "
+                                      << sizeof( eth_config_v3 ) << "-" << sizeof( header_copy ) );
+        eth_config_v3 config;
+        std::memcpy( &config, hwm_response.data(), sizeof( config ) );
+        *this = config;
         break;
     }
     case 4: {
-        if( header->size != sizeof( eth_config_v4 ) - sizeof( *header ) )
+        if( header_copy.size != sizeof( eth_config_v4 ) - sizeof( header_copy ) )
             throw std::runtime_error( rsutils::string::from()
-                                      << "Invalid Eth config table v4 size (" << header->size << "); expecting "
-                                      << sizeof( eth_config_v4 ) << "-" << sizeof( *header ) );
-        auto config = reinterpret_cast< eth_config_v4 const * >( hwm_response.data() );
-        *this = *config;
+                                      << "Invalid Eth config table v4 size (" << header_copy.size << "); expecting "
+                                      << sizeof( eth_config_v4 ) << "-" << sizeof( header_copy ) );
+        eth_config_v4 config;
+        std::memcpy( &config, hwm_response.data(), sizeof( config ) );
+        *this = config;
         break;
     }
     case 5: {
-        if( header->size != sizeof( eth_config_v5 ) - sizeof( *header ) )
+        if( header_copy.size != sizeof( eth_config_v5 ) - sizeof( header_copy ) )
             throw std::runtime_error( rsutils::string::from()
-                                      << "Invalid Eth config table v5 size (" << header->size << "); expecting "
-                                      << sizeof( eth_config_v5 ) << "-" << sizeof( *header ) );
-        auto config = reinterpret_cast< eth_config_v5 const * >( hwm_response.data() );
-        *this = *config;
+                                      << "Invalid Eth config table v5 size (" << header_copy.size << "); expecting "
+                                      << sizeof( eth_config_v5 ) << "-" << sizeof( header_copy ) );
+        eth_config_v5 config;
+        std::memcpy( &config, hwm_response.data(), sizeof( config ) );
+        *this = config;
         break;
     }
     default:
         throw std::runtime_error( rsutils::string::from()
-                                  << "Unrecognized Eth config table version " << header->version );
+                                  << "Unrecognized Eth config table version " << header_copy.version );
     }
 }
 
@@ -185,7 +190,10 @@ std::vector< uint8_t > eth_config::build_command() const
 
     std::vector< uint8_t > data;
     data.resize( sizeof( eth_config_v5 ) );
-    eth_config_v5 & cfg = *reinterpret_cast< eth_config_v5 * >( data.data() );
+
+    // Work on a local struct to avoid aliasing/invalidation issues with the vector's buffer
+    eth_config_v5 cfg;
+    std::memset( &cfg, 0, sizeof( cfg ) );
     configured.ip.get_components( cfg.config_ip );
     configured.netmask.get_components( cfg.config_netmask );
     configured.gateway.get_components( cfg.config_gateway );
@@ -210,10 +218,15 @@ std::vector< uint8_t > eth_config::build_command() const
         data.resize( sizeof( eth_config_v3 ) ); // Trim greater version reserved bytes
     }
 
-    eth_config_header & cfg_header = *reinterpret_cast< eth_config_header * >( data.data() ); // Getting reference to header again after possible resize
+    // Copy the struct into the vector buffer
+    std::memcpy( data.data(), &cfg, data.size() );
+
+    // Now fill in the header directly via memcpy-safe access
+    eth_config_header cfg_header;
     cfg_header.version = header.version;
     cfg_header.size = static_cast< uint16_t >( data.size() - sizeof( cfg_header ) );
     cfg_header.crc = rsutils::number::calc_crc32( data.data() + sizeof( cfg_header ), cfg_header.size );
+    std::memcpy( data.data(), &cfg_header, sizeof( cfg_header ) );
     
     return data;
 }

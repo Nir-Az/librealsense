@@ -62,8 +62,7 @@ public:
     void wait() const
     {
         std::unique_lock< std::mutex > lock( _m );
-        if( ! _is_set )
-            _cv.wait( lock );
+        _cv.wait( lock, [this]() { return _is_set; } );
     }
 
     // Clear and block until the event is set() again
@@ -71,7 +70,7 @@ public:
     {
         std::unique_lock< std::mutex > lock( _m );
         _is_set = false;
-        _cv.wait( lock );
+        _cv.wait( lock, [this]() { return _is_set; } );
     }
 
     // Block until the event is set(), or the timeout occurs
@@ -81,7 +80,7 @@ public:
     bool wait( std::chrono::duration< Rep, Period > const & timeout ) const
     {
         std::unique_lock< std::mutex > lock( _m );
-        return _is_set || std::cv_status::timeout != _cv.wait_for( lock, timeout );
+        return _cv.wait_for( lock, timeout, [this]() { return _is_set; } );
     }
 
     // Clear and block until the event is set() again or timeout occurs
@@ -91,7 +90,7 @@ public:
     {
         std::unique_lock< std::mutex > lock( _m );
         _is_set = false;
-        return std::cv_status::timeout != _cv.wait_for( lock, timeout );
+        return _cv.wait_for( lock, timeout, [this]() { return _is_set; } );
     }
 };
 

@@ -221,23 +221,41 @@ std::ostream & operator<<( std::ostream & os, hexdump::_format const & f )
                         else if( n_bytes == 2 )
                         {
                             if( *pf == 'i' )
-                                os << std::to_string( *reinterpret_cast< int16_t const * >( pb ) );
+                            {
+                                int16_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                             else
-                                os << std::to_string( *reinterpret_cast< uint16_t const * >( pb ) );
+                            {
+                                uint16_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                         }
                         else if( n_bytes == 4 )
                         {
                             if( *pf == 'i' )
-                                os << std::to_string( *reinterpret_cast< int32_t const * >( pb ) );
+                            {
+                                int32_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                             else
-                                os << std::to_string( *reinterpret_cast< uint32_t const * >( pb ) );
+                            {
+                                uint32_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                         }
                         else if( n_bytes == 8 )
                         {
                             if( *pf == 'i' )
-                                os << std::to_string( *reinterpret_cast< int64_t const * >( pb ) );
+                            {
+                                int64_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                             else
-                                os << std::to_string( *reinterpret_cast< uint64_t const * >( pb ) );
+                            {
+                                uint64_t v; std::memcpy( &v, pb, sizeof( v ) );
+                                os << std::to_string( v );
+                            }
                         }
                         pb += n_bytes;
                     }
@@ -260,11 +278,13 @@ std::ostream & operator<<( std::ostream & os, hexdump::_format const & f )
                     {
                         if( n_bytes == 4 )
                         {
-                            os << std::to_string( *reinterpret_cast< float const * >( pb ) );
+                            float v; std::memcpy( &v, pb, sizeof( v ) );
+                            os << std::to_string( v );
                         }
                         else if( n_bytes == 8 )
                         {
-                            os << std::to_string( *reinterpret_cast< double const * >( pb ) );
+                            double v; std::memcpy( &v, pb, sizeof( v ) );
+                            os << std::to_string( v );
                         }
                         pb += n_bytes;
                     }
