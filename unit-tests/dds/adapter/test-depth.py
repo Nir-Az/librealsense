@@ -75,14 +75,14 @@ try:
             sensor.open( [profile] ),
             RuntimeError, 'open(...) failed. Software device is streaming!' )
 
-        with test.closure( 'Stop streaming' ):
-            sensor.stop()
-            sensor.close()
+    with test.closure( 'Stop streaming' ):
+        sensor.stop()
+        sensor.close()
 
-        del profile
-        del sensor
-        del dev
-        del context
+    del profile
+    del sensor
+    del dev
+    del context
 
 finally:
     # Always ensure the adapter process is terminated, even if test fails
@@ -94,15 +94,9 @@ finally:
             log.d( 'rs-dds-adapter terminated gracefully' )
         except (subprocess.TimeoutExpired, Exception) as e:
             # Force kill if graceful termination fails
-            if isinstance(e, subprocess.TimeoutExpired):
-                log.w( 'rs-dds-adapter did not terminate gracefully, forcing kill' )
-            else:
-                log.e( f'Error terminating rs-dds-adapter: {e}' )
-            try:
-                adapter_process.kill()
-                adapter_process.wait( timeout=2 )
-            except:
-                pass
+            log.e( f'Error terminating rs-dds-adapter: {e}' )
+            adapter_process.kill()
+            adapter_process.wait( timeout=2 )
 
 test.print_results_and_exit()
 
