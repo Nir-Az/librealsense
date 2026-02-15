@@ -310,6 +310,17 @@ def _device_change_callback( info ):
         log.d( 'device added:', sn, handle )
         if sn in _device_by_sn:
             device = _device_by_sn[sn]
+            # Check if connection type changed (e.g., USB -> DDS)
+            old_connection_type = device._connection_type
+            new_connection_type = handle.supports(rs.camera_info.connection_type) and handle.get_info(rs.camera_info.connection_type) or None
+            if new_connection_type and new_connection_type != old_connection_type:
+                log.d( f'device {sn} connection type changed from {old_connection_type} to {new_connection_type}' )
+                # Update connection type and recalculate port
+                device._connection_type = new_connection_type
+                device._is_dds = new_connection_type == "DDS"
+                # DDS devices don't have hub ports
+                if device._is_dds:
+                    device._port = None
             device._dev = handle     # Because it has a new handle!
             device._removed = False
         else:
