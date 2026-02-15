@@ -314,9 +314,10 @@ def _device_change_callback( info ):
             device._removed = False
         else:
             # shouldn't see new devices...
-            log.d( 'new device detected!?' )
-            _device_by_sn[sn] = Device( sn, handle )
-
+            # we do not wish to add it to the list of devices, 
+            # because we only want devices that were present at the time of query() - but we do want to log it
+            # could happen on DDS simulated devices
+            log.d( 'ignoring new device...' )
 
 def all():
     """
