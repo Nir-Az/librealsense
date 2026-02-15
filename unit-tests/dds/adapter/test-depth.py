@@ -31,7 +31,7 @@ if log.is_debug_on():
 try:
 
     with test.closure( 'Initialize librealsense context', on_fail=test.ABORT ):
-    context = rs.context( { 'dds': { 'enabled': True, 'domain': config_file.get_domain_from_config_file_or_default(), 'participant': 'client' }} )
+        context = rs.context( { 'dds': { 'enabled': True, 'domain': config_file.get_domain_from_config_file_or_default(), 'participant': 'client' }} )
 
     with test.closure( 'Wait for a device', on_fail=test.ABORT ):
         # Note: takes time for a device to enumerate, and more to get it discovered
