@@ -314,20 +314,16 @@ def _device_change_callback( info ):
             old_connection_type = device._connection_type
             new_connection_type = handle.supports(rs.camera_info.connection_type) and handle.get_info(rs.camera_info.connection_type) or None
             if new_connection_type and new_connection_type != old_connection_type:
-                log.d( f'device {sn} connection type changed from {old_connection_type} to {new_connection_type}' )
-                # Update connection type and recalculate port
-                device._connection_type = new_connection_type
-                device._is_dds = new_connection_type == "DDS"
-                # DDS devices don't have hub ports
-                if device._is_dds:
-                    device._port = None
-            device._dev = handle     # Because it has a new handle!
-            device._removed = False
+                # Device reappeared with different connection type (e.g., USB camera now exposed via DDS adapter)
+                # This is likely a test artifact - don't replace the physical device with the virtual one
+                log.d( f'ignoring device {sn} with changed connection type: {old_connection_type} -> {new_connection_type}' )
+            else:
+                # Same connection type, just update the handle (device was recycled/reset)
+                device._dev = handle
+                device._removed = False
         else:
-            # shouldn't see new devices...
-            # we do not wish to add it to the list of devices, 
-            # because we only want devices that were present at the time of query() - but we do want to log it
-            # could happen on DDS simulated devices
+            # New device not in initial map - ignore it
+            # Could be DDS simulated devices created during tests
             log.d( 'ignoring new device...' )
 
 def all():
