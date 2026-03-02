@@ -25,6 +25,12 @@ log.i(f"Found {device_count} connected device(s)")
 # Enumerate and verify all devices
 #
 with test.closure("Device enumeration and basic verification"):
+    # Verify required device count
+    test.check(device_count == 2, f"Test requires exactly 2 D400 devices, but found {device_count}")
+    
+    if device_count != 2:
+        log.e(f"FAIL: Test requires exactly 2 D400 devices but found {device_count}")
+        test.print_results_and_exit()
     
     for i in range(device_count):
         dev = device_list[i]

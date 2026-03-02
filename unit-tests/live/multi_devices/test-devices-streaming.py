@@ -361,6 +361,13 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
 # Test: Stream multiple stream types simultaneously from all devices
 #
 with test.closure(f"Multiple devices - multi-stream simultaneous operation (depth + color + IR) - {device_count} devices"):
+    # Verify required device count
+    test.check(device_count == 2, f"Test requires exactly 2 D400 devices, but found {device_count}")
+    
+    if device_count != 2:
+        log.e(f"FAIL: Test requires exactly 2 D400 devices but found {device_count}")
+        test.print_results_and_exit()
+    
     # Use the devices already queried at the top of the file
     devs = [device_list[i] for i in range(device_count)]
     
