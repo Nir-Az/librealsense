@@ -29,10 +29,10 @@ MAX_ENUM_TIME_D400     = 10   # [sec] increased vs single-shot KPI to allow for 
 MAX_ENUM_TIME_D500     = 15   # [sec]
 MAX_ENUM_TIME_D500_DDS = 18   # [sec] extra time for DDS discovery / initialization
 
-dev             = None   # current live handle — used for hardware_reset() and serial-number matching
+dev             = None   # current live handle - used for hardware_reset() and serial-number matching
 device_removed  = False
 device_added    = False
-target_sn       = None   # serial number of the device under test — set once, never changes
+target_sn       = None   # serial number of the device under test - set once, never changes
 
 
 def device_changed( info ):
@@ -129,11 +129,11 @@ for i in range( 1, iterations + 1 ):
         failed_reconnect.append( i )
         break
 
-    log.d( f"[{i}/{iterations}] added in {added_time:.2f} [sec] — OK" )
+    log.d( f"[{i}/{iterations}] added in {added_time:.2f} [sec] - OK" )
 
 log.i( f"Completed {i} of {iterations} iterations" )
 if skipped_removal:
-    log.w( f"{skipped_removal} iteration(s) had no removal event (OS race — device reconnected too fast)" )
+    log.w( f"{skipped_removal} iteration(s) had no removal event (OS race - device reconnected too fast)" )
 
 if failed_removal:
     log.e( "Iterations with no events:", failed_removal )
