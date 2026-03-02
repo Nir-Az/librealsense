@@ -4,7 +4,7 @@
 # Fails on D585S and D555
 
 # test:device each(D400*)
-# test:device each(D500*) !D585S !D555S
+# test:device each(D500*) !D585S !D555
 # test:donotrun:!nightly
 # test:timeout 360
 # test:timeout:weekly 3600
@@ -31,11 +31,10 @@ MAX_ENUM_TIME_D500_DDS = 18   # [sec] extra time for DDS discovery / initializat
 dev             = None   # current live handle — used for both was_removed() matching and hardware_reset()
 device_removed  = False
 device_added    = False
-new_dev_handle  = None   # updated by callback so each iteration gets the fresh handle
 
 
 def device_changed( info ):
-    global dev, device_removed, device_added, new_dev_handle
+    global dev, device_removed, device_added
     if info.was_removed( dev ):
         device_removed = True
     for candidate in info.get_new_devices():
@@ -45,8 +44,8 @@ def device_changed( info ):
         except RuntimeError:
             continue
         if added_sn == tested_sn:
-            new_dev_handle = candidate
-            device_added   = True
+            dev          = candidate
+            device_added = True
 
 
 def get_max_enum_time( d ):
@@ -85,7 +84,6 @@ failed_reconnect = []
 for i in range( 1, iterations + 1 ):
     device_removed = False
     device_added   = False
-    new_dev_handle = None
 
     log.d( f"[{i}/{iterations}] Sending HW-reset" )
     dev.hardware_reset()
@@ -118,8 +116,6 @@ for i in range( 1, iterations + 1 ):
         # Cannot continue — no valid device handle for further resets
         break
 
-    # Update dev to the fresh handle so was_removed() and hardware_reset() stay in sync
-    dev = new_dev_handle
     log.d( f"[{i}/{iterations}] OK" )
 
 log.i( f"Completed {i} of {iterations} iterations" )
