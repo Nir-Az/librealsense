@@ -42,6 +42,7 @@ def device_changed( info ):
     for candidate in info.get_new_devices():
         try:
             if candidate.get_info( rs.camera_info.serial_number ) == target_sn:
+                # We replace the device handle after each reset, to be sure we're always referring to the current live instance.
                 dev          = candidate
                 device_added = True
         except RuntimeError:
