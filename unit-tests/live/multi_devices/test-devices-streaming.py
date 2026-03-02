@@ -32,7 +32,7 @@ device_count = len(device_list)
 def get_common_multi_stream_config(*devs):
     """
     Find a multi-stream configuration that works on all provided devices.
-    Returns a list of (stream_type, width, height, format, fps) tuples.
+    Returns a list of (stream_type, stream_index, width, height, format, fps) tuples.
     
     This tries to enable as many stream types as possible:
     - Depth stream
@@ -85,7 +85,7 @@ def get_common_multi_stream_config(*devs):
         # Try each resolution until we find a common one
         for target_width, target_height, target_fps in target_resolutions:
             if (target_width, target_height, target_fps) in common_depth:
-                stream_configs.append((rs.stream.depth, target_width, target_height, rs.format.z16, target_fps))
+                stream_configs.append((rs.stream.depth, -1, target_width, target_height, rs.format.z16, target_fps))
                 log.d(f"  Added Depth stream: {target_width}x{target_height} @ {target_fps}fps")
                 break
     
@@ -101,14 +101,14 @@ def get_common_multi_stream_config(*devs):
             # Try each resolution until we find a common one
             for target_width, target_height, target_fps in target_resolutions:
                 if (target_width, target_height, target_fps) in common_color:
-                    stream_configs.append((rs.stream.color, target_width, target_height, color_format, target_fps))
+                    stream_configs.append((rs.stream.color, -1, target_width, target_height, color_format, target_fps))
                     log.d(f"  Added Color stream: {target_width}x{target_height} @ {target_fps}fps {color_format}")
                     break
             if stream_configs and stream_configs[-1][0] == rs.stream.color:
                 # Successfully added color stream, don't try other formats
                 break
     
-    # Try to add Infrared stream (usually index 1)
+    # Try to add Infrared stream (explicitly use index 1 for IR1)
     ir_key = (rs.stream.infrared, rs.format.y8)
     if all(ir_key in dev_prof for dev_prof in all_profiles):
         common_ir = all_profiles[0][ir_key]
@@ -118,8 +118,8 @@ def get_common_multi_stream_config(*devs):
         # Try each resolution until we find a common one
         for target_width, target_height, target_fps in target_resolutions:
             if (target_width, target_height, target_fps) in common_ir:
-                stream_configs.append((rs.stream.infrared, target_width, target_height, rs.format.y8, target_fps))
-                log.d(f"  Added Infrared stream: {target_width}x{target_height} @ {target_fps}fps")
+                stream_configs.append((rs.stream.infrared, 1, target_width, target_height, rs.format.y8, target_fps))
+                log.d(f"  Added Infrared stream (index 1): {target_width}x{target_height} @ {target_fps}fps")
                 break
     
     # Try to add second Infrared stream if available (index 2)
@@ -134,7 +134,7 @@ def setup_pipelines(devs, stream_configs):
     Create and configure pipelines for all devices with the specified stream configurations.
     
     :param devs: List of device objects
-    :param stream_configs: List of (stream_type, width, height, format, fps) tuples
+    :param stream_configs: List of (stream_type, stream_index, width, height, format, fps) tuples
     :return: Tuple of (pipes, cfgs, device_info)
     """
     pipes = []
@@ -156,10 +156,16 @@ def setup_pipelines(devs, stream_configs):
     
     # Configure all pipelines identically
     log.i(f"Configuring streams:")
-    for stream_type, width, height, format, fps in stream_configs:
+    for stream_type, stream_index, width, height, format, fps in stream_configs:
         for cfg in cfgs:
-            cfg.enable_stream(stream_type, width, height, format, fps)
-        log.i(f"  - {stream_type} {width}x{height} @ {fps}fps {format}")
+            if stream_index >= 0:
+                # Use the overload with stream_index (important for infrared streams)
+                cfg.enable_stream(stream_type, stream_index, width, height, format, fps)
+            else:
+                # Use the overload without stream_index (for depth/color)
+                cfg.enable_stream(stream_type, width, height, format, fps)
+        index_str = f" index {stream_index}" if stream_index >= 0 else ""
+        log.i(f"  - {stream_type}{index_str} {width}x{height} @ {fps}fps {format}")
     
     return pipes, cfgs, device_info
 
