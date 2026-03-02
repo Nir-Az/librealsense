@@ -5,16 +5,13 @@
 #test:device:!jetson D400* D400*
 
 """
-Multi-stream operation test for all connected devices.
-
 Tests:
-- Simultaneous multi-stream operation (depth + color + IR) on all devices
+- Simultaneous multi-stream operation (depth + color + IR) on 2 devices
 - Frame drop detection with multiple stream types
 - Long duration stress testing
 - Stream independence verification
 
 Requires 2 D400 series devices.
-See README.md for documentation on writing multi-device tests.
 """
 
 import pyrealsense2 as rs
@@ -31,10 +28,6 @@ STABILIZATION_TIME_SEC = 3  # Time to allow auto-exposure to settle
 ctx = rs.context()
 device_list = ctx.query_devices()
 device_count = len(device_list)
-
-log.i(f"\n{'='*80}")
-log.i(f"TESTING MULTIPLE CONNECTED DEVICES - Found {device_count} device(s)")
-log.i(f"{'='*80}\n")
 
 def get_common_multi_stream_config(*devs):
     """
