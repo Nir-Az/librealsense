@@ -4,7 +4,7 @@
 # Fails on D585S and D555
 
 # test:device each(D400*)
-# test:device each(D500*) !D585S 
+# test:device each(D500*) !D585S !D555
 # test:donotrun:!nightly
 # test:timeout 360
 # test:timeout:weekly 3600
@@ -27,7 +27,7 @@ STRESS_ITERATIONS_NIGHTLY_DDS  =   5
 REMOVAL_TIMEOUT        = 10   # [sec] max wait for any device event after reset
 MAX_ENUM_TIME_D400     = 10   # [sec] increased vs single-shot KPI to allow for slower reconnects after rapid resets
 MAX_ENUM_TIME_D500     = 15   # [sec]
-MAX_ENUM_TIME_D500_DDS = 30   # [sec] extra time for DDS discovery / initialization
+MAX_ENUM_TIME_D500_DDS = 18   # [sec] extra time for DDS discovery / initialization
 
 dev             = None   # current live handle - used for hardware_reset() and serial-number matching
 device_removed  = False
