@@ -54,8 +54,10 @@ print("Delay from pipeline.start() until first depth frame is: {:.3f} [sec] max 
 test.check(frame_delay < max_delay_for_depth_frame)
 test.finish()
 
-
 ################################################################################################
+time.sleep(3) # Allow time for device to get into idle state before starting color stream test
+################################################################################################
+
 product_name = dev.get_info(rs.camera_info.name)
 if 'D421' not in product_name and 'D405' not in product_name and 'D430' not in product_name: # Cameras with no color sensor
     test.start("Testing pipeline first color frame delay on " + product_line + " device - " + platform.system() + " OS")

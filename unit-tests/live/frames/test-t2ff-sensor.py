@@ -86,8 +86,11 @@ print("Time until first depth frame is: {:.3f} [sec] max allowed is: {:.1f} [sec
 test.check(first_depth_frame_delay < max_delay_for_depth_frame)
 test.finish()
 
-
+################################################################################################
+time.sleep(3) # Allow time for device to get into idle state before starting color stream test
+# We also see D555 needs more time to cleanup the depth stream before starting the color stream
 #####################################################################################################
+
 test.start("Testing first color frame delay on " + product_line + " device - "+ platform.system() + " OS")
 product_name = dev.get_info(rs.camera_info.name)
 cs = None
