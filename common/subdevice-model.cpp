@@ -1465,6 +1465,11 @@ namespace rs2
         return results;
     }
 
+    // Move-and-wait pattern: the first caller that enters takes ownership of the
+    // future via std::move, so a concurrent second caller sees an invalid future
+    // and returns immediately.  This is the intended behaviour — all current call
+    // sites (destructor, play(), fw-update) are mutually exclusive flows, so at
+    // most one thread waits on the background stop at any given time.
     void subdevice_model::wait_for_stop()
     {
         std::future< void > local;
@@ -1533,9 +1538,14 @@ namespace rs2
                     if (viewer.not_model)
                         viewer.not_model->add_log(
                             rsutils::string::from() << "Error stopping sensor: " << e.what(),
-                            RS2_LOG_SEVERITY_WARN);
+                            RS2_LOG_SEVERITY_ERROR);
                 }
-                catch (...) {}
+                catch (...)
+                {
+                    if (viewer.not_model)
+                        viewer.not_model->add_log( "Error stopping sensor: unknown exception",
+                            RS2_LOG_SEVERITY_ERROR );
+                }
             });
     }
 
