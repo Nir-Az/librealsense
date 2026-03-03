@@ -68,13 +68,13 @@ print("Device creation time is: {:.3f} [sec] max allowed is: {:.1f} [sec] ".form
 test.check(device_creation_time < max_time_for_device_creation)
 test.finish()
 
-product_line = dev.get_info(rs.camera_info.product_line)
+product_name = dev.get_info(rs.camera_info.name)
 max_delay_for_depth_frame = 1
 max_delay_for_color_frame = 1
 
 
 #####################################################################################################
-test.start("Testing first depth frame delay on " + product_line + " device - "+ platform.system() + " OS")
+test.start("Testing first depth frame delay on " + product_name + " device - "+ platform.system() + " OS")
 ds = dev.first_depth_sensor()
 dp = next(p for p in
           ds.profiles if p.fps() == 30
@@ -86,10 +86,12 @@ print("Time until first depth frame is: {:.3f} [sec] max allowed is: {:.1f} [sec
 test.check(first_depth_frame_delay < max_delay_for_depth_frame)
 test.finish()
 
-
+################################################################################################
+if 'D555' in product_name:
+    time.sleep(1) # Allow HKR some time to close the depth pipe completely
 #####################################################################################################
-test.start("Testing first color frame delay on " + product_line + " device - "+ platform.system() + " OS")
-product_name = dev.get_info(rs.camera_info.name)
+
+test.start("Testing first color frame delay on " + product_name + " device - "+ platform.system() + " OS")
 cs = None
 try:
     cs = dev.first_color_sensor()
