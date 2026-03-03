@@ -24,16 +24,8 @@ dev, ctx = test.find_first_device_or_exit()
 # Note, it goes back to idle after streaming ends, no need to sleep between depth and color streaming.
 time.sleep(3)
 
-product_line = dev.get_info(rs.camera_info.product_line)
-if product_line == "D400":
-    max_delay_for_depth_frame = 1
-    max_delay_for_color_frame = 1
-elif product_line == "D500":
-    max_delay_for_depth_frame = 1
-    max_delay_for_color_frame = 1
-else:
-    log.f("Not supported product line " + product_line)
-
+max_delay_for_depth_frame = 1
+max_delay_for_color_frame = 1
 
 def time_to_first_frame(config):
     pipe = rs.pipeline(ctx)
@@ -54,11 +46,12 @@ print("Delay from pipeline.start() until first depth frame is: {:.3f} [sec] max 
 test.check(frame_delay < max_delay_for_depth_frame)
 test.finish()
 
-################################################################################################
-time.sleep(3) # Allow time for device to get into idle state before starting color stream test
-################################################################################################
-
 product_name = dev.get_info(rs.camera_info.name)
+
+################################################################################################
+if 'D555' in product_name:
+    time.sleep(1) # Allow HKR some time to close the depth pipe completely
+################################################################################################
 if 'D421' not in product_name and 'D405' not in product_name and 'D430' not in product_name: # Cameras with no color sensor
     test.start("Testing pipeline first color frame delay on " + product_line + " device - " + platform.system() + " OS")
     color_cfg = rs.config()
