@@ -700,7 +700,7 @@ try:
                         log.debug_indent()
                         should_reset = not no_reset
                         devices.enable_only( serial_numbers, recycle=should_reset )
-                    except RuntimeError as e:
+                    except (RuntimeError, TimeoutError, OSError) as e:
                         log.w( log.red + test.name + log.reset + ': ' + str( e ) )
                     else:
                         register_signal_handlers()

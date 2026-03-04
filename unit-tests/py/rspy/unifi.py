@@ -51,6 +51,11 @@ SWITCH_SSH_USER = "admin"
 SWITCH_SSH_PASS = os.environ["UNIFI_SSH_PASSWORD"]
 
 
+# channel_timeout protects against hangs during open_session() (channel open),
+# which paramiko's exec_command(timeout=) does NOT cover.
+# This requires paramiko >= 3.1.0.
+CHANNEL_TIMEOUT = 30
+
 def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH_PASS, retries = 0):
     """
     Return a UniFi device and connect to it via SSH
@@ -61,7 +66,8 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
     for i in range(retries+1):
         try:
            client.connect(hostname=ip, username=ssh_username,
-                                password=ssh_password, timeout=10)
+                                password=ssh_password, timeout=10,
+                                channel_timeout=CHANNEL_TIMEOUT)
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
@@ -181,35 +187,49 @@ class UniFiSwitch(device_hub.device_hub):
         """
         return "enabled" if self.is_port_enabled(port) else "disabled"
 
-    def _run_command(self, command, timeout=30, retries=1):
+    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1):
         """
-        Run a command on the switch
+        Run a command on the switch.
+        channel_timeout (set during connect) protects open_session from hanging.
+        exec_command(timeout=) + settimeout protect the read/write phase.
         :param command: the command to run
         :param timeout: seconds to wait for a response before retrying
         :param retries: number of times to retry on timeout before raising TimeoutError
         :return: the output of the command
         """
-        if not self.is_connected():
-            raise Exception("Not connected to switch.")
         for attempt in range(retries + 1):
-            stdin, stdout, stderr = self.client.exec_command(command)
-            stdout.channel.settimeout(timeout)
-            stderr.channel.settimeout(timeout)
+            if not self.is_connected():
+                log.w( f"SSH not connected, reconnecting (attempt {attempt + 1}/{retries + 1})..." )
+                self._reconnect()
             try:
+                stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+                stdout.channel.settimeout(timeout)
+                stderr.channel.settimeout(timeout)
                 out = stdout.read().decode().strip()
                 err = stderr.read().decode().strip()
-            except socket.timeout:
-                stdout.close()
-                stderr.close()
-                stdin.close()
+            except (socket.timeout, socket.error, EOFError, paramiko.SSHException, OSError) as e:
+                log.w(f"Command '{command}' failed: {e}")
+                self._reconnect()
                 if attempt < retries:
-                    log.w(f"Command '{command}' timed out after {timeout} seconds, retrying ({attempt + 1}/{retries})...")
+                    log.w(f"Retrying ({attempt + 1}/{retries})...")
                     continue
-                raise TimeoutError(f"Command '{command}' timed out after {timeout} seconds ({retries + 1} attempts)")
+                raise TimeoutError(f"Command '{command}' failed after {retries + 1} attempts: {e}")
             if err:
                 log.f(f"Error running command '{command}': {err}")
-            # print(f"executed \"{command}\" successfully")
             return out
+
+    def _reconnect(self):
+        """
+        Close existing SSH connection and establish a new one.
+        """
+        try:
+            if self.client:
+                self.client.close()
+        except Exception:
+            pass
+        self.client = discover(self.ip, self.username, self.password, retries=2)
+        if self.client is None:
+            raise RuntimeError("Failed to reconnect to UniFi switch")
 
     def enable_ports(self, ports=None, disable_other_ports=False, sleep_on_change=0):
         log.d(f"Enabling ports {ports if ports is not None else 'all'} on Unifi Switch"
