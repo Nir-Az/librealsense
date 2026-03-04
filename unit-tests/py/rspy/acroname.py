@@ -37,6 +37,7 @@ if __name__ == '__main__':
 
 try:
     import brainstem
+    log.d( f'brainstem {brainstem.version.get_version_string().split()[-1]} loaded from {brainstem.__file__}' )
 except ModuleNotFoundError:
     log.d( 'no acroname library is available' )
     raise
