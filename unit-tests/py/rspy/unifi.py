@@ -67,7 +67,7 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
     for i in range(retries+1):
         try:
            # channel_timeout protects open_session() from hanging (paramiko >= 3.1)
-           # If the installed version doesn't support it, fall back gracefully
+           # Keep the TypeError fallback for machines that may have older paramiko installs
            try:
                client.connect(hostname=ip, username=ssh_username,
                                     password=ssh_password, timeout=10,
@@ -149,9 +149,9 @@ class UniFiSwitch(device_hub.device_hub):
         """
         return "UniFi Switch"
 
-    def connect(self, reset=False):
+    def connect(self, reset=False, retries=0):
         if self.client is None:
-            self.client = discover(self.ip, self.username, self.password) # assuming no throw because it's done in the c'tor
+            self.client = discover(self.ip, self.username, self.password, retries=retries)
 
         if reset:
             # rebooting the switch takes over a minute, so the reboot code is commented out
@@ -212,19 +212,30 @@ class UniFiSwitch(device_hub.device_hub):
             if not self.is_connected():
                 log.w( f"SSH not connected, reconnecting (attempt {attempt + 1}/{retries + 1})..." )
                 self._reconnect()
+            stdin = stdout = stderr = None
             try:
                 stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+                # channel_timeout (set on connect) guards open_session(); settimeout guards the subsequent read() calls
                 stdout.channel.settimeout(timeout)
                 stderr.channel.settimeout(timeout)
                 out = stdout.read().decode().strip()
                 err = stderr.read().decode().strip()
             except (socket.timeout, socket.error, EOFError, paramiko.SSHException, OSError) as e:
                 log.w(f"Command '{command}' failed: {e}")
+                try:
+                    for s in (stdin, stdout, stderr):
+                        if s is not None:
+                            s.close()
+                except Exception:
+                    pass
                 self._reconnect()
                 if attempt < retries:
                     log.w(f"Retrying ({attempt + 1}/{retries})...")
                     continue
-                raise TimeoutError(f"Command '{command}' failed after {retries + 1} attempts: {e}")
+                # Raise TimeoutError only for actual timeouts; use RuntimeError for other SSH/socket failures
+                if isinstance(e, socket.timeout):
+                    raise TimeoutError(f"Command '{command}' timed out after {retries + 1} attempts") from e
+                raise RuntimeError(f"Command '{command}' failed after {retries + 1} attempts: {e}") from e
             if err:
                 log.f(f"Error running command '{command}': {err}")
             return out
@@ -233,12 +244,8 @@ class UniFiSwitch(device_hub.device_hub):
         """
         Close existing SSH connection and establish a new one.
         """
-        try:
-            if self.client:
-                self.client.close()
-        except Exception:
-            pass
-        self.client = discover(self.ip, self.username, self.password, retries=2)
+        self.disconnect()
+        self.connect(retries=2)
         if self.client is None:
             raise RuntimeError("Failed to reconnect to UniFi switch")
 

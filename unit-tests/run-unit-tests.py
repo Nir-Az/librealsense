@@ -707,6 +707,7 @@ try:
                         devices.enable_only( serial_numbers, recycle=should_reset )
                     except (RuntimeError, TimeoutError, OSError) as e:
                         log.w( log.red + test.name + log.reset + ': ' + str( e ) )
+                        test_ok = False
                     else:
                         register_signal_handlers()
                         test_ok = test_wrapper( test, configuration, repetition, serial_numbers ) and test_ok
