@@ -38,6 +38,7 @@ if __name__ == '__main__':
 try:
     import paramiko
     import socket
+    log.d( f'paramiko {paramiko.__version__} loaded from {paramiko.__file__}' )
 except ModuleNotFoundError:
     log.d( 'no paramiko library is available' )
     raise
@@ -65,9 +66,19 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     for i in range(retries+1):
         try:
-           client.connect(hostname=ip, username=ssh_username,
-                                password=ssh_password, timeout=10,
-                                channel_timeout=CHANNEL_TIMEOUT)
+           # channel_timeout protects open_session() from hanging (paramiko >= 3.1)
+           # If the installed version doesn't support it, fall back gracefully
+           try:
+               client.connect(hostname=ip, username=ssh_username,
+                                    password=ssh_password, timeout=10,
+                                    channel_timeout=CHANNEL_TIMEOUT)
+           except TypeError:
+               client.connect(hostname=ip, username=ssh_username,
+                                    password=ssh_password, timeout=10)
+               # Try to set channel_timeout directly on the transport
+               transport = client.get_transport()
+               if transport is not None:
+                   transport.channel_timeout = CHANNEL_TIMEOUT
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
