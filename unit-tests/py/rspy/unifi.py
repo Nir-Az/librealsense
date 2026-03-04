@@ -54,7 +54,6 @@ SWITCH_SSH_PASS = os.environ["UNIFI_SSH_PASSWORD"]
 
 # channel_timeout protects against hangs during open_session() (channel open),
 # which paramiko's exec_command(timeout=) does NOT cover.
-# This requires paramiko >= 3.1.0.
 CHANNEL_TIMEOUT = 30
 
 def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH_PASS, retries = 0):
@@ -66,19 +65,10 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     for i in range(retries+1):
         try:
-           # channel_timeout protects open_session() from hanging (paramiko >= 3.1)
-           # Keep the TypeError fallback for machines that may have older paramiko installs
-           try:
-               client.connect(hostname=ip, username=ssh_username,
-                                    password=ssh_password, timeout=10,
-                                    channel_timeout=CHANNEL_TIMEOUT)
-           except TypeError:
-               client.connect(hostname=ip, username=ssh_username,
-                                    password=ssh_password, timeout=10)
-               # Try to set channel_timeout directly on the transport
-               transport = client.get_transport()
-               if transport is not None:
-                   transport.channel_timeout = CHANNEL_TIMEOUT
+           # channel_timeout protects open_session() from hanging (guaranteed available: version checked at import)
+           client.connect(hostname=ip, username=ssh_username,
+                                password=ssh_password, timeout=10,
+                                channel_timeout=CHANNEL_TIMEOUT)
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
