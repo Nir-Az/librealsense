@@ -396,7 +396,13 @@ namespace rs2
     subdevice_model::~subdevice_model()
     {
         _destructing = true;
-        wait_for_stop();
+        try
+        {
+            wait_for_stop();
+        }
+        catch( ... )
+        {
+        }
         try
         {
             s->on_options_changed( []( const options_list & list ) {} );
@@ -1467,9 +1473,13 @@ namespace rs2
 
     // Move-and-wait pattern: the first caller that enters takes ownership of the
     // future via std::move, so a concurrent second caller sees an invalid future
-    // and returns immediately.  This is the intended behaviour — all current call
-    // sites (destructor, play(), fw-update) are mutually exclusive flows, so at
-    // most one thread waits on the background stop at any given time.
+    // and returns immediately.  All current call sites (destructor, play(),
+    // fw-update) are mutually exclusive flows, so at most one thread waits on
+    // the background stop at any given time.
+    //
+    // NOTE: exceptions from the background stop propagate through the future
+    // and are re-thrown here.  Callers that must not throw (e.g. destructor)
+    // are responsible for their own try/catch around this call.
     void subdevice_model::wait_for_stop()
     {
         std::future< void > local;
@@ -1516,36 +1526,20 @@ namespace rs2
         auto sensor_ptr = s;
         _stop_future = std::async(std::launch::async, [this, sensor_ptr, prev_stop = std::move(prev_stop)]() mutable
             {
-                try
-                {
-                    if (prev_stop.valid())
-                        prev_stop.get();
+                if (prev_stop.valid())
+                    prev_stop.get();
 
-                    sensor_ptr->stop();
+                sensor_ptr->stop();
 
-                    _options_invalidated = true;
+                _options_invalidated = true;
 
-                    queues.foreach([&](frame_queue& q)
-                        {
-                            frame f;
-                            while (q.poll_for_frame(&f));
-                        });
+                queues.foreach([&](frame_queue& q)
+                    {
+                        frame f;
+                        while (q.poll_for_frame(&f));
+                    });
 
-                    sensor_ptr->close();
-                }
-                catch (const std::exception& e)
-                {
-                    if (viewer.not_model)
-                        viewer.not_model->add_log(
-                            rsutils::string::from() << "Error stopping sensor: " << e.what(),
-                            RS2_LOG_SEVERITY_ERROR);
-                }
-                catch (...)
-                {
-                    if (viewer.not_model)
-                        viewer.not_model->add_log( "Error stopping sensor: unknown exception",
-                            RS2_LOG_SEVERITY_ERROR );
-                }
+                sensor_ptr->close();
             });
     }
 
