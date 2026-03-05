@@ -1228,9 +1228,9 @@ namespace rs2
         enable_dismiss = true;
         enable_complex_dismiss = true; // Allow "don't show again"
         pinned = false;
-        message = "UDEV is not enabled on this system.\n"
+        message = "UDEV support not enabled in this build.\n"
             "For better device detection and stability,\n"
-            "install UDEV support using:\n"
+            "install UDEV and rebuild from source:\n"
             "sudo apt install libudev-dev\n"
             "Then rebuild librealsense.";
     }
