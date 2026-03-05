@@ -2,6 +2,7 @@
 # Copyright(c) 2026 Intel Corporation. All Rights Reserved.
 
 #test:device D400*
+#test:donotrun:!nightly
 
 import os, platform, shutil, subprocess
 from rspy import log, repo, test
