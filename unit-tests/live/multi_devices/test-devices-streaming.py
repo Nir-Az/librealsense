@@ -29,6 +29,145 @@ ctx = rs.context()
 device_list = ctx.query_devices()
 device_count = len(device_list)
 
+def _discover_device_profiles(devs):
+    """
+    Discover all available stream profiles across all devices.
+    
+    :param devs: List of device objects
+    :return: List of profile dictionaries, one per device. Each dictionary maps
+             (stream_type, format) -> set of (width, height, fps) tuples
+    """
+    all_profiles = []
+    
+    for dev in devs:
+        sensors = dev.query_sensors()
+        dev_profiles = defaultdict(set)
+        
+        for sensor in sensors:
+            for profile in sensor.get_stream_profiles():
+                if profile.is_video_stream_profile():
+                    vp = profile.as_video_stream_profile()
+                    key = (profile.stream_type(), profile.format())
+                    value = (vp.width(), vp.height(), profile.fps())
+                    dev_profiles[key].add(value)
+        
+        all_profiles.append(dev_profiles)
+    
+    return all_profiles
+
+
+def _find_common_profiles(all_profiles, stream_key):
+    """
+    Find the intersection of available profiles for a specific stream across all devices.
+    
+    :param all_profiles: List of profile dictionaries from _discover_device_profiles
+    :param stream_key: Tuple of (stream_type, format) to look up
+    :return: Set of (width, height, fps) tuples available on all devices, or None if not available
+    """
+    # Check if all devices support this stream
+    if not all(stream_key in dev_prof for dev_prof in all_profiles):
+        return None
+    
+    # Find intersection of all devices
+    common_profiles = all_profiles[0][stream_key]
+    for dev_prof in all_profiles[1:]:
+        common_profiles = common_profiles.intersection(dev_prof[stream_key])
+    
+    return common_profiles
+
+
+def _select_best_resolution(available_configs, target_resolutions):
+    """
+    Select the best matching resolution from available configurations.
+    
+    :param available_configs: Set of (width, height, fps) tuples
+    :param target_resolutions: List of (width, height, fps) tuples in preference order
+    :return: Tuple of (width, height, fps) if found, else None
+    """
+    if not available_configs:
+        return None
+    
+    # Try each target resolution in order of preference
+    for target_width, target_height, target_fps in target_resolutions:
+        if (target_width, target_height, target_fps) in available_configs:
+            return (target_width, target_height, target_fps)
+    
+    return None
+
+
+def _try_add_depth_stream(all_profiles, target_resolutions):
+    """
+    Attempt to add a depth stream configuration.
+    
+    :param all_profiles: List of profile dictionaries for all devices
+    :param target_resolutions: List of (width, height, fps) tuples in preference order
+    :return: Stream configuration tuple if successful, else None
+    """
+    depth_key = (rs.stream.depth, rs.format.z16)
+    common_depth = _find_common_profiles(all_profiles, depth_key)
+    
+    if common_depth is None:
+        return None
+    
+    resolution = _select_best_resolution(common_depth, target_resolutions)
+    if resolution:
+        width, height, fps = resolution
+        log.d(f"  Added Depth stream: {width}x{height} @ {fps}fps")
+        return (rs.stream.depth, -1, width, height, rs.format.z16, fps)
+    
+    return None
+
+
+def _try_add_color_stream(all_profiles, target_resolutions):
+    """
+    Attempt to add a color stream configuration, trying multiple formats.
+    
+    :param all_profiles: List of profile dictionaries for all devices
+    :param target_resolutions: List of (width, height, fps) tuples in preference order
+    :return: Stream configuration tuple if successful, else None
+    """
+    color_formats = [rs.format.rgb8, rs.format.bgr8, rs.format.rgba8, rs.format.bgra8, rs.format.yuyv]
+    
+    for color_format in color_formats:
+        color_key = (rs.stream.color, color_format)
+        common_color = _find_common_profiles(all_profiles, color_key)
+        
+        if common_color is None:
+            continue
+        
+        resolution = _select_best_resolution(common_color, target_resolutions)
+        if resolution:
+            width, height, fps = resolution
+            log.d(f"  Added Color stream: {width}x{height} @ {fps}fps {color_format}")
+            return (rs.stream.color, -1, width, height, color_format, fps)
+    
+    return None
+
+
+def _try_add_infrared_stream(all_profiles, target_resolutions, stream_index=1):
+    """
+    Attempt to add an infrared stream configuration.
+    
+    :param all_profiles: List of profile dictionaries for all devices
+    :param target_resolutions: List of (width, height, fps) tuples in preference order
+    :param stream_index: IR stream index (1 or 2)
+    :return: Stream configuration tuple if successful, else None
+    """
+    ir_key = (rs.stream.infrared, rs.format.y8)
+    common_ir = _find_common_profiles(all_profiles, ir_key)
+    
+    if common_ir is None:
+        return None
+    
+    resolution = _select_best_resolution(common_ir, target_resolutions)
+    if resolution:
+        width, height, fps = resolution
+        log.d(f"  Added Infrared stream (index {stream_index}): {width}x{height} @ {fps}fps")
+        return (rs.stream.infrared, stream_index, width, height, rs.format.y8, fps)
+    
+    return None
+
+
 def get_common_multi_stream_config(*devs):
     """
     Find a multi-stream configuration that works on all provided devices.
@@ -52,79 +191,30 @@ def get_common_multi_stream_config(*devs):
         (640, 480, 30),  # Standard VGA resolution
         (640, 360, 30),  # Fallback for safety cameras and other devices
     ]
-    target_fps = 30
     
-    # Build profile sets for each device
-    all_profiles = []
+    # Discover available profiles from all devices
+    all_profiles = _discover_device_profiles(devs)
     
-    for dev in devs:
-        sensors = dev.query_sensors()
-        dev_profiles = defaultdict(set)
-        
-        for sensor in sensors:
-            for profile in sensor.get_stream_profiles():
-                if profile.is_video_stream_profile():
-                    vp = profile.as_video_stream_profile()
-                    key = (profile.stream_type(), profile.format())
-                    value = (vp.width(), vp.height(), profile.fps())
-                    dev_profiles[key].add(value)
-        
-        all_profiles.append(dev_profiles)
-    
-    # Build multi-stream configuration by finding common profiles across ALL devices
+    # Build multi-stream configuration by trying each stream type
     stream_configs = []
     
     # Try to add Depth stream
-    depth_key = (rs.stream.depth, rs.format.z16)
-    if all(depth_key in dev_prof for dev_prof in all_profiles):
-        # Find intersection of all devices
-        common_depth = all_profiles[0][depth_key]
-        for dev_prof in all_profiles[1:]:
-            common_depth = common_depth.intersection(dev_prof[depth_key])
-        
-        # Try each resolution until we find a common one
-        for target_width, target_height, target_fps in target_resolutions:
-            if (target_width, target_height, target_fps) in common_depth:
-                stream_configs.append((rs.stream.depth, -1, target_width, target_height, rs.format.z16, target_fps))
-                log.d(f"  Added Depth stream: {target_width}x{target_height} @ {target_fps}fps")
-                break
+    depth_config = _try_add_depth_stream(all_profiles, target_resolutions)
+    if depth_config:
+        stream_configs.append(depth_config)
     
-    # Try to add Color stream (try multiple formats)
-    color_formats = [rs.format.rgb8, rs.format.bgr8, rs.format.rgba8, rs.format.bgra8, rs.format.yuyv]
-    for color_format in color_formats:
-        color_key = (rs.stream.color, color_format)
-        if all(color_key in dev_prof for dev_prof in all_profiles):
-            common_color = all_profiles[0][color_key]
-            for dev_prof in all_profiles[1:]:
-                common_color = common_color.intersection(dev_prof[color_key])
-            
-            # Try each resolution until we find a common one
-            for target_width, target_height, target_fps in target_resolutions:
-                if (target_width, target_height, target_fps) in common_color:
-                    stream_configs.append((rs.stream.color, -1, target_width, target_height, color_format, target_fps))
-                    log.d(f"  Added Color stream: {target_width}x{target_height} @ {target_fps}fps {color_format}")
-                    break
-            if stream_configs and stream_configs[-1][0] == rs.stream.color:
-                # Successfully added color stream, don't try other formats
-                break
+    # Try to add Color stream
+    color_config = _try_add_color_stream(all_profiles, target_resolutions)
+    if color_config:
+        stream_configs.append(color_config)
     
-    # Try to add Infrared stream (explicitly use index 1 for IR1)
-    ir_key = (rs.stream.infrared, rs.format.y8)
-    if all(ir_key in dev_prof for dev_prof in all_profiles):
-        common_ir = all_profiles[0][ir_key]
-        for dev_prof in all_profiles[1:]:
-            common_ir = common_ir.intersection(dev_prof[ir_key])
-        
-        # Try each resolution until we find a common one
-        for target_width, target_height, target_fps in target_resolutions:
-            if (target_width, target_height, target_fps) in common_ir:
-                stream_configs.append((rs.stream.infrared, 1, target_width, target_height, rs.format.y8, target_fps))
-                log.d(f"  Added Infrared stream (index 1): {target_width}x{target_height} @ {target_fps}fps")
-                break
+    # Try to add Infrared stream (index 1)
+    ir_config = _try_add_infrared_stream(all_profiles, target_resolutions, stream_index=1)
+    if ir_config:
+        stream_configs.append(ir_config)
     
-    # Try to add second Infrared stream if available (index 2)
-    # Note: We can't add multiple streams of same type with different indices via simple enable_stream
-    # So we'll skip IR2 for now to keep the test simpler
+    # Note: IR2 skipped for simplicity as multiple streams of same type with different
+    # indices require more complex configuration
     
     return stream_configs
 
@@ -192,11 +282,13 @@ def collect_frames(pipes, duration_sec):
     
     :param pipes: List of pipeline objects
     :param duration_sec: How long to stream in seconds
-    :return: Tuple of (all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration)
+    :return: Tuple of (all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message)
     """
     all_frame_counters = [defaultdict(list) for _ in pipes]
     all_framesets_received = [0] * len(pipes)
     all_stream_frame_counts = [defaultdict(int) for _ in pipes]
+    error_occurred = False
+    error_message = None
     
     log.i(f"Streaming for {duration_sec} seconds...")
     start_time = time.time()
@@ -216,11 +308,13 @@ def collect_frames(pipes, duration_sec):
                         all_frame_counters[i][stream_type].append(counter)
                     
         except Exception as e:
-            log.w(f"  Exception during streaming: {e}")
+            error_occurred = True
+            error_message = str(e)
+            log.e(f"  Exception during streaming: {e}")
             break
     
     actual_duration = time.time() - start_time
-    return all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration
+    return all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message
 
 
 def analyze_device_drops(frame_counters, stream_frame_counts, device_name):
@@ -342,8 +436,13 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
         stabilize_streams(pipes)
         
         # Collection phase: Stream and collect frame data
-        all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration = \
+        all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message = \
             collect_frames(pipes, duration_sec)
+        
+        # Check if streaming failed
+        if error_occurred:
+            log.e(f"Streaming failed with error: {error_message}")
+            return False, [], {'devices': [], 'duration': actual_duration, 'error': error_message}
         
         # Analysis phase: Aggregate results and analyze drops
         success, drop_percentages, stats = aggregate_results(
@@ -357,8 +456,8 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
         for pipe in pipes:
             try:
                 pipe.stop()
-            except:
-                pass
+            except Exception as e:
+                log.d(f"Failed to stop pipeline during cleanup: {e}")
 
 
 #
@@ -400,54 +499,63 @@ with test.closure(f"Multiple devices - multi-stream simultaneous operation (dept
             *devs, stream_configs=stream_configs
         )
         
-        # Print detailed results
-        log.i("\n" + "=" * 80)
-        log.i("RESULTS:")
-        log.i("=" * 80)
-        log.i(f"Duration: {stats['duration']:.2f} seconds")
-        
-        for i, dev_stats in enumerate(stats['devices'], 1):
-            log.i(f"\nDevice {i} ({dev_stats['name']}):")
-            log.i(f"  Total framesets: {dev_stats['framesets']}")
-            log.i(f"  Overall drop rate: {dev_stats['drop_pct']:.2f}%")
-            for stream_type, stream_stats in dev_stats['streams'].items():
-                log.i(f"  {stream_type}:")
-                log.i(f"    Received: {stream_stats['received']}/{stream_stats['expected']}")
-                log.i(f"    Dropped: {stream_stats['dropped']} ({stream_stats['drop_pct']:.2f}%)")
-        
-        log.i("=" * 80)
-        
-        if success:
-            log.i(f"\nPASS - Multi-stream test successful!")
-            for i, drop_pct in enumerate(drop_percentages, 1):
-                log.i(f"  Device {i} drop rate: {drop_pct:.2f}%")
+        # Check for streaming errors first
+        if 'error' in stats:
+            log.e(f"\nFAIL - Streaming error occurred: {stats['error']}")
+            test.check(False, f"Streaming should complete without errors: {stats['error']}")
+        elif len(stats['devices']) == 0:
+            log.e("\nFAIL - No device statistics collected (likely due to streaming failure)")
+            test.check(False, "Should collect statistics from all devices")
         else:
-            log.w(f"\nFAIL - Excessive frame drops detected!")
-            for i, drop_pct in enumerate(drop_percentages, 1):
-                log.w(f"  Device {i} drop rate: {drop_pct:.2f}% (max: {MAX_FRAME_DROP_PERCENTAGE}%)")
-        
-        test.check(success, 
-                    f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices")
-        
-        # Verify stream independence: Check that each stream type received adequate frames
-        # (at least 80% of expected for a 10-second test at 30fps = ~240 frames)
-        log.i("\nVerifying stream independence...")
-        min_expected_frames = int(STREAM_DURATION_SEC * 30 * 0.8)
-        all_streams_ok = True
-        
-        for i, dev_stats in enumerate(stats['devices'], 1):
-            for stream_type, stream_stats in dev_stats['streams'].items():
-                if stream_stats['received'] < min_expected_frames:
-                    log.w(f"Device {i} {stream_type} received only {stream_stats['received']} frames (expected ~{min_expected_frames})")
-                    all_streams_ok = False
-        
-        if all_streams_ok:
-            log.i("PASS - All streams received adequate frame counts (independence verified)")
-        else:
-            log.w("FAIL - Some streams received fewer frames than expected")
-        
-        test.check(all_streams_ok, 
-                    "All streams should receive frames independently without interference")
+            # Print detailed results
+            # Print detailed results
+            log.i("\n" + "=" * 80)
+            log.i("RESULTS:")
+            log.i("=" * 80)
+            log.i(f"Duration: {stats['duration']:.2f} seconds")
+            
+            for i, dev_stats in enumerate(stats['devices'], 1):
+                log.i(f"\nDevice {i} ({dev_stats['name']}):")
+                log.i(f"  Total framesets: {dev_stats['framesets']}")
+                log.i(f"  Overall drop rate: {dev_stats['drop_pct']:.2f}%")
+                for stream_type, stream_stats in dev_stats['streams'].items():
+                    log.i(f"  {stream_type}:")
+                    log.i(f"    Received: {stream_stats['received']}/{stream_stats['expected']}")
+                    log.i(f"    Dropped: {stream_stats['dropped']} ({stream_stats['drop_pct']:.2f}%)")
+            
+            log.i("=" * 80)
+            
+            if success:
+                log.i(f"\nPASS - Multi-stream test successful!")
+                for i, drop_pct in enumerate(drop_percentages, 1):
+                    log.i(f"  Device {i} drop rate: {drop_pct:.2f}%")
+            else:
+                log.w(f"\nFAIL - Excessive frame drops detected!")
+                for i, drop_pct in enumerate(drop_percentages, 1):
+                    log.w(f"  Device {i} drop rate: {drop_pct:.2f}% (max: {MAX_FRAME_DROP_PERCENTAGE}%)")
+            
+            test.check(success, 
+                        f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices")
+            
+            # Verify stream independence: Check that each stream type received adequate frames
+            # (at least 80% of expected based on actual duration and configured FPS)
+            log.i("\nVerifying stream independence...")
+            all_streams_ok = True
+            
+            for i, dev_stats in enumerate(stats['devices'], 1):
+                for stream_type, stream_stats in dev_stats['streams'].items():
+                    min_expected_frames = int(stream_stats['expected'] * 0.8)
+                    if stream_stats['received'] < min_expected_frames:
+                        log.w(f"Device {i} {stream_type} received only {stream_stats['received']} frames (expected >={min_expected_frames})")
+                        all_streams_ok = False
+            
+            if all_streams_ok:
+                log.i("PASS - All streams received adequate frame counts (independence verified)")
+            else:
+                log.w("FAIL - Some streams received fewer frames than expected")
+            
+            test.check(all_streams_ok, 
+                        "All streams should receive frames independently without interference")
 
 # Print test summary
 test.print_results_and_exit()
