@@ -202,7 +202,7 @@ macro(viewer_target_config _target)
         target_sources(${_target} PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
             ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc)
-        set_target_properties(${_target} PROPERTIES LINK_FLAGS "${LD_FLAGS_STR}")
+        set_target_properties(${_target} PROPERTIES LINK_FLAGS "/ignore:4199 ${LD_FLAGS_STR}")
     else()
         target_link_libraries(${_target} dl)
     endif()
@@ -259,12 +259,13 @@ if(BUILD_VIEWER_TESTS)
     FetchContent_MakeAvailable(imgui_test_engine)
     set(TE_DIR ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine)
 
+    file(GLOB VIEWER_TEST_CASES tests/test-*.cpp)
+    list(REMOVE_ITEM VIEWER_TEST_CASES ${CMAKE_CURRENT_SOURCE_DIR}/tests/test-device.cpp)
     set(VIEWER_TEST_SOURCES
         tests/viewer-test-main.cpp
         tests/viewer-test-helpers.cpp
-        tests/test-device.cpp
-        tests/test-streaming.cpp
-        tests/test-controls.cpp
+        tests/test-device.cpp        # written explicitly to be run first, to check device connected and perform hw reset before other tests run
+        ${VIEWER_TEST_CASES}
     )
     file(GLOB TE_SOURCES ${TE_DIR}/*.cpp)
 
@@ -277,6 +278,13 @@ if(BUILD_VIEWER_TESTS)
         IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1)
     target_include_directories(realsense-viewer-tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR} ${TE_DIR} ${TE_DIR}/thirdparty/Str)
+
+    # Suppress warnings in third-party test engine sources
+    if(MSVC)
+        set_source_files_properties(${TE_SOURCES} PROPERTIES COMPILE_OPTIONS "/W0")
+    else()
+        set_source_files_properties(${TE_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
+    endif()
 
     source_group("Test Files" FILES ${VIEWER_TEST_SOURCES})
 endif()

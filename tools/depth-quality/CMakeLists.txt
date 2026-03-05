@@ -90,7 +90,7 @@ if(BUILD_GRAPHICAL_EXAMPLES)
         PREPEND(DELAYED " /DELAYLOAD:" ${DELAYED})
         #infoValue(DELAYED)
         string(REPLACE ";" " " LD_FLAGS_STR "${DELAYED}")
-        set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "${LD_FLAGS_STR}")
+        set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/ignore:4199 ${LD_FLAGS_STR}")
 
     else()
         target_sources( ${PROJECT_NAME}
