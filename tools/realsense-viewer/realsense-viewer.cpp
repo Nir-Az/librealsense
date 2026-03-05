@@ -321,8 +321,6 @@ int main(int argc, const char** argv) try
 #if defined(__linux__) && !defined(USING_UDEV)
     {
         auto n = std::make_shared<udev_warning_model>();
-        n->delay_id = "udev_warning.linux";
-        n->enable_complex_dismiss = true;
         if (!n->is_delayed())
         {
             viewer_model.not_model->add_notification(n);

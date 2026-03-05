@@ -1228,11 +1228,14 @@ namespace rs2
         enable_dismiss = true;
         enable_complex_dismiss = true; // Allow "don't show again"
         pinned = false;
+        delay_id = "udev_warning.linux";
+        severity = RS2_LOG_SEVERITY_WARN;
+        category = RS2_NOTIFICATION_CATEGORY_UNKNOWN_ERROR;
         message = "UDEV support not enabled in this build.\n"
             "For better device detection and stability,\n"
-            "install UDEV and rebuild from source:\n"
-            "sudo apt install libudev-dev\n"
-            "Then rebuild librealsense.";
+            "install the libudev development headers for your distribution\n"
+            "(e.g. on Debian/Ubuntu: sudo apt install libudev-dev)\n"
+            "and then rebuild librealsense from source.";
     }
 
     void udev_warning_model::draw_content(ux_window& win, int x, int y, float t, std::string& error_message)
