@@ -52,7 +52,7 @@ SWITCH_SSH_USER = "admin"
 SWITCH_SSH_PASS = os.environ["UNIFI_SSH_PASSWORD"]
 
 
-# channel_timeout protects against hangs during open_session() (channel open),
+# channel_timeout protects against hangs during SSH channel establishment,
 # which paramiko's exec_command(timeout=) does NOT cover.
 CHANNEL_TIMEOUT = 30
 
@@ -65,7 +65,7 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     for i in range(retries+1):
         try:
-           # channel_timeout protects open_session() from hanging (guaranteed available: version checked at import)
+           # channel_timeout protects SSH channel establishment from hanging
            client.connect(hostname=ip, username=ssh_username,
                                 password=ssh_password, timeout=10,
                                 channel_timeout=CHANNEL_TIMEOUT)
@@ -191,7 +191,6 @@ class UniFiSwitch(device_hub.device_hub):
     def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1):
         """
         Run a command on the switch.
-        channel_timeout (set during connect) protects open_session from hanging.
         exec_command(timeout=) + settimeout protect the read/write phase.
         :param command: the command to run
         :param timeout: seconds to wait for a response before retrying
@@ -205,7 +204,6 @@ class UniFiSwitch(device_hub.device_hub):
             stdin = stdout = stderr = None
             try:
                 stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
-                # channel_timeout (set on connect) guards open_session(); settimeout guards the subsequent read() calls
                 stdout.channel.settimeout(timeout)
                 stderr.channel.settimeout(timeout)
                 out = stdout.read().decode().strip()
