@@ -12,15 +12,20 @@ sys.path.append( os.path.join( current_dir, 'py' ))
 from rspy import log, file, repo, libci
 from rspy.signals import register_signal_handlers
 
-# Python's default list of paths to look for modules includes user-intalled. We want
-# to avoid those to take only the pyrealsense2 we actually compiled!
+# Python's default list of paths to look for modules includes user-installed. We want
+# to avoid those to take only the pyrealsense2/pyrealdds/pyrsutils we actually compiled!
 #
-# Rather than rebuilding the whole sys.path, we instead remove:
+# Rather than rebuilding the whole sys.path, we instead remove only the user site-packages
+# directories that actually contain our compiled packages. This preserves other user-installed
+# packages (e.g. paramiko, pykush) that tests depend on.
 from site import getusersitepackages   # not the other stuff, like quit(), exit(), etc.!
-#log.d( 'site packages=', getusersitepackages() )
+_user_site = getusersitepackages()
+_compiled_pkg_names = { 'pyrealsense2', 'pyrealdds', 'pyrsutils' }
+#log.d( 'site packages=', _user_site )
 #log.d( 'sys.path=', sys.path )
-#log.d( 'removing', [p for p in sys.path if file.is_inside( p, getusersitepackages() )])
-sys.path = [p for p in sys.path if not file.is_inside( p, getusersitepackages() )]
+sys.path = [p for p in sys.path
+            if not file.is_inside( p, _user_site )
+            or not any( os.path.exists( os.path.join( p, pkg ) ) for pkg in _compiled_pkg_names )]
 #log.d( 'modified=', sys.path )
 
 
@@ -700,8 +705,9 @@ try:
                         log.debug_indent()
                         should_reset = not no_reset
                         devices.enable_only( serial_numbers, recycle=should_reset )
-                    except RuntimeError as e:
+                    except (RuntimeError, TimeoutError, OSError) as e:
                         log.w( log.red + test.name + log.reset + ': ' + str( e ) )
+                        test_ok = False
                     else:
                         register_signal_handlers()
                         test_ok = test_wrapper( test, configuration, repetition, serial_numbers ) and test_ok
