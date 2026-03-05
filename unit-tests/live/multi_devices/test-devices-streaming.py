@@ -282,19 +282,18 @@ def collect_frames(pipes, duration_sec):
     
     :param pipes: List of pipeline objects
     :param duration_sec: How long to stream in seconds
-    :return: Tuple of (all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message)
+    :return: Tuple of (all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration)
+    :raises: Re-raises any exception from wait_for_frames() after logging
     """
     all_frame_counters = [defaultdict(list) for _ in pipes]
     all_framesets_received = [0] * len(pipes)
     all_stream_frame_counts = [defaultdict(int) for _ in pipes]
-    error_occurred = False
-    error_message = None
     
     log.i(f"Streaming for {duration_sec} seconds...")
     start_time = time.time()
     
-    while time.time() - start_time < duration_sec:
-        try:
+    try:
+        while time.time() - start_time < duration_sec:
             for i, pipe in enumerate(pipes):
                 frameset = pipe.wait_for_frames(timeout_ms=5000)
                 all_framesets_received[i] += 1
@@ -306,15 +305,13 @@ def collect_frames(pipes, duration_sec):
                     if frame.supports_frame_metadata(rs.frame_metadata_value.frame_counter):
                         counter = frame.get_frame_metadata(rs.frame_metadata_value.frame_counter)
                         all_frame_counters[i][stream_type].append(counter)
-                    
-        except Exception as e:
-            error_occurred = True
-            error_message = str(e)
-            log.e(f"  Exception during streaming: {e}")
-            break
+    except Exception as e:
+        actual_duration = time.time() - start_time
+        log.e(f"Exception during streaming after {actual_duration:.2f}s: {e}")
+        raise
     
     actual_duration = time.time() - start_time
-    return all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message
+    return all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration
 
 
 def analyze_device_drops(frame_counters, stream_frame_counts, device_name):
@@ -436,13 +433,9 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
         stabilize_streams(pipes)
         
         # Collection phase: Stream and collect frame data
-        all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration, error_occurred, error_message = \
+        # Note: Exceptions will propagate and fail the test after cleanup in finally block
+        all_frame_counters, all_framesets_received, all_stream_frame_counts, actual_duration = \
             collect_frames(pipes, duration_sec)
-        
-        # Check if streaming failed
-        if error_occurred:
-            log.e(f"Streaming failed with error: {error_message}")
-            return False, [], {'devices': [], 'duration': actual_duration, 'error': error_message}
         
         # Analysis phase: Aggregate results and analyze drops
         success, drop_percentages, stats = aggregate_results(
@@ -495,16 +488,14 @@ with test.closure(f"Multiple devices - multi-stream simultaneous operation (dept
         log.i(f"Will stream all of them simultaneously from all {device_count} devices")
         
         # Run the multi-stream test
+        # Note: Exceptions during streaming will propagate and fail the test automatically
         success, drop_percentages, stats = stream_multi_and_check_frames(
             *devs, stream_configs=stream_configs
         )
         
-        # Check for streaming errors first
-        if 'error' in stats:
-            log.e(f"\nFAIL - Streaming error occurred: {stats['error']}")
-            test.check(False, f"Streaming should complete without errors: {stats['error']}")
-        elif len(stats['devices']) == 0:
-            log.e("\nFAIL - No device statistics collected (likely due to streaming failure)")
+        # Check for analysis errors
+        if len(stats['devices']) == 0:
+            log.e("\nFAIL - No device statistics collected")
             test.check(False, "Should collect statistics from all devices")
         else:
             # Print detailed results
