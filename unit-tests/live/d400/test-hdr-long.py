@@ -25,8 +25,10 @@ def retry_on_exception(func, max_retries=10):
     for attempt in range(max_retries):
         try:
             return func()
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             print(f"Attempt {attempt + 1} failed with exception: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(3)  # give device time to recover before retry
     print("Failed to execute the function after maximum retries.")
     return None
 
@@ -336,13 +338,14 @@ def hdr_streaming_checking_sequence_id():
         pipe = rs.pipeline(ctx)
         pipe.start(cfg)
 
-        depth_sensor.set_option(rs.option.hdr_enabled, 1)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
+        try:
+            depth_sensor.set_option(rs.option.hdr_enabled, 1)
+            test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
 
-        check_sequence_id(pipe)
-
-        pipe.stop()
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+            check_sequence_id(pipe)
+        finally:
+            pipe.stop()
+            depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # CHECKING SEQUENCE ID WHILE STREAMING
@@ -365,13 +368,14 @@ def emitter_on_off_check_sequence_id():
         pipe = rs.pipeline(ctx)
         pipe.start(cfg)
 
-        depth_sensor.set_option(rs.option.emitter_on_off, 1)
-        test.check(depth_sensor.get_option(rs.option.emitter_on_off) == 1)
+        try:
+            depth_sensor.set_option(rs.option.emitter_on_off, 1)
+            test.check(depth_sensor.get_option(rs.option.emitter_on_off) == 1)
 
-        check_sequence_id(pipe)
-
-        pipe.stop()
-        depth_sensor.set_option(rs.option.emitter_on_off, 0)  # disable emitter before next tests
+            check_sequence_id(pipe)
+        finally:
+            pipe.stop()
+            depth_sensor.set_option(rs.option.emitter_on_off, 0)  # disable emitter before next tests
 
 
 with test.closure("Emitter on/off - checking sequence id"):
@@ -471,12 +475,20 @@ def hdr_start_stop_recover_manual_exposure_and_gain():
 
 
         iteration_for_disable = 50
-        iteration_to_check_after_disable = iteration_for_disable + 5  # Was 2, aligned to validation KPI's [DSO-18682]
-        for iteration in range(1, 70):
+        iteration_to_check_after_disable = iteration_for_disable + 15  # Was 5 [DSO-18682], increased for D457/GMSL settling time
+        for iteration in range(1, 80):
 
             data = pipe.wait_for_frames()
 
             out_depth_frame = data.get_depth_frame()
+
+            # HDR disable must happen unconditionally at the right iteration,
+            # regardless of metadata support on this particular frame
+            if iteration == iteration_for_disable:
+                depth_sensor.set_option(rs.option.hdr_enabled, 0)
+                test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 0)
+                time.sleep(1)  # allow firmware to restore manual exposure/gain
+                continue
 
             if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
 
@@ -486,11 +498,7 @@ def hdr_start_stop_recover_manual_exposure_and_gain():
                 if iteration > iteration_for_disable and iteration < iteration_to_check_after_disable:
                     continue
 
-                if iteration == iteration_for_disable:
-                    depth_sensor.set_option(rs.option.hdr_enabled, 0)
-                    test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 0)
-
-                elif iteration >= iteration_to_check_after_disable:
+                if iteration >= iteration_to_check_after_disable:
                     test.check(frame_gain == gain_before_hdr)
 
                     test.info("iteration", iteration)
