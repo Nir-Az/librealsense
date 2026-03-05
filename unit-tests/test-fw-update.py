@@ -250,9 +250,18 @@ image_file = find_image_or_exit(product_name, fw_version_regex) if not custom_fw
 
 cmd = [fw_updater_exe, '-f', image_file]
 if custom_fw_path:
-    # Add '-u' only if the path doesn't include 'signed'
+    # Add '-u' only if the path doesn't include 'signed', the device is unlocked,
+    # and the device is not a GMSL/MIPI device that requires signed-update via DFU path.
+    # D555 and GMSL devices (e.g. D457) use a different signed-update mechanism and
+    # do not support unsigned direct-flash write when locked.
+    is_camera_locked = (device.supports(rs.camera_info.camera_locked)
+                        and device.get_info(rs.camera_info.camera_locked) == "YES")
+    is_gmsl = (device.supports(rs.camera_info.connection_type)
+               and device.get_info(rs.camera_info.connection_type) == "GMSL")
     if ('signed' not in custom_fw_path.lower()
-            and "d555" not in product_name.lower()): # currently -u is not supported for D555
+            and "d555" not in product_name.lower()  # currently -u is not supported for D555
+            and not is_gmsl                          # GMSL/MIPI devices use signed DFU path
+            and not is_camera_locked):               # locked cameras cannot do unsigned flash write
         cmd.insert(1, '-u')
 
 # for DDS devices we need to close device and context to detect it back after FW update

@@ -115,6 +115,8 @@ namespace librealsense
     bool ds_device_common::is_locked( const uint8_t * gvd_buff, uint32_t offset )
     {
         std::memcpy( &_is_locked, gvd_buff + offset, 1 );
+        LOG_DEBUG( "GVD camera-lock byte at offset " << offset << " = " << (int)gvd_buff[offset]
+                   << " -> camera is " << ( _is_locked ? "LOCKED" : "UNLOCKED" ) );
         return _is_locked;
     }
 
