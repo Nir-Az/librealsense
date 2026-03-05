@@ -5,16 +5,16 @@
 #test:device:!jetson D400* D400*
 
 """
-Device enumeration example showing basic pattern for discovering and verifying all connected devices.
+Device enumeration discovering and verifying the connected devices.
 
-This test enumerates all devices and verifies basic functionality without extensive documentation.
+This test enumerates the devices and verifies basic functionality.
 Requires 2 D400 series devices to run.
 """
 
 import pyrealsense2 as rs
 from rspy import test, log
 
-# Query all connected devices directly via RealSense context
+# Query the connected devices directly via RealSense context
 ctx = rs.context()
 device_list = ctx.query_devices()
 device_count = len(device_list)
@@ -22,7 +22,7 @@ device_count = len(device_list)
 log.i(f"Found {device_count} connected device(s)")
 
 #
-# Enumerate and verify all devices
+# Enumerate and verify devices
 #
 with test.closure("Device enumeration and basic verification"):
     # Verify required device count

@@ -24,7 +24,7 @@ STREAM_DURATION_SEC = 10  # Longer duration for multi-stream stress test
 MAX_FRAME_DROP_PERCENTAGE = 5.0  # Allow up to 5% frame drops
 STABILIZATION_TIME_SEC = 3  # Time to allow auto-exposure to settle
 
-# Query all connected devices directly via RealSense context
+# Query the connected devices directly via RealSense context
 ctx = rs.context()
 device_list = ctx.query_devices()
 device_count = len(device_list)
