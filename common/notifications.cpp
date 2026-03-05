@@ -1220,4 +1220,33 @@ namespace rs2
         draw_text(get_title().c_str(), x, y, height - 50);
         ImGui::PopStyleColor();
     }
+
+    udev_warning_model::udev_warning_model()
+        : notification_model()
+    {
+        enable_expand = false;
+        enable_dismiss = true;
+        enable_complex_dismiss = true; // Allow "don't show again"
+        pinned = false;
+        message = "UDEV is not enabled on this system.\n"
+            "For better device detection and stability,\n"
+            "install UDEV support using:\n"
+            "sudo apt install libudev-dev\n"
+            "Then rebuild librealsense.";
+    }
+
+    void udev_warning_model::draw_content(ux_window& win, int x, int y, float t, std::string& error_message)
+    {
+        ImGui::SetCursorScreenPos({ float(x + 9), float(y + 4) });
+
+        ImGui::GetWindowDrawList()->AddRectFilled({ float(x), float(y) },
+            { float(x + width), float(y + 25) }, ImColor(yellow)); // Use yellow for warning
+
+        ImGui::Text("UDEV Not Enabled");
+
+        ImGui::SetCursorScreenPos({ float(x + 5), float(y + 30) });
+        ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
+        draw_text(get_title().c_str(), x, y, height - 50);
+        ImGui::PopStyleColor();
+    }
 }
