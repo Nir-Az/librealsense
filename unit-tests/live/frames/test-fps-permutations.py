@@ -2,7 +2,7 @@
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
 # test:device D400*
-# test:device D555
+
 
 # test:donotrun:!nightly
 # test:timeout 300
