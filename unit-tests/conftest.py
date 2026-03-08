@@ -168,6 +168,12 @@ def pytest_addoption(parser):
         default=False,
         help="Reset the hub itself during initialization."
     )
+    parser.addoption(
+        "--live",
+        action="store_true",
+        default=False,
+        help="Only run tests that require a live device (have at least one device/device_each marker)."
+    )
 
 
 # Global context variable to match old LibCI behavior
@@ -313,6 +319,14 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "dds" in item.keywords:
                 item.add_marker(skip_dds)
+
+    # Skip non-device tests when --live is specified
+    if config.getoption("--live", default=False):
+        skip_no_device = pytest.mark.skip(reason="--live: test has no device requirement")
+        for item in items:
+            has_device = any(item.iter_markers("device")) or any(item.iter_markers("device_each"))
+            if not has_device:
+                item.add_marker(skip_no_device)
 
     def get_priority(item):
         marker = item.get_closest_marker("priority")
