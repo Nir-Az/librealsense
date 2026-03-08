@@ -174,6 +174,9 @@ def pytest_addoption(parser):
         default=False,
         help="Only run tests that require a live device (have at least one device/device_each marker)."
     )
+    # Note: --debug is consumed by rspy.log at import time (before pytest parses args)
+    # and enables rspy debug logging (-D- lines) in test output and per-test log files.
+    # It also triggers pytest's built-in debug mode (pytestdebug.log) — this is harmless.
 
 
 # Global context variable to match old LibCI behavior
@@ -234,10 +237,14 @@ def pytest_configure(config):
         "markers", "priority(value): test execution priority (lower runs first, default 500)"
     )
 
-    # Enable rspy debug logging if pytest log level is DEBUG
-    log_cli_level = config.getoption('--log-cli-level', default=None)
-    if log_cli_level and log_cli_level.upper() == 'DEBUG':
-        log.debug_on()
+    # Enable rspy debug logging:
+    # --debug is consumed by rspy.log at import time and calls log.debug_on()
+    # --log-cli-level=DEBUG is an alternative way to enable it
+    if not log.is_debug_on():
+        log_cli_level = config.getoption('--log-cli-level', default=None)
+        if log_cli_level and log_cli_level.upper() == 'DEBUG':
+            log.debug_on()
+    if log.is_debug_on():
         import logging
         logging.getLogger('paramiko').setLevel(logging.WARNING)
 

@@ -43,7 +43,8 @@ def device_config(module_test_device):
 
     product_name = dev.get_info(rs.camera_info.name)
 
-    max_delay_depth = 1
+    #max_delay_depth = 1 TEST! REMOVE!
+    max_delay_depth = 0.1
     max_delay_color = 1
 
     # Check if device has color sensor
