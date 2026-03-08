@@ -337,17 +337,88 @@ def pytest_collection_modifyitems(config, items):
     items.sort(key=get_priority)
 
 
+class _TeeWriter:
+    """
+    Tee stdout to both the original stream and a log file.
+    """
+    def __init__(self, original, log_file):
+        self._original = original
+        self._log_file = log_file
+
+    def write(self, data):
+        self._original.write(data)
+        try:
+            self._log_file.write(data)
+        except Exception:
+            pass
+
+    def flush(self):
+        self._original.flush()
+        try:
+            self._log_file.flush()
+        except Exception:
+            pass
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+def _test_log_name(item):
+    """
+    Derive a log file name from a pytest node id.
+    E.g., 'unit-tests/live/frames/pytest-t2ff-pipeline.py::test_func[D455-SN]'
+      ->  'pytest-t2ff-pipeline[D455-SN].log'
+    """
+    # Get the test file basename without extension
+    file_path = item.fspath
+    basename = os.path.splitext(os.path.basename(str(file_path)))[0]  # 'pytest-t2ff-pipeline'
+
+    # Get the test name with parametrize suffix
+    test_name = item.name  # 'test_func[D455-SN]'
+
+    # Combine: pytest-t2ff-pipeline_test_func[D455-SN].log
+    # Sanitize for filesystem
+    log_name = f"{basename}_{test_name}"
+    log_name = re.sub(r'[<>:"/\\|?*]', '_', log_name)
+    return log_name + ".log"
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
     """
-    Visual separators around each test.
+    Visual separators around each test, and per-test log file creation.
     """
     log.i("-" * 80)
     log.i(f"Test: {item.nodeid}")
     log.i("-" * 80)
     log.debug_indent()
 
+    # Set up per-test log file if logdir is available
+    logdir = getattr(item.config, '_test_logdir', None)
+    log_file = None
+    original_stdout = None
+
+    if logdir:
+        log_name = _test_log_name(item)
+        log_path = os.path.join(logdir, log_name)
+        try:
+            log_file = open(log_path, 'w')
+            original_stdout = sys.stdout
+            sys.stdout = _TeeWriter(original_stdout, log_file)
+        except Exception as e:
+            log.w(f"Could not create test log file {log_path}: {e}")
+            log_file = None
+
     outcome = yield
+
+    # Restore stdout and close log file
+    if original_stdout is not None:
+        sys.stdout = original_stdout
+    if log_file is not None:
+        try:
+            log_file.close()
+        except Exception:
+            pass
 
     log.debug_unindent()
 
