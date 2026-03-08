@@ -14,25 +14,16 @@ Requires 2 D400 series devices to run.
 import pyrealsense2 as rs
 from rspy import test, log
 
-# Query the connected devices directly via RealSense context
-ctx = rs.context()
-device_list = ctx.query_devices()
-device_count = len(device_list)
+# Find exactly 2 devices or skip the test
+device_list, ctx = test.find_n_devices_or_exit(2)
 
-log.i(f"Found {device_count} connected device(s)")
+log.i(f"Found {len(device_list)} connected device(s)")
 
 #
 # Enumerate and verify devices
 #
 with test.closure("Device enumeration and basic verification"):
-    # Verify required device count
-    test.check(device_count == 2, f"Test requires exactly 2 D400 devices, but found {device_count}")
-    
-    if device_count != 2:
-        log.e(f"FAIL: Test requires exactly 2 D400 devices but found {device_count}")
-        test.print_results_and_exit()
-    
-    for i in range(device_count):
+    for i in range(len(device_list)):
         dev = device_list[i]
         
         # Get basic info
@@ -44,6 +35,6 @@ with test.closure("Device enumeration and basic verification"):
         sensors = dev.query_sensors()
         test.check(len(sensors) > 0, f"Device {i+1} should have sensors")
     
-    log.i(f"All {device_count} devices verified successfully")
+    log.i(f"All {len(device_list)} devices verified successfully")
 
 test.print_results_and_exit()

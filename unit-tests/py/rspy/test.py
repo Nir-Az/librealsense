@@ -159,6 +159,32 @@ def find_devices_by_product_line_or_exit( product_line ):
     return devices_list
 
 
+def find_n_devices_or_exit( n, product_line = None ):
+    """
+    :param n: The exact number of devices required
+    :param product_line: Optional product line filter for the devices
+    :return: A list of devices and the context if exactly n devices are found, otherwise the test is skipped.
+        That way multi-device tests can skip gracefully when the required number of devices is not connected
+    """
+    import pyrealsense2 as rs
+    c = rs.context()
+    if product_line:
+        devices_list = c.query_devices(product_line)
+    else:
+        devices_list = c.query_devices()
+    
+    device_count = devices_list.size()
+    if device_count != n:
+        if product_line:
+            log.f( f"Test requires exactly {n} device(s) of {product_line} product line, but found {device_count}" )
+        else:
+            log.f( f"Test requires exactly {n} device(s), but found {device_count}" )
+    
+    log.d( f'found {device_count} device(s):', [dev for dev in devices_list] )
+    log.d( 'in', rs )
+    return [devices_list[i] for i in range(device_count)], c
+
+
 def print_stack():
     """
     Function for printing the current call stack. Used when an assertion fails

@@ -24,147 +24,29 @@ STREAM_DURATION_SEC = 10  # Longer duration for multi-stream stress test
 MAX_FRAME_DROP_PERCENTAGE = 5.0  # Allow up to 5% frame drops
 STABILIZATION_TIME_SEC = 3  # Time to allow auto-exposure to settle
 
-# Query the connected devices directly via RealSense context
-ctx = rs.context()
-device_list = ctx.query_devices()
-device_count = len(device_list)
+# Find exactly 2 devices or skip the test
+device_list, ctx = test.find_n_devices_or_exit(2)
 
-def _discover_device_profiles(devs):
-    """
-    Discover all available stream profiles across all devices.
-    
-    :param devs: List of device objects
-    :return: List of profile dictionaries, one per device. Each dictionary maps
-             (stream_type, format) -> set of (width, height, fps) tuples
-    """
-    all_profiles = []
-    
-    for dev in devs:
-        sensors = dev.query_sensors()
-        dev_profiles = defaultdict(set)
-        
-        for sensor in sensors:
-            for profile in sensor.get_stream_profiles():
-                if profile.is_video_stream_profile():
-                    vp = profile.as_video_stream_profile()
-                    key = (profile.stream_type(), profile.format())
-                    value = (vp.width(), vp.height(), profile.fps())
-                    dev_profiles[key].add(value)
-        
-        all_profiles.append(dev_profiles)
-    
-    return all_profiles
+# Target resolutions to try in order of preference
+TARGET_RESOLUTIONS = [
+    (640, 480, 30),  # Standard VGA resolution
+    (640, 360, 30),  # Fallback for safety cameras and other devices
+]
 
-
-def _find_common_profiles(all_profiles, stream_key):
-    """
-    Find the intersection of available profiles for a specific stream across all devices.
-    
-    :param all_profiles: List of profile dictionaries from _discover_device_profiles
-    :param stream_key: Tuple of (stream_type, format) to look up
-    :return: Set of (width, height, fps) tuples available on all devices, or None if not available
-    """
-    # Check if all devices support this stream
-    if not all(stream_key in dev_prof for dev_prof in all_profiles):
-        return None
-    
-    # Find intersection of all devices
-    common_profiles = all_profiles[0][stream_key]
-    for dev_prof in all_profiles[1:]:
-        common_profiles = common_profiles.intersection(dev_prof[stream_key])
-    
-    return common_profiles
-
-
-def _select_best_resolution(available_configs, target_resolutions):
-    """
-    Select the best matching resolution from available configurations.
-    
-    :param available_configs: Set of (width, height, fps) tuples
-    :param target_resolutions: List of (width, height, fps) tuples in preference order
-    :return: Tuple of (width, height, fps) if found, else None
-    """
-    if not available_configs:
-        return None
-    
-    # Try each target resolution in order of preference
-    for target_width, target_height, target_fps in target_resolutions:
-        if (target_width, target_height, target_fps) in available_configs:
-            return (target_width, target_height, target_fps)
-    
-    return None
-
-
-def _try_add_depth_stream(all_profiles, target_resolutions):
-    """
-    Attempt to add a depth stream configuration.
-    
-    :param all_profiles: List of profile dictionaries for all devices
-    :param target_resolutions: List of (width, height, fps) tuples in preference order
-    :return: Stream configuration tuple if successful, else None
-    """
-    depth_key = (rs.stream.depth, rs.format.z16)
-    common_depth = _find_common_profiles(all_profiles, depth_key)
-    
-    if common_depth is None:
-        return None
-    
-    resolution = _select_best_resolution(common_depth, target_resolutions)
-    if resolution:
-        width, height, fps = resolution
-        log.d(f"  Added Depth stream: {width}x{height} @ {fps}fps")
-        return (rs.stream.depth, -1, width, height, rs.format.z16, fps)
-    
-    return None
-
-
-def _try_add_color_stream(all_profiles, target_resolutions):
-    """
-    Attempt to add a color stream configuration, trying multiple formats.
-    
-    :param all_profiles: List of profile dictionaries for all devices
-    :param target_resolutions: List of (width, height, fps) tuples in preference order
-    :return: Stream configuration tuple if successful, else None
-    """
-    color_formats = [rs.format.rgb8, rs.format.bgr8, rs.format.rgba8, rs.format.bgra8, rs.format.yuyv]
-    
-    for color_format in color_formats:
-        color_key = (rs.stream.color, color_format)
-        common_color = _find_common_profiles(all_profiles, color_key)
-        
-        if common_color is None:
-            continue
-        
-        resolution = _select_best_resolution(common_color, target_resolutions)
-        if resolution:
-            width, height, fps = resolution
-            log.d(f"  Added Color stream: {width}x{height} @ {fps}fps {color_format}")
-            return (rs.stream.color, -1, width, height, color_format, fps)
-    
-    return None
-
-
-def _try_add_infrared_stream(all_profiles, target_resolutions, stream_index=1):
-    """
-    Attempt to add an infrared stream configuration.
-    
-    :param all_profiles: List of profile dictionaries for all devices
-    :param target_resolutions: List of (width, height, fps) tuples in preference order
-    :param stream_index: IR stream index (1 or 2)
-    :return: Stream configuration tuple if successful, else None
-    """
-    ir_key = (rs.stream.infrared, rs.format.y8)
-    common_ir = _find_common_profiles(all_profiles, ir_key)
-    
-    if common_ir is None:
-        return None
-    
-    resolution = _select_best_resolution(common_ir, target_resolutions)
-    if resolution:
-        width, height, fps = resolution
-        log.d(f"  Added Infrared stream (index {stream_index}): {width}x{height} @ {fps}fps")
-        return (rs.stream.infrared, stream_index, width, height, rs.format.y8, fps)
-    
+def find_common_profile(devs, stream_type, stream_format, target_resolutions):
+    """Return (width, height, fps) available on all devices, or None."""
+    for w, h, fps in target_resolutions:
+        if all(
+            any(p.stream_type() == stream_type and p.format() == stream_format
+                and p.as_video_stream_profile().width() == w
+                and p.as_video_stream_profile().height() == h
+                and p.fps() == fps
+                for sensor in dev.query_sensors()
+                for p in sensor.get_stream_profiles()
+                if p.is_video_stream_profile())
+            for dev in devs
+        ):
+            return w, h, fps
     return None
 
 
@@ -176,45 +58,34 @@ def get_common_multi_stream_config(*devs):
     This tries to enable as many stream types as possible:
     - Depth stream
     - Color stream  
-    - Infrared streams (1 and 2 if available)
+    - Infrared stream
     
     All streams will use the same resolution and FPS for simplicity.
     """
-    # Guard against empty device list
-    if len(devs) == 0:
-        log.w("get_common_multi_stream_config called with no devices")
-        return []
-    
-    # Try common resolutions in order of preference
-    # 640x360 added as fallback to support safety camera profiles
-    target_resolutions = [
-        (640, 480, 30),  # Standard VGA resolution
-        (640, 360, 30),  # Fallback for safety cameras and other devices
-    ]
-    
-    # Discover available profiles from all devices
-    all_profiles = _discover_device_profiles(devs)
-    
-    # Build multi-stream configuration by trying each stream type
     stream_configs = []
     
     # Try to add Depth stream
-    depth_config = _try_add_depth_stream(all_profiles, target_resolutions)
-    if depth_config:
-        stream_configs.append(depth_config)
+    res = find_common_profile(devs, rs.stream.depth, rs.format.z16, TARGET_RESOLUTIONS)
+    if res:
+        w, h, fps = res
+        log.d(f"  Added Depth stream: {w}x{h} @ {fps}fps")
+        stream_configs.append((rs.stream.depth, -1, w, h, rs.format.z16, fps))
     
-    # Try to add Color stream
-    color_config = _try_add_color_stream(all_profiles, target_resolutions)
-    if color_config:
-        stream_configs.append(color_config)
+    # Try to add Color stream (try multiple formats)
+    for color_format in [rs.format.rgb8, rs.format.bgr8, rs.format.rgba8, rs.format.bgra8, rs.format.yuyv]:
+        res = find_common_profile(devs, rs.stream.color, color_format, TARGET_RESOLUTIONS)
+        if res:
+            w, h, fps = res
+            log.d(f"  Added Color stream: {w}x{h} @ {fps}fps {color_format}")
+            stream_configs.append((rs.stream.color, -1, w, h, color_format, fps))
+            break
     
     # Try to add Infrared stream (index 1)
-    ir_config = _try_add_infrared_stream(all_profiles, target_resolutions, stream_index=1)
-    if ir_config:
-        stream_configs.append(ir_config)
-    
-    # Note: IR2 skipped for simplicity as multiple streams of same type with different
-    # indices require more complex configuration
+    res = find_common_profile(devs, rs.stream.infrared, rs.format.y8, TARGET_RESOLUTIONS)
+    if res:
+        w, h, fps = res
+        log.d(f"  Added Infrared stream (index 1): {w}x{h} @ {fps}fps")
+        stream_configs.append((rs.stream.infrared, 1, w, h, rs.format.y8, fps))
     
     return stream_configs
 
@@ -456,19 +327,12 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
 #
 # Test: Stream multiple stream types simultaneously from all devices
 #
-with test.closure(f"Multiple devices - multi-stream simultaneous operation (depth + color + IR) - {device_count} devices"):
-    # Verify required device count
-    test.check(device_count == 2, f"Test requires exactly 2 D400 devices, but found {device_count}")
-    
-    if device_count != 2:
-        log.e(f"FAIL: Test requires exactly 2 D400 devices but found {device_count}")
-        test.print_results_and_exit()
-    
+with test.closure(f"Multiple devices - multi-stream simultaneous operation (depth + color + IR) - {len(device_list)} devices"):
     # Use the devices already queried at the top of the file
-    devs = [device_list[i] for i in range(device_count)]
+    devs = device_list
     
     log.i("=" * 80)
-    log.i(f"Testing multi-stream operation on {device_count} devices:")
+    log.i(f"Testing multi-stream operation on {len(device_list)} devices:")
     for i, dev in enumerate(devs, 1):
         sn = dev.get_info(rs.camera_info.serial_number)
         name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else "Unknown"
@@ -485,7 +349,7 @@ with test.closure(f"Multiple devices - multi-stream simultaneous operation (dept
         test.check(False, "Devices should support at least 2 common stream types")
     else:
         log.i(f"\nFound {len(stream_configs)} common stream types")
-        log.i(f"Will stream all of them simultaneously from all {device_count} devices")
+        log.i(f"Will stream all of them simultaneously from all {len(device_list)} devices")
         
         # Run the multi-stream test
         # Note: Exceptions during streaming will propagate and fail the test automatically
