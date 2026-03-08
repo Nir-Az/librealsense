@@ -353,7 +353,10 @@ class _TeeWriter:
         self._log_file = log_file
 
     def write(self, data):
+        global _at_line_start
         self._original.write(data)
+        if data:
+            _at_line_start = data[-1] in ('\n', '\r')
         try:
             self._log_file.write(data)
         except Exception:
@@ -368,6 +371,16 @@ class _TeeWriter:
 
     def __getattr__(self, name):
         return getattr(self._original, name)
+
+
+_at_line_start = True
+
+def _ensure_newline():
+    """Ensure we're on a fresh line before emitting log output."""
+    global _at_line_start
+    if not _at_line_start:
+        sys.stdout.write('\n')
+        _at_line_start = True
 
 
 def _test_log_name(item):
@@ -395,6 +408,7 @@ def pytest_runtest_protocol(item, nextitem):
     """
     Visual separators around each test, and per-test log file creation.
     """
+    _ensure_newline()
     log.i("-" * 80)
     log.i(f"Test: {item.nodeid}")
     log.i("-" * 80)
@@ -427,6 +441,10 @@ def pytest_runtest_protocol(item, nextitem):
         except Exception:
             pass
 
+    # After yield, pytest may have printed a verdict (F/.) without a trailing newline
+    global _at_line_start
+    _at_line_start = False
+    _ensure_newline()
     log.debug_unindent()
 
 
@@ -439,6 +457,7 @@ def pytest_runtest_makereport(item, call):
     report = outcome.get_result()
 
     if call.when == "call":
+        _ensure_newline()
         log.d(f"Test execution took {report.duration:.3f}s")
 
 
@@ -446,6 +465,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """
     Summary with pass/fail/skip counts.
     """
+    _ensure_newline()
     log.i("")
     log.i("=" * 80)
     log.i("Test Summary")
