@@ -161,10 +161,11 @@ def find_devices_by_product_line_or_exit( product_line ):
 
 def find_n_devices_or_exit( n, product_line = None ):
     """
-    :param n: The exact number of devices required
+    :param n: The minimum number of devices required
     :param product_line: Optional product line filter for the devices
-    :return: A list of devices and the context if exactly n devices are found, otherwise the test is skipped.
-        That way multi-device tests can skip gracefully when the required number of devices is not connected
+    :return: A list of n devices and the context if at least n devices are found, otherwise the test is skipped.
+        That way multi-device tests can skip gracefully when the required number of devices is not connected.
+        If more than n devices are found, only the first n are returned.
     """
     import pyrealsense2 as rs
     c = rs.context()
@@ -174,15 +175,15 @@ def find_n_devices_or_exit( n, product_line = None ):
         devices_list = c.query_devices()
     
     device_count = devices_list.size()
-    if device_count != n:
+    if device_count < n:
         if product_line:
-            log.f( f"Test requires exactly {n} device(s) of {product_line} product line, but found {device_count}" )
+            log.f( f"Test requires at least {n} device(s) of {product_line} product line, but found {device_count}" )
         else:
-            log.f( f"Test requires exactly {n} device(s), but found {device_count}" )
+            log.f( f"Test requires at least {n} device(s), but found {device_count}" )
     
     log.d( f'found {device_count} device(s):', [dev for dev in devices_list] )
     log.d( 'in', rs )
-    return [devices_list[i] for i in range(device_count)], c
+    return [devices_list[i] for i in range(n)], c
 
 
 def print_stack():
