@@ -28,8 +28,8 @@ if py_dir not in sys.path:
 from rspy import log, devices, repo
 from rspy.signals import register_signal_handlers
 
-# Consume flags that conflict with pytest built-ins before pytest sees them.
-# These are translated to their pytest equivalents.
+# Translate legacy flags that conflict with pytest built-ins before pytest sees them.
+# Flags unknown to pytest (like --retry) must use the pytest equivalent directly (--retries).
 def _consume_flag_with_arg(flags, pytest_equiv):
     """Consume a flag+argument from sys.argv, translate to pytest equivalent."""
     for flag in flags:
@@ -44,6 +44,7 @@ def _consume_flag_with_arg(flags, pytest_equiv):
             return value
     return None
 
+# -r/--regex conflicts with pytest's built-in -r (report chars) — safe to consume here
 _consume_flag_with_arg(['-r', '--regex'], '-k')
 
 # Find and add pyrealsense2 to path
