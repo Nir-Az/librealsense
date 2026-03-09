@@ -259,12 +259,12 @@ if(BUILD_VIEWER_TESTS)
     FetchContent_MakeAvailable(imgui_test_engine)
     set(TE_DIR ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine)
 
-    file(GLOB VIEWER_TEST_CASES tests/test-*.cpp)
-    list(REMOVE_ITEM VIEWER_TEST_CASES ${CMAKE_CURRENT_SOURCE_DIR}/tests/test-device.cpp)
+    file(GLOB_RECURSE VIEWER_TEST_CASES tests/test-*.cpp)
+    list(REMOVE_ITEM VIEWER_TEST_CASES ${CMAKE_CURRENT_SOURCE_DIR}/tests/hw-reset/test-hw-reset.cpp)
     set(VIEWER_TEST_SOURCES
         tests/viewer-test-main.cpp
         tests/viewer-test-helpers.cpp
-        tests/test-device.cpp        # written explicitly to be run first, to check device connected and perform hw reset before other tests run
+        tests/hw-reset/test-hw-reset.cpp  # written explicitly to be run first, to check device connected and perform hw reset before other tests run
         ${VIEWER_TEST_CASES}
     )
     file(GLOB TE_SOURCES ${TE_DIR}/*.cpp)
@@ -277,7 +277,8 @@ if(BUILD_VIEWER_TESTS)
         IMGUI_ENABLE_TEST_ENGINE IMGUI_TEST_ENGINE_ENABLE_STD_FUNCTION
         IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1)
     target_include_directories(realsense-viewer-tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR} ${TE_DIR} ${TE_DIR}/thirdparty/Str)
+        ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${TE_DIR} ${TE_DIR}/thirdparty/Str)
 
     # Suppress warnings in third-party test engine sources
     if(MSVC)

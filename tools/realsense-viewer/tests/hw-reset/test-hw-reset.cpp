@@ -22,5 +22,5 @@ VIEWER_TEST( "device", "hardware_reset" )
     // Disconnect can be brief — poll at 50ms to catch it; allow up to 10s
     IM_CHECK( test.wait_until( 200, 0.05f, [&] { return test.device_models.empty(); } ) );
     // Reconnect takes several seconds; allow up to 20s
-    IM_CHECK( test.wait_until( 40, 0.5f, [&] { return !test.device_models.empty(); } ) );
+    IM_CHECK( test.wait_until( 20, 1.0f, [&] { return !test.device_models.empty(); } ) );
 }
