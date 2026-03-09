@@ -203,7 +203,8 @@ def pytest_addoption(parser):
         default=False,
         help="Pre-parsed flags (no need for --rs-help): "
              "--debug (enable -D- debug logs), "
-             "-r/--regex <pattern> (filter tests by name, maps to -k)."
+             "-r/--regex <pattern> (filter tests by name, maps to -k), "
+             "--retries N (retry failed tests N times)."
     )
 
 
