@@ -514,12 +514,19 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 
 def _cleanup_devices():
     """Release hub and rs.context so the process can exit cleanly."""
-    if devices.hub and devices.hub.is_connected():
-        log.d("Signal cleanup: disconnecting from hub(s)")
-        devices.hub.disable_ports()
-        devices.wait_until_all_ports_disabled()
-        devices.hub.disconnect()
+    if devices.hub:
+        try:
+            if devices.hub.is_connected():
+                log.d("Cleanup: disconnecting from hub(s)")
+                devices.hub.disable_ports()
+                devices.wait_until_all_ports_disabled()
+            devices.hub.disconnect()
+        except Exception:
+            pass
+        devices.hub = None
     devices._context = None
+    import gc
+    gc.collect()
 
 
 @pytest.fixture(scope="session", autouse=True)
