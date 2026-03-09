@@ -27,18 +27,23 @@ if py_dir not in sys.path:
 
 from rspy import log, devices, repo
 
-# Consume -r/--regex before pytest sees it (pytest's built-in -r means something else).
-# Translates to pytest's -k flag for test name filtering.
-_regex_pattern = None
-for _flag in ('-r', '--regex'):
-    _idx = log.find_flag(_flag)
-    if _idx is not None and _idx + 1 < len(sys.argv):
-        _regex_pattern = sys.argv[_idx + 1]
-        del sys.argv[_idx:_idx + 2]
-        break
-if _regex_pattern:
-    sys.argv.extend(['-k', _regex_pattern])
-    log.d(f'Regex filter: -k {_regex_pattern}')
+# Consume flags that conflict with pytest built-ins before pytest sees them.
+# These are translated to their pytest equivalents.
+def _consume_flag_with_arg(flags, pytest_equiv):
+    """Consume a flag+argument from sys.argv, translate to pytest equivalent."""
+    for flag in flags:
+        idx = log.find_flag(flag)
+        if idx is not None:
+            if idx + 1 >= len(sys.argv):
+                log.f(f'{flag} requires an argument')  # exits
+            value = sys.argv[idx + 1]
+            del sys.argv[idx:idx + 2]
+            sys.argv.extend([pytest_equiv, value])
+            log.d(f'{flag} {value} -> {pytest_equiv} {value}')
+            return value
+    return None
+
+_consume_flag_with_arg(['-r', '--regex'], '-k')
 
 # Find and add pyrealsense2 to path
 pyrs_dir = repo.find_pyrs_dir()
@@ -145,51 +150,59 @@ def pytest_addoption(parser):
     """
     Add custom command-line options — full CLI parity with run-unit-tests.py.
     """
-    parser.addoption(
+    group = parser.getgroup('librealsense', 'RealSense unit test options')
+    group.addoption(
         "--device",
         action="append",
         default=[],
         help="Include only devices matching pattern (e.g., --device D455). Can be used multiple times."
     )
-    parser.addoption(
+    group.addoption(
         "--device-exclude",
         action="append",
         default=[],
         help="Exclude devices matching pattern (e.g., --device-exclude D455). Can be used multiple times."
     )
-    parser.addoption(
+    group.addoption(
         "--context",
         action="store",
         default="",
         help="Context for test configuration (e.g., --context \"nightly weekly\"). Space-separated list."
     )
-    parser.addoption(
+    group.addoption(
         "--rslog",
         action="store_true",
         default=False,
         help="Enable LibRS debug logging (rs.log_to_console)."
     )
-    parser.addoption(
+    group.addoption(
         "--no-reset",
         action="store_true",
         default=False,
         help="Don't recycle (power-cycle) devices between tests."
     )
-    parser.addoption(
+    group.addoption(
         "--hub-reset",
         action="store_true",
         default=False,
         help="Reset the hub itself during initialization."
     )
-    parser.addoption(
+    group.addoption(
         "--live",
         action="store_true",
         default=False,
         help="Only run tests that require a live device (have at least one device/device_each marker)."
     )
-    # Note: --debug is consumed by rspy.log at import time (before pytest parses args)
-    # and enables rspy debug logging (-D- lines) in test output and per-test log files.
-    # It also triggers pytest's built-in debug mode (pytestdebug.log) — this is harmless.
+    # --debug and -r/--regex conflict with pytest built-ins and are consumed before
+    # pytest parses args. Document them here so they show up in --help:
+    group.addoption(
+        "--rs-help",
+        action="store_true",
+        default=False,
+        help="Pre-parsed flags (no need for --rs-help): "
+             "--debug (enable -D- debug logs), "
+             "-r/--regex <pattern> (filter tests by name, maps to -k)."
+    )
 
 
 # Global context variable to match old LibCI behavior
