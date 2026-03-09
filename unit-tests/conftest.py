@@ -26,6 +26,7 @@ if py_dir not in sys.path:
     sys.path.insert(0, py_dir)
 
 from rspy import log, devices, repo
+from rspy.signals import register_signal_handlers
 
 # Consume flags that conflict with pytest built-ins before pytest sees them.
 # These are translated to their pytest equivalents.
@@ -511,12 +512,24 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 # Session-Scoped Fixtures
 # ============================================================================
 
+def _cleanup_devices():
+    """Release hub and rs.context so the process can exit cleanly."""
+    if devices.hub and devices.hub.is_connected():
+        log.d("Signal cleanup: disconnecting from hub(s)")
+        devices.hub.disable_ports()
+        devices.wait_until_all_ports_disabled()
+        devices.hub.disconnect()
+    devices._context = None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def session_setup_teardown():
     """
     Session-level setup and teardown.
     Logs session start, yields, then disconnects hub and disables ports.
     """
+    register_signal_handlers(_cleanup_devices)
+
     log.i("")
     log.i("=" * 80)
     log.i("Pytest Session Starting")
@@ -539,14 +552,10 @@ def session_setup_teardown():
     log.i("Pytest Session Ending")
     log.i("=" * 80)
 
-    if devices.hub and devices.hub.is_connected():
-        log.i("Disconnecting from hub(s)")
-        try:
-            devices.hub.disable_ports()
-            devices.wait_until_all_ports_disabled()
-            devices.hub.disconnect()
-        except Exception as e:
-            log.w(f"Error during hub cleanup: {e}")
+    try:
+        _cleanup_devices()
+    except Exception as e:
+        log.w(f"Error during cleanup: {e}")
 
     log.i("=" * 80)
 
