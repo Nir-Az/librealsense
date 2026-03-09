@@ -19,7 +19,7 @@ import re
 import warnings
 from typing import List
 
-# Add py directory to path for rspy imports
+# unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
 current_dir = os.path.dirname(os.path.abspath(__file__))
 py_dir = os.path.join(current_dir, 'py')
 if py_dir not in sys.path:
@@ -28,8 +28,13 @@ if py_dir not in sys.path:
 from rspy import log, devices, repo
 from rspy.signals import register_signal_handlers
 
-# Translate legacy flags that conflict with pytest built-ins before pytest sees them.
-# Flags unknown to pytest (like --retry) must use the pytest equivalent directly (--retries).
+
+# ============================================================================
+# Legacy CLI Flag Translation
+# ============================================================================
+# The old run-unit-tests.py used flags like -r/--regex that clash with pytest built-ins.
+# We intercept and translate them here, before pytest parses sys.argv.
+
 def _consume_flag_with_arg(flags, pytest_equiv):
     """Consume a flag+argument from sys.argv, translate to pytest equivalent."""
     for flag in flags:
@@ -44,10 +49,13 @@ def _consume_flag_with_arg(flags, pytest_equiv):
             return value
     return None
 
-# -r/--regex conflicts with pytest's built-in -r (report chars) — safe to consume here
-_consume_flag_with_arg(['-r', '--regex'], '-k')
+_consume_flag_with_arg(['-r', '--regex'], '-k')  # -r/--regex -> pytest's -k (keyword filter)
 
-# Find and add pyrealsense2 to path
+
+# ============================================================================
+# pyrealsense2 Import
+# ============================================================================
+# pyrealsense2 is built as part of the CMake build — repo.find_pyrs_dir() locates the .pyd/.so
 pyrs_dir = repo.find_pyrs_dir()
 if pyrs_dir and pyrs_dir not in sys.path:
     sys.path.insert(1, pyrs_dir)
@@ -64,9 +72,7 @@ except ImportError:
 # ============================================================================
 
 def is_jetson_platform():
-    """
-    Detect if running on NVIDIA Jetson platform.
-    """
+    """Detect NVIDIA Jetson — some tests behave differently on embedded platforms."""
     try:
         with open('/proc/device-tree/model', 'r') as f:
             model = f.read()
@@ -80,10 +86,7 @@ def is_jetson_platform():
 # ============================================================================
 
 def _find_build_dir():
-    """
-    Find the build directory by searching upward from current directory.
-    Matches the logic in run-unit-tests.py.
-    """
+    """Walk up from unit-tests/ to find the CMake build dir (contains CMakeCache.txt)."""
     search_dir = current_dir
     while True:
         cmake_cache = os.path.join(search_dir, 'CMakeCache.txt')
@@ -103,11 +106,7 @@ def _find_build_dir():
 
 
 def _setup_test_logging(config):
-    """
-    Set up test logging to match run-unit-tests.py behavior.
-
-    Logs are written to: <build_dir>/<CONFIGURATION>/unit-tests/
-    """
+    """Set up per-test log directory and JUnit XML output path (<build_dir>/<config>/unit-tests/)."""
     build_dir = _find_build_dir()
 
     if build_dir:
@@ -149,9 +148,7 @@ def _setup_test_logging(config):
 # ============================================================================
 
 def pytest_addoption(parser):
-    """
-    Add custom command-line options — full CLI parity with run-unit-tests.py.
-    """
+    """Register RealSense-specific CLI options (device filters, hub control, etc.)."""
     group = parser.getgroup('librealsense', 'RealSense unit test options')
     group.addoption(
         "--device",
@@ -208,14 +205,12 @@ def pytest_addoption(parser):
     )
 
 
-# Global context variable to match old LibCI behavior
+# Shared context tags (e.g. "nightly", "weekly") — tests check this to adjust behavior
 context_list = []
 
 
 def pytest_configure(config):
-    """
-    Register custom markers and perform early setup.
-    """
+    """Early setup: register markers, configure defaults, and query connected devices."""
     global context_list
 
     # Parse and store context
@@ -227,7 +222,7 @@ def pytest_configure(config):
     # Set up test log directory
     _setup_test_logging(config)
 
-    # Configure test discovery and defaults (replaces pytest.ini)
+    # Test discovery defaults (replaces pytest.ini which is .gitignored)
     config.addinivalue_line("python_files", "pytest-*.py")
     config.addinivalue_line("python_classes", "Test*")
     config.addinivalue_line("python_functions", "test_*")
@@ -288,12 +283,7 @@ def pytest_configure(config):
 
 
 def pytest_generate_tests(metafunc):
-    """
-    Parametrize tests based on device_each markers.
-
-    Creates one test instance per matching device, with IDs like {name}-{serial}.
-    Respects --device include filter, --device-exclude CLI filter, and device_exclude markers.
-    """
+    """Expand @device_each into one test instance per matching device (e.g. test[D455-SN123])."""
     device_each_markers = [m for m in metafunc.definition.iter_markers("device_each")]
 
     if not device_each_markers:
@@ -336,12 +326,7 @@ def pytest_generate_tests(metafunc):
 
 
 def pytest_collection_modifyitems(config, items):
-    """
-    Modify test collection:
-    1. Skip nightly tests unless -m nightly specified
-    2. Skip dds tests unless -m dds specified
-    3. Sort by priority marker (lower first, default 500)
-    """
+    """Auto-skip nightly/dds tests unless opted in, filter --live, and sort by priority."""
     markexpr = config.getoption("-m", default="")
 
     if not (markexpr and "nightly" in markexpr):
@@ -374,9 +359,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 class _TeeWriter:
-    """
-    Tee stdout to both the original stream and a log file.
-    """
+    """Duplicates stdout to both terminal and a per-test log file."""
     def __init__(self, original, log_file):
         self._original = original
         self._log_file = log_file
@@ -400,17 +383,13 @@ class _TeeWriter:
 
 
 def _ensure_newline():
-    """Ensure we're on a fresh line before emitting log output."""
+    """Pytest's progress dots (F/.) don't end with newline — force one before our log output."""
     sys.stdout.write('\n')
     sys.stdout.flush()
 
 
 def _test_log_name(item):
-    """
-    Derive a log file name from a pytest node id.
-    E.g., 'unit-tests/live/frames/pytest-t2ff-pipeline.py::test_func[D455-SN]'
-      ->  'pytest-t2ff-pipeline[D455-SN].log'
-    """
+    """Convert a node id like 'live/frames/pytest-t2ff.py::test_x[D455-SN]' to a log filename."""
     # Get the test file basename without extension
     file_path = item.fspath
     basename = os.path.splitext(os.path.basename(str(file_path)))[0]  # 'pytest-t2ff-pipeline'
@@ -427,9 +406,7 @@ def _test_log_name(item):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
-    """
-    Visual separators around each test, and per-test log file creation.
-    """
+    """Wrap each test with log separators and tee output to a per-test log file."""
     _ensure_newline()
     log.i("-" * 80)
     log.i(f"Test: {item.nodeid}")
@@ -470,9 +447,7 @@ def pytest_runtest_protocol(item, nextitem):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """
-    Log test execution timing after the call phase.
-    """
+    """Log test duration after each test call phase."""
     outcome = yield
     report = outcome.get_result()
 
@@ -482,9 +457,7 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """
-    Summary with pass/fail/skip counts.
-    """
+    """Print a clear pass/fail/skip summary at the end of the run."""
     _ensure_newline()
     log.i("")
     log.i("=" * 80)
@@ -515,7 +488,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 # ============================================================================
 
 def _cleanup_devices():
-    """Release hub and rs.context so the process can exit cleanly."""
+    """Release hub and rs.context — required so BrainStem threads don't prevent exit."""
     if devices.hub:
         try:
             if devices.hub.is_connected():
@@ -528,15 +501,12 @@ def _cleanup_devices():
         devices.hub = None
     devices._context = None
     import gc
-    gc.collect()
+    gc.collect()  # Force release so BrainStem USB hub threads shut down
 
 
 @pytest.fixture(scope="session", autouse=True)
 def session_setup_teardown():
-    """
-    Session-level setup and teardown.
-    Logs session start, yields, then disconnects hub and disables ports.
-    """
+    """Runs once per session: log startup info, yield, then clean up hub/devices on exit."""
     register_signal_handlers(_cleanup_devices)
 
     log.i("")
@@ -575,19 +545,13 @@ def session_setup_teardown():
 
 @pytest.fixture
 def _test_device_serial(request):
-    """
-    Internal fixture to receive device serial from parametrization.
-    Automatically injected for tests with device_each markers.
-    """
+    """Receives the device serial injected by pytest_generate_tests parametrization."""
     return request.param
 
 
 @pytest.fixture(scope="function")
 def module_device_setup(request):
-    """
-    Enable only the required device port, optionally recycle (--no-reset check).
-    Yields the serial number of the enabled device.
-    """
+    """Power-cycle and enable only the target device via the hub. Yields its serial number."""
     serial_number = None
 
     # Check parametrized serial from device_each
@@ -638,9 +602,7 @@ def module_device_setup(request):
 
 @pytest.fixture
 def test_context(request, module_device_setup):
-    """
-    Create rs.context(), optionally enable --rslog.
-    """
+    """Create a fresh rs.context() for the test. Depends on module_device_setup for hub state."""
     if not rs:
         pytest.skip("pyrealsense2 not available")
 
@@ -658,10 +620,7 @@ def test_context(request, module_device_setup):
 
 @pytest.fixture
 def test_device(test_context):
-    """
-    Find first device in context or pytest.skip.
-    Equivalent to the old test.find_first_device_or_exit().
-    """
+    """Return (device, context) for the first visible device, or skip if none found."""
     devices_list = list(test_context.devices)
     if not devices_list:
         pytest.skip("No device available for test")
@@ -674,9 +633,7 @@ def test_device(test_context):
 
 @pytest.fixture
 def module_test_device(test_context):
-    """
-    Alias for test_device — provides (device, context) tuple.
-    """
+    """Alias for test_device — some legacy tests use this name."""
     devices_list = list(test_context.devices)
     if not devices_list:
         pytest.skip("No device available for test")
@@ -689,10 +646,7 @@ def module_test_device(test_context):
 
 @pytest.fixture
 def test_context_var():
-    """
-    Provides the test context list (e.g., ['nightly', 'weekly']).
-    Matches the old LibCI test.context behavior.
-    """
+    """Expose the --context tags (e.g. ['nightly', 'weekly']) so tests can branch on them."""
     return context_list
 
 
@@ -701,10 +655,7 @@ def test_context_var():
 # ============================================================================
 
 def _device_matches_pattern(device, pattern: str) -> bool:
-    """
-    Wildcard matching against product_line and name.
-    E.g., 'D400*' matches product_line 'D400'; 'D455' matches name 'D455'.
-    """
+    """Wildcard match against product_line and name (e.g. 'D400*' or 'D455')."""
     regex_pattern = pattern.replace('*', '.*')
     regex_pattern = f'^{regex_pattern}$'
 
@@ -718,9 +669,7 @@ def _device_matches_pattern(device, pattern: str) -> bool:
 
 
 def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_excludes=None) -> List[str]:
-    """
-    Collect serial numbers from markers + filters.
-    """
+    """Resolve device markers + CLI filters into a list of matching serial numbers."""
     all_device_sns = devices.all()
     matching_sns = []
     exclude_patterns = []
