@@ -27,6 +27,19 @@ if py_dir not in sys.path:
 
 from rspy import log, devices, repo
 
+# Consume -r/--regex before pytest sees it (pytest's built-in -r means something else).
+# Translates to pytest's -k flag for test name filtering.
+_regex_pattern = None
+for _flag in ('-r', '--regex'):
+    _idx = log.find_flag(_flag)
+    if _idx is not None and _idx + 1 < len(sys.argv):
+        _regex_pattern = sys.argv[_idx + 1]
+        del sys.argv[_idx:_idx + 2]
+        break
+if _regex_pattern:
+    sys.argv.extend(['-k', _regex_pattern])
+    log.d(f'Regex filter: -k {_regex_pattern}')
+
 # Find and add pyrealsense2 to path
 pyrs_dir = repo.find_pyrs_dir()
 if pyrs_dir and pyrs_dir not in sys.path:
@@ -353,10 +366,7 @@ class _TeeWriter:
         self._log_file = log_file
 
     def write(self, data):
-        global _at_line_start
         self._original.write(data)
-        if data:
-            _at_line_start = data[-1] in ('\n', '\r')
         try:
             self._log_file.write(data)
         except Exception:
@@ -373,14 +383,10 @@ class _TeeWriter:
         return getattr(self._original, name)
 
 
-_at_line_start = True
-
 def _ensure_newline():
     """Ensure we're on a fresh line before emitting log output."""
-    global _at_line_start
-    if not _at_line_start:
-        sys.stdout.write('\n')
-        _at_line_start = True
+    sys.stdout.write('\n')
+    sys.stdout.flush()
 
 
 def _test_log_name(item):
@@ -442,8 +448,6 @@ def pytest_runtest_protocol(item, nextitem):
             pass
 
     # After yield, pytest may have printed a verdict (F/.) without a trailing newline
-    global _at_line_start
-    _at_line_start = False
     _ensure_newline()
     log.debug_unindent()
 
@@ -516,6 +520,7 @@ def session_setup_teardown():
 
     yield
 
+    _ensure_newline()
     log.i("")
     log.i("=" * 80)
     log.i("Pytest Session Ending")
