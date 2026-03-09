@@ -26,6 +26,18 @@ parser.add_argument('--custom-fw-d555', type=str, help='Path to custom D555 firm
 args = parser.parse_args()
 
 
+def wait_for_reboot( same_version ):
+    """
+    Wait for the camera to finish rebooting after a FW update.
+    The test exit flow may cut USB power (via hub port disable), so we must ensure
+    the device has had enough time to complete its reboot before we exit.
+    When updating to a different version, FW may need time to flash a new ISP FW.
+    """
+    sleep_time = 60 if not same_version else 3
+    log.d( "Waiting", sleep_time, "seconds for device to finish rebooting after FW update..." )
+    time.sleep( sleep_time )
+
+
 def send_hardware_monitor_command(device, command):
     # byte_index = -1
     raw_result = rs.debug_protocol(device).send_and_receive_raw_data(command)
@@ -259,17 +271,34 @@ if custom_fw_path:
 del device, ctx
 log.d( 'running:', cmd )
 sys.stdout.flush()
-subprocess.run( cmd )   # may throw
+result = subprocess.run( cmd )   # may throw
+if result.returncode != 0:
+    log.e( 'rs-fw-update returned exit code', result.returncode )
+    test.check( False, description='rs-fw-update should return exit code 0' )
+    # rs-fw-update may have already triggered a device reboot before failing;
+    # wait so the camera finishes rebooting before exit (hub may cut power on cleanup)
+    wait_for_reboot( same_version )
+    test.finish()
+    test.print_results_and_exit()
 
-# if we updated to the different version, FW might need time to flash a new ISP FW,
-# otherwise 3 seconds should be enough to allow devices to reboot and enumerate again
-sleep_time = 60 if not same_version else 3
-log.d("Sleeping for", sleep_time, "seconds to allow device to reboot and enumerate after FW update...")
-time.sleep(sleep_time) 
+wait_for_reboot( same_version )
 
 # make sure update worked and check FW version and update counter
 device, ctx = test.find_first_device_or_exit()
 current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
+
+# Detect flash lock: if the device reports a camera_locked status other than UNLOCKED,
+# the update may have locked the flash (GVD offset 25). Log a warning so CI can flag it.
+if device.supports( rs.camera_info.camera_locked ):
+    try:
+        camera_locked_info = device.get_info( rs.camera_info.camera_locked )
+    except Exception as ex:
+        log.w( 'Failed to read camera_locked info from device:', ex )
+    else:
+        if camera_locked_info != 'UNLOCKED':
+            log.w( 'Device may be flash-locked (camera_locked != UNLOCKED):', camera_locked_info )
+else:
+    log.d( 'Device does not expose camera_locked info; skipping flash-lock check' )
 
 expected_fw_version = custom_fw_version if custom_fw_path else bundled_fw_version
 test.check_equal(current_fw_version, expected_fw_version)
