@@ -272,23 +272,22 @@ del device, ctx
 log.d( 'running:', cmd )
 sys.stdout.flush()
 result = subprocess.run( cmd )   # may throw
+
+# Wait for the camera to finish rebooting before doing anything else;
+# the test exit flow may cut USB power (hub port disable) so we must not exit mid-reboot
+wait_for_reboot( same_version )
+
 if result.returncode != 0:
     log.e( 'rs-fw-update returned exit code', result.returncode )
     test.check( False, description='rs-fw-update should return exit code 0' )
-    # rs-fw-update may have already triggered a device reboot before failing;
-    # wait so the camera finishes rebooting before exit (hub may cut power on cleanup)
-    wait_for_reboot( same_version )
     test.finish()
     test.print_results_and_exit()
-
-wait_for_reboot( same_version )
 
 # make sure update worked and check FW version and update counter
 device, ctx = test.find_first_device_or_exit()
 current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
 
 # Detect flash lock: if the device reports a camera_locked status other than UNLOCKED,
-# the update may have locked the flash (GVD offset 25). Log a warning so CI can flag it.
 if device.supports( rs.camera_info.camera_locked ):
     try:
         camera_locked_info = device.get_info( rs.camera_info.camera_locked )
