@@ -15,7 +15,8 @@ from rspy import log, repo, test
 # If we want to run a specific test / test group, we can use the -r flag
 
 # On headless Linux (no $DISPLAY), wraps the executable with xvfb-run for a virtual display.
-# On Windows (or Linux with a display), runs the executable directly.
+# On some Windows machines OpenGL is not available, so we use Mesa's software renderer to provide it
+# (install https://github.com/pal1000/mesa-dist-win/releases to C:\mesa\).
 cmd = []
 env = None
 if platform.system() == 'Linux' and not os.environ.get( 'DISPLAY' ):
@@ -31,6 +32,15 @@ test.start( "Run realsense-viewer GUI tests" )
 viewer_tests = repo.find_built_exe( 'tools/realsense-viewer', 'realsense-viewer-tests' )
 test.check( viewer_tests )
 if viewer_tests:
+    if platform.system() == 'Windows':
+        mesa_dir = r'C:\mesa'
+        exe_dir = os.path.dirname( viewer_tests )
+        for dll in ['opengl32.dll', 'libgallium_wgl.dll']:
+            src = os.path.join( mesa_dir, dll )
+            dst = os.path.join( exe_dir, dll )
+            if os.path.isfile( src ) and not os.path.isfile( dst ):
+                log.d( 'copying Mesa', dll, 'to', exe_dir )
+                shutil.copy2( src, dst )
     cmd += [viewer_tests, '--auto']
     log.d( 'running:', *cmd )
     p = subprocess.run( cmd,
