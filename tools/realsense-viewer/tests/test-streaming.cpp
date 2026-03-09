@@ -5,6 +5,7 @@
 #include "imgui_te_context.h"
 
 
+// Start and stop each sensor one at a time, verifying frames arrive for each
 VIEWER_TEST( "streaming", "stream_each_sensor_individually" )
 {
     IM_CHECK( !test.device_models.empty() );
@@ -26,6 +27,7 @@ VIEWER_TEST( "streaming", "stream_each_sensor_individually" )
 }
 
 
+// Start all sensors simultaneously and verify all streams are alive
 VIEWER_TEST( "streaming", "stream_all_sensors" )
 {
     IM_CHECK( !test.device_models.empty() );

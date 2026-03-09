@@ -5,6 +5,7 @@
 #include "imgui_te_context.h"
 
 
+// Set exposure manually, verify auto-exposure disables, toggle it back on, and confirm frames keep arriving
 VIEWER_TEST( "controls", "sensor_controls" )
 {
     IM_CHECK( !test.device_models.empty() );
@@ -47,6 +48,7 @@ VIEWER_TEST( "controls", "sensor_controls" )
 }
 
 
+// Change resolution via the combo box for each sensor (if applicable), start streaming, and verify frames arrive
 VIEWER_TEST( "controls", "select_resolution_and_stream" )
 {
     IM_CHECK( !test.device_models.empty() );

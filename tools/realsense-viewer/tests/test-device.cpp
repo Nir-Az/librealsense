@@ -5,12 +5,14 @@
 #include "imgui_te_context.h"
 
 
+// Check that the viewer's device list is non-empty, i.e. at least one camera is connected and visible on the viewer
 VIEWER_TEST( "device", "device_detected" )
 {
     IM_CHECK( !test.device_models.empty() );
 }
 
 
+// Reset the device via the UI menu and verify it disconnects and reconnects
 VIEWER_TEST( "device", "hardware_reset" )
 {
     IM_CHECK( !test.device_models.empty() );

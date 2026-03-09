@@ -72,7 +72,7 @@ void viewer_test::click_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
                                             rs2::device_model & model )
 {
     if( sub->streaming )
-        return;
+        throw std::runtime_error( "click_toggle_on: sensor is already streaming" );
     imgui->SetRef( "Control Panel" );
     std::string label = rsutils::string::from()
         << rs2::textual_icons::toggle_off << "   off " << model.id << ", "
@@ -84,7 +84,7 @@ void viewer_test::click_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
                                              rs2::device_model & model )
 {
     if( !sub->streaming )
-        return;
+        throw std::runtime_error( "click_toggle_off: sensor is not streaming" );
     imgui->SetRef( "Control Panel" );
     std::string label = rsutils::string::from()
         << rs2::textual_icons::toggle_on << "   on  " << model.id << ","

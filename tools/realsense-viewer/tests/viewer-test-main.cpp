@@ -36,6 +36,27 @@ static void register_viewer_tests( ImGuiTestEngine *       engine,
     }
 }
 
+/*
+Creating a new test:
+Add a new test function in any .cpp file under the tests directory, using the VIEWER_TEST macro:
+    VIEWER_TEST( "category_name", "test_name" )
+    {
+        // test code here
+    }
+The macro will auto-register the test and make it available in the test engine,
+it will also provide the test function with a viewer_test object (named 'test')
+that has helper methods to interact with the viewer and make assertions.
+
+File naming: test files must follow the test-*.cpp pattern to be picked up by the CMake glob.
+
+Categories group related tests and allow running subsets independently with -r:
+    realsense-viewer-tests --auto -r "controls"
+The --auto flag runs all matching tests sequentially and exits with a nonzero code on failure,
+intended for CI environment.
+
+Assertions are made using the IM_CHECK macro, which will log failures and continue executing the test.
+*/
+
 int main( int argc, const char ** argv ) try
 {
     // Strip test-specific flags from argv before passing to run_viewer
