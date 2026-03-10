@@ -245,6 +245,11 @@ def pytest_configure(config):
         config.option.timeout = 200
         config.option.timeout_method = "thread"
 
+    # Suppress verbose failure tracebacks and short summary — per-test log files have full details
+    if not config.getoption("--tb", default=None):
+        config.option.tbstyle = "no"
+    config.option.reportchars = "N"
+
     # Suppress paramiko and cryptography deprecation warnings
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:cryptography")
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:paramiko")
