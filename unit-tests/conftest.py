@@ -537,7 +537,7 @@ def _test_device_serial(request):
 
 @pytest.fixture(scope="function")
 def module_device_setup(request):
-    """Power-cycle and enable only the target device via the hub. Yields its serial number."""
+    """Enable the target device via the hub. Recycles (power-cycles) once per test file, not per test case."""
     serial_number = None
 
     # Check parametrized serial from device_each
@@ -566,16 +566,25 @@ def module_device_setup(request):
         serial_number = serial_numbers[0]
         log.debug(f"Test will use first matching device: {serial_number}")
 
-    # Enable only this device; recycle unless --no-reset
+    # Enable only this device; recycle only once per module (like run-unit-tests.py),
+    # but also recycle on retries (same test running again after failure).
     device = devices.get(serial_number)
     device_name = device.name if device else serial_number
     log.info(f"Configuration: {device_name} [{serial_number}]")
 
+    module = request.node.module
+    nodeid = request.node.nodeid
+    no_reset = request.config.getoption("--no-reset", default=False)
+    already_reset = getattr(module, '_hub_reset_done', False)
+    last_test = getattr(module, '_last_test_nodeid', None)
+    is_retry = (last_test == nodeid)
+    recycle = not no_reset and (not already_reset or is_retry)
+
     try:
-        no_reset = request.config.getoption("--no-reset", default=False)
-        recycle = not no_reset
         log.debug(f"{'Recycling' if recycle else 'Enabling'} device via hub...")
         devices.enable_only([serial_number], recycle=recycle)
+        module._hub_reset_done = True
+        module._last_test_nodeid = nodeid
         log.debug(f"Device enabled and ready")
     except Exception as e:
         pytest.fail(f"Failed to enable device {serial_number}: {e}")
