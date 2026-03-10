@@ -282,9 +282,11 @@ def pytest_configure(config):
             _debug_requested = True
     log_level_name = 'DEBUG' if _debug_requested else 'INFO'
     logging.getLogger().setLevel(getattr(logging, log_level_name))
-    config.option.log_cli_level = log_level_name
-    config.option.log_cli_format = '-%(levelname).1s- %(message)s'
-    config.option.log_cli_date_format = ''
+    capture = config.getoption('capture', default='fd')
+    if capture == 'no':  # -s passed: stream logs to console
+        config.option.log_cli_level = log_level_name
+        config.option.log_cli_format = '-%(levelname).1s- %(message)s'
+        config.option.log_cli_date_format = ''
     if _debug_requested:
         logging.getLogger('paramiko').setLevel(logging.WARNING)
 
