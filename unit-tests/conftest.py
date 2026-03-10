@@ -28,10 +28,38 @@ if py_dir not in sys.path:
 _debug_requested = '--debug' in sys.argv
 
 import logging
-from rspy import devices, repo
+from rspy import devices, repo, log as rspy_log
 from rspy.signals import register_signal_handlers
 
 log = logging.getLogger('librealsense')
+
+
+# ============================================================================
+# Bridge rspy.log → Python logging
+# ============================================================================
+# rspy.log writes directly to stdout via its own out() function, so hub messages
+# (port enable/disable, device added/removed) don't appear in per-test log files.
+# Wrap each rspy.log level function to also forward to Python logging.
+
+def _bridge_rspy_log():
+    """Wrap rspy.log.d/i/w/e to also emit via Python logging."""
+    _rspy_module = rspy_log
+
+    def _wrap(original_fn, py_level):
+        def wrapper(*args):
+            result = original_fn(*args)
+            msg = ' '.join(str(a) for a in args)
+            log.log(py_level, msg)
+            return result
+        return wrapper
+
+    # d() is dynamically redefined by debug_on(), so wrap whatever is current
+    _rspy_module.d = _wrap(_rspy_module.d, logging.DEBUG)
+    _rspy_module.i = _wrap(_rspy_module.i, logging.INFO)
+    _rspy_module.w = _wrap(_rspy_module.w, logging.WARNING)
+    _rspy_module.e = _wrap(_rspy_module.e, logging.ERROR)
+
+_bridge_rspy_log()
 
 
 # ============================================================================
