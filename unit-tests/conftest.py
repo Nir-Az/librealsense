@@ -273,11 +273,12 @@ def pytest_configure(config):
         config.option.timeout = 200
         config.option.timeout_method = "thread"
 
-    # Suppress verbose failure tracebacks and short summary — per-test log files have full details.
+    # Suppress verbose failure tracebacks — per-test log files have full details.
+    # Keep short "FAILED" one-liners (-rf) so Jenkins Groovy can parse them for log file links.
     # pytest-retry's verbose report is also suppressed (details are in per-test log files).
     if config.getoption("--tb") == "auto":
         config.option.tbstyle = "no"
-    config.option.reportchars = "N"
+    config.option.reportchars = "f"
     try:
         from pytest_retry.retry_plugin import retry_manager
         retry_manager.build_retry_report = lambda *args, **kwargs: None
