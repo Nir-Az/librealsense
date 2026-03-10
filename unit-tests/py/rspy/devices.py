@@ -366,9 +366,9 @@ def by_product_line( product_line, ignored_products ):
     global _device_by_sn
     result = set()
     for device in _device_by_sn.values():
-        if device.product_line == product_line:
+        if device.product_line.upper() == product_line.upper():
             for ignored_product in ignored_products:
-                if ignored_product in device.name:
+                if ignored_product.upper() in device.name.upper():
                     break
             else:
                 result.add(device.serial_number)
@@ -384,9 +384,9 @@ def by_name( name, ignored_products ):
     global _device_by_sn
     result = set()
     ignored_list_as_str = " ".join(ignored_products)
-    if name not in ignored_list_as_str:
+    if name.upper() not in ignored_list_as_str.upper():
         for device in _device_by_sn.values():
-            if device.name and device.name.find( name ) >= 0:
+            if device.name and device.name.upper().find( name.upper() ) >= 0:
                 result.add(device.serial_number)
     return result
 
