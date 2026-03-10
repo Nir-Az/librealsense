@@ -16,7 +16,6 @@ import pytest
 import sys
 import os
 import re
-import warnings
 from typing import List
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
