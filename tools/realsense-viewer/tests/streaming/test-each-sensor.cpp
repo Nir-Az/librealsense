@@ -16,10 +16,10 @@ VIEWER_TEST( "streaming", "stream_each_sensor_individually" )
         if( sub->get_selected_profiles().empty() )
             continue;
 
-        test.click_toggle_on( sub, model );
+        test.click_stream_toggle_on( sub, model );
         IM_CHECK( test.all_streams_alive() );
         test.imgui->SleepNoSkip( 2.0f, 1.0f );
-        test.click_toggle_off( sub, model );
+        test.click_stream_toggle_off( sub, model );
         test.imgui->Sleep( 1.0f );
     }
 

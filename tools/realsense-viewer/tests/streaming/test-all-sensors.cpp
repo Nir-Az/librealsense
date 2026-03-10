@@ -12,7 +12,7 @@ VIEWER_TEST( "streaming", "stream_all_sensors" )
     auto & model = *test.device_models[0];
 
     for( auto && sub : model.subdevices )
-        test.click_toggle_on( sub, model );
+        test.click_stream_toggle_on( sub, model );
 
     test.imgui->SleepNoSkip( 1.0f, 0.5f );
     IM_CHECK( test.all_streams_alive() );
@@ -20,7 +20,7 @@ VIEWER_TEST( "streaming", "stream_all_sensors" )
     test.imgui->SleepNoSkip( 2.0f, 1.0f );
 
     for( auto && sub : model.subdevices )
-        test.click_toggle_off( sub, model );
+        test.click_stream_toggle_off( sub, model );
 
     IM_CHECK( !model.is_streaming() );
 }

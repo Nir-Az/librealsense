@@ -4,7 +4,7 @@
 #test:device D400*
 #test:donotrun:!nightly
 
-import os, platform, shutil, subprocess
+import os, platform, shutil, subprocess, sys
 from rspy import log, repo, test
 
 #############################################################################################
@@ -43,12 +43,15 @@ if viewer_tests:
                 shutil.copy2( src, dst )
     cmd += [viewer_tests, '--auto']
     log.d( 'running:', *cmd )
-    p = subprocess.run( cmd,
-                        stdout=None,
-                        stderr=subprocess.STDOUT,
-                        timeout=300,
-                        check=False,
-                        env=env )
+    p = subprocess.Popen( cmd,
+                          stdout=None,
+                          stderr=subprocess.PIPE,
+                          env=env )
+    # Mesa's software renderer emits a benign GL error for glCopyTexImage2D; filter it out
+    for line in p.stderr:
+        if b'glCopyTexImage2D' not in line:
+            sys.stderr.buffer.write( line )
+    p.wait()
     if p.returncode != 0:
         log.e( 'realsense-viewer-tests exited with code', p.returncode )
     test.check( p.returncode == 0 )

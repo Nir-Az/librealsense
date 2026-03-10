@@ -25,7 +25,8 @@ VIEWER_TEST( "controls", "select_resolution_and_stream" )
 
         test.expand_sensor_panel( sub, model );
 
-        // Resolution combo label: "##DeviceNameSensorName resolution"
+        // Build the ImGui label that matches the resolution combo box in the viewer's control panel,
+        // then select the target resolution from its dropdown
         std::string res_combo = rsutils::string::from()
             << "##" << sub->dev.get_info( RS2_CAMERA_INFO_NAME )
             << sub->s->get_info( RS2_CAMERA_INFO_NAME ) << " resolution";
@@ -33,12 +34,12 @@ VIEWER_TEST( "controls", "select_resolution_and_stream" )
 
         test.collapse_sensor_panel( sub, model );
 
-        test.click_toggle_on( sub, model );
+        test.click_stream_toggle_on( sub, model );
         IM_CHECK( test.all_streams_alive() );
 
         test.imgui->SleepNoSkip( 3.0f, 1.0f );
 
-        test.click_toggle_off( sub, model );
+        test.click_stream_toggle_off( sub, model );
         // Give the camera real time to stop before the next sensor starts.
         test.imgui->SleepNoSkip( 2.0f, 0.5f );
     }

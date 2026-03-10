@@ -7,6 +7,13 @@
 
 // ---------------------------------------------------------------------------
 // viewer_test method implementations
+//
+// The imgui test engine locates UI elements by their label strings.
+// The label/id helpers below must produce strings identical to what the viewer renders.
+// SetRef("Control Panel") scopes subsequent item lookups to the viewer's left-side panel;
+// most helpers call it first so that ItemClick/ItemOpen resolve within the correct window.
+// Sleep() is skipped in --auto (fast) mode; use SleepNoSkip(seconds, framestep) to wait
+// real wall-clock time.
 // ---------------------------------------------------------------------------
 
 std::string viewer_test::sensor_label( std::shared_ptr< rs2::subdevice_model > sub,
@@ -68,11 +75,11 @@ void viewer_test::collapse_sensor_panel( std::shared_ptr< rs2::subdevice_model >
     imgui->SleepNoSkip( 0.3f, 0.1f );
 }
 
-void viewer_test::click_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
+void viewer_test::click_stream_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
                                             rs2::device_model & model )
 {
     if( sub->streaming )
-        throw std::runtime_error( "click_toggle_on: sensor is already streaming" );
+        throw std::runtime_error( "click_stream_toggle_on: sensor is already streaming" );
     imgui->SetRef( "Control Panel" );
     std::string label = rsutils::string::from()
         << rs2::textual_icons::toggle_off << "   off " << model.id << ", "
@@ -80,11 +87,11 @@ void viewer_test::click_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
     imgui->ItemClick( label.c_str() );
 }
 
-void viewer_test::click_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
+void viewer_test::click_stream_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
                                              rs2::device_model & model )
 {
     if( !sub->streaming )
-        throw std::runtime_error( "click_toggle_off: sensor is not streaming" );
+        throw std::runtime_error( "click_stream_toggle_off: sensor is not streaming" );
     imgui->SetRef( "Control Panel" );
     std::string label = rsutils::string::from()
         << rs2::textual_icons::toggle_on << "   on  " << model.id << ","
@@ -94,6 +101,8 @@ void viewer_test::click_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
 
 void viewer_test::click_device_menu_item( rs2::device_model & model, const char * item )
 {
+    // Construct the label matching the viewer's hamburger menu button — the test engine
+    // locates UI elements by their ImGui label, so this must match what the viewer renders
     std::string bars_btn = rsutils::string::from()
         << rs2::textual_icons::bars << "##" << model.id;
 
@@ -121,6 +130,7 @@ void viewer_test::set_option_value( std::shared_ptr< rs2::subdevice_model > sub,
                                     rs2_option option, const char * value )
 {
     auto & opt = find_option( sub, option );
+    // Only slider options have an edit field; enums use select_combo_item, bools use toggle_option
     if( opt.is_enum() || opt.is_checkbox() )
         throw std::runtime_error( rsutils::string::from()
             << rs2_option_to_string( option ) << " is not a slider" );
@@ -134,6 +144,7 @@ void viewer_test::set_option_value( std::shared_ptr< rs2::subdevice_model > sub,
     imgui->ItemClick( ImHashStr( edit_btn.c_str(), 0, seed ) );
 
     imgui->ItemInput( ImHashStr( opt.id.c_str(), 0, seed ) );
+    // Clear the input field, type the new value, and press Enter to apply
     imgui->KeyCharsReplaceEnter( value );
 }
 

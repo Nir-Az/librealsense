@@ -18,7 +18,7 @@ VIEWER_TEST( "controls", "set_exposure" )
             || exp_it->second.read_only )
             continue;
 
-        test.click_toggle_on( sub, model );
+        test.click_stream_toggle_on( sub, model );
         test.imgui->SleepNoSkip( 2.0f, 1.0f );
 
         test.expand_sensor_panel( sub, model, true );
@@ -40,7 +40,7 @@ VIEWER_TEST( "controls", "set_exposure" )
         }
 
         test.collapse_sensor_panel( sub, model, true );
-        test.click_toggle_off( sub, model );
+        test.click_stream_toggle_off( sub, model );
         test.imgui->Sleep( 1.0f );
     }
 

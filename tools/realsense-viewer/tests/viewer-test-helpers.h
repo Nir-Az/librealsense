@@ -83,10 +83,10 @@ public:
                                 bool close_controls = false );
 
     // Start streaming on a sensor by clicking its toggle button; throws if already streaming
-    void click_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
+    void click_stream_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
                           rs2::device_model & model );
     // Stop streaming on a sensor by clicking its toggle button; throws if already stopped
-    void click_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
+    void click_stream_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
                            rs2::device_model & model );
 
     // Poll a condition up to max_attempts times, sleeping interval seconds between checks
