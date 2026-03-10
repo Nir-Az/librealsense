@@ -497,12 +497,12 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Print a clear pass/fail/skip summary at the end of the run."""
+    """Print a clear pass/fail/skip summary at the end of the run.
+
+    Uses both log.info (captured in per-test log files) and print() (always on stdout)
+    so Jenkins Groovy can parse the '-I-' prefixed lines from the tee'd console log.
+    """
     _ensure_newline()
-    log.info("")
-    log.info("=" * 80)
-    log.info("Test Summary")
-    log.info("=" * 80)
 
     passed = len(terminalreporter.stats.get('passed', []))
     failed = len(terminalreporter.stats.get('failed', []))
@@ -510,17 +510,24 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     error = len(terminalreporter.stats.get('error', []))
     total = passed + failed + skipped + error
 
-    log.info(f"Total tests run: {total}")
-    if passed > 0:
-        log.info(f"Passed: {passed}")
-    if failed > 0:
-        log.info(f"Failed: {failed}")
-    if skipped > 0:
-        log.info(f"Skipped: {skipped}")
-    if error > 0:
-        log.info(f"Errors: {error}")
+    def summary(msg):
+        log.info(msg)
+        print(f"-I- {msg}")
 
-    log.info("=" * 80)
+    summary("")
+    summary("=" * 80)
+    summary("Test Summary")
+    summary("=" * 80)
+    summary(f"Total tests run: {total}")
+    if passed > 0:
+        summary(f"Passed: {passed}")
+    if failed > 0:
+        summary(f"Failed: {failed}")
+    if skipped > 0:
+        summary(f"Skipped: {skipped}")
+    if error > 0:
+        summary(f"Errors: {error}")
+    summary("=" * 80)
 
 
 # ============================================================================
