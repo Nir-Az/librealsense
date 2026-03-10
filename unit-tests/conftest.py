@@ -306,30 +306,31 @@ def pytest_generate_tests(metafunc):
 
     all_serials = []
 
-    # Collect exclusion patterns from markers
+    # Resolve exclusion patterns (markers + CLI) to a set of excluded serial numbers
     exclude_markers = [m for m in metafunc.definition.iter_markers("device_exclude")]
     exclude_patterns = [m.args[0] for m in exclude_markers if m.args]
-
-    # Add CLI --device-exclude patterns
     cli_excludes = metafunc.config.getoption("--device-exclude", default=[])
     exclude_patterns.extend(cli_excludes)
+    excluded_sns = set()
+    for pattern in exclude_patterns:
+        excluded_sns.update(devices.by_spec(pattern, []))
 
-    # Get CLI --device include patterns (if any, only matching devices are considered)
+    # Resolve CLI --device includes to a set of allowed serial numbers (None = no filter)
     cli_includes = metafunc.config.getoption("--device", default=[])
+    included_sns = None
+    if cli_includes:
+        included_sns = set()
+        for inc in cli_includes:
+            included_sns.update(devices.by_spec(inc, []))
 
     for marker in device_each_markers:
         if not marker.args:
             continue
         pattern = marker.args[0]
-        for sn in devices.all():
-            device = devices.get(sn)
-            if not _device_matches_pattern(device, pattern):
+        for sn in devices.by_spec(pattern, []):
+            if sn in excluded_sns:
                 continue
-            # Check CLI include filter
-            if cli_includes and not any(_device_matches_pattern(device, inc) for inc in cli_includes):
-                continue
-            # Check exclusions
-            if any(_device_matches_pattern(device, exp) for exp in exclude_patterns):
+            if included_sns is not None and sn not in included_sns:
                 continue
             if sn not in all_serials:
                 all_serials.append(sn)
@@ -624,39 +625,33 @@ def test_context_var():
 # Helper Functions
 # ============================================================================
 
-def _device_matches_pattern(device, pattern: str) -> bool:
-    """Wildcard match against product_line and name (e.g. 'D400*' or 'D455')."""
-    regex_pattern = pattern.replace('*', '.*')
-    regex_pattern = f'^{regex_pattern}$'
-
-    if device.product_line and re.match(regex_pattern, device.product_line):
-        return True
-
-    if device.name and re.match(regex_pattern, device.name):
-        return True
-
-    return False
-
-
 def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_excludes=None) -> List[str]:
     """Resolve device markers + CLI filters into a list of matching serial numbers."""
-    all_device_sns = devices.all()
     matching_sns = []
-    exclude_patterns = []
 
     if cli_includes is None:
         cli_includes = []
     if cli_excludes is None:
         cli_excludes = []
 
-    # Collect exclusion patterns from markers
+    # Resolve exclusion patterns (markers + CLI) to a set of excluded serial numbers
+    exclude_patterns = []
     for marker in device_markers:
         if marker.name == 'device_exclude' and marker.args:
             exclude_patterns.append(marker.args[0])
             log.debug(f"Excluding devices matching pattern: {marker.args[0]}")
-
-    # Add CLI exclusions
     exclude_patterns.extend(cli_excludes)
+
+    excluded_sns = set()
+    for pattern in exclude_patterns:
+        excluded_sns.update(devices.by_spec(pattern, []))
+
+    # Resolve CLI includes to a set of allowed serial numbers (None = no filter)
+    included_sns = None
+    if cli_includes:
+        included_sns = set()
+        for inc in cli_includes:
+            included_sns.update(devices.by_spec(inc, []))
 
     # Find matching devices
     for marker in device_markers:
@@ -666,24 +661,16 @@ def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_exc
         pattern = marker.args[0]
         log.debug(f"Looking for devices matching pattern: {pattern}")
 
-        for sn in all_device_sns:
-            device = devices.get(sn)
-            if not _device_matches_pattern(device, pattern):
+        for sn in devices.by_spec(pattern, []):
+            if sn in excluded_sns:
+                log.debug(f"  Device {devices.get(sn).name} ({sn}) excluded")
                 continue
-
-            # Check CLI include filter
-            if cli_includes and not any(_device_matches_pattern(device, inc) for inc in cli_includes):
-                continue
-
-            # Check exclusions
-            excluded = any(_device_matches_pattern(device, exp) for exp in exclude_patterns)
-            if excluded:
-                log.debug(f"  Device {device.name} ({sn}) excluded")
+            if included_sns is not None and sn not in included_sns:
                 continue
 
             if sn not in matching_sns:
                 matching_sns.append(sn)
-                log.debug(f"  Found matching device: {device.name} ({sn})")
+                log.debug(f"  Found matching device: {devices.get(sn).name} ({sn})")
 
             if not each:
                 return matching_sns
