@@ -273,10 +273,16 @@ def pytest_configure(config):
         config.option.timeout = 200
         config.option.timeout_method = "thread"
 
-    # Suppress verbose failure tracebacks and short summary — per-test log files have full details
-    if not config.getoption("--tb", default=None):
+    # Suppress verbose failure tracebacks and short summary — per-test log files have full details.
+    # pytest-retry's verbose report is also suppressed (details are in per-test log files).
+    if config.getoption("--tb") == "auto":
         config.option.tbstyle = "no"
     config.option.reportchars = "N"
+    try:
+        from pytest_retry.retry_plugin import retry_manager
+        retry_manager.build_retry_report = lambda *args, **kwargs: None
+    except ImportError:
+        pass
 
     # Suppress paramiko and cryptography deprecation warnings
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:cryptography")
