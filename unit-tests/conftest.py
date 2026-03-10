@@ -376,6 +376,18 @@ def pytest_collection_modifyitems(config, items):
 
     items.sort(key=get_priority)
 
+    # Group parametrized tests by device within each module, so all tests run on one
+    # device before switching to the next (matching run-unit-tests.py behavior).
+    def get_device_group_key(item):
+        module = item.module.__name__
+        if hasattr(item, 'callspec') and '_test_device_serial' in item.callspec.params:
+            device_serial = item.callspec.params['_test_device_serial']
+        else:
+            device_serial = ''
+        return (module, device_serial)
+
+    items.sort(key=get_device_group_key)
+
 
 def _ensure_newline():
     """Pytest's progress dots (F/.) don't end with newline — force one before our log output."""
@@ -578,15 +590,17 @@ def module_device_setup(request):
     module = request.node.module
     nodeid = request.node.nodeid
     no_reset = request.config.getoption("--no-reset", default=False)
-    already_reset = getattr(module, '_hub_reset_done', False)
+    last_device = getattr(module, '_last_device_serial', None)
     last_test = getattr(module, '_last_test_nodeid', None)
     is_retry = (last_test == nodeid)
-    recycle = not no_reset and (not already_reset or is_retry)
+    device_changed = (last_device is not None and last_device != serial_number)
+    first_setup = (last_device is None)
+    recycle = not no_reset and (first_setup or device_changed or is_retry)
 
     try:
         log.debug(f"{'Recycling' if recycle else 'Enabling'} device via hub...")
         devices.enable_only([serial_number], recycle=recycle)
-        module._hub_reset_done = True
+        module._last_device_serial = serial_number
         module._last_test_nodeid = nodeid
         log.debug(f"Device enabled and ready")
     except Exception as e:
