@@ -374,30 +374,6 @@ def pytest_collection_modifyitems(config, items):
     items.sort(key=get_priority)
 
 
-class _TeeWriter:
-    """Duplicates stdout to both terminal and a per-test log file."""
-    def __init__(self, original, log_file):
-        self._original = original
-        self._log_file = log_file
-
-    def write(self, data):
-        self._original.write(data)
-        try:
-            self._log_file.write(data)
-        except Exception:
-            pass
-
-    def flush(self):
-        self._original.flush()
-        try:
-            self._log_file.flush()
-        except Exception:
-            pass
-
-    def __getattr__(self, name):
-        return getattr(self._original, name)
-
-
 def _ensure_newline():
     """Pytest's progress dots (F/.) don't end with newline — force one before our log output."""
     sys.stdout.write('\n')
@@ -422,40 +398,36 @@ def _test_log_name(item):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
-    """Wrap each test with log separators and tee output to a per-test log file."""
+    """Wrap each test with log separators and write per-test log file via logging FileHandler."""
     _ensure_newline()
     log.info("-" * 80)
     log.info(f"Test: {item.nodeid}")
     log.info("-" * 80)
 
-    # Set up per-test log file if logdir is available
+    # Add per-test log file handler (only when stdout is captured, i.e. -s not passed)
     logdir = getattr(item.config, '_test_logdir', None)
-    log_file = None
-    original_stdout = None
+    file_handler = None
+    capture = item.config.getoption('capture', default='fd')
 
-    if logdir:
+    if logdir and capture != 'no':
         log_name = _test_log_name(item)
         log_path = os.path.join(logdir, log_name)
         try:
-            log_file = open(log_path, 'w')
-            original_stdout = sys.stdout
-            sys.stdout = _TeeWriter(original_stdout, log_file)
+            file_handler = logging.FileHandler(log_path, mode='w')
+            file_handler.setFormatter(logging.Formatter('-%(levelname).1s- %(message)s'))
+            file_handler.setLevel(logging.DEBUG)
+            logging.getLogger().addHandler(file_handler)
         except Exception as e:
             log.warning(f"Could not create test log file {log_path}: {e}")
-            log_file = None
+            file_handler = None
 
     outcome = yield
 
-    # Restore stdout and close log file
-    if original_stdout is not None:
-        sys.stdout = original_stdout
-    if log_file is not None:
-        try:
-            log_file.close()
-        except Exception:
-            pass
+    # Remove per-test file handler
+    if file_handler is not None:
+        logging.getLogger().removeHandler(file_handler)
+        file_handler.close()
 
-    # After yield, pytest may have printed a verdict (F/.) without a trailing newline
     _ensure_newline()
 
 
