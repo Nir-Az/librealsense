@@ -233,7 +233,7 @@ def pytest_configure(config):
         config.option.timeout_method = "thread"
 
     # Suppress paramiko and cryptography deprecation warnings
-    config.addinivalue_line("filterwarnings", "ignore::cryptography.utils.CryptographyDeprecationWarning")
+    config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:cryptography")
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:paramiko")
     config.addinivalue_line("filterwarnings", "ignore:TripleDES has been moved")
     config.addinivalue_line("filterwarnings", "ignore:Blowfish has been moved")
@@ -630,18 +630,6 @@ def test_device(test_context):
 
     return dev, test_context
 
-
-@pytest.fixture
-def module_test_device(test_context):
-    """Alias for test_device — some legacy tests use this name."""
-    devices_list = list(test_context.devices)
-    if not devices_list:
-        pytest.skip("No device available for test")
-
-    dev = devices_list[0]
-    log.d(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
-
-    return dev, test_context
 
 
 @pytest.fixture

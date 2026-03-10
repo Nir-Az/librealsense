@@ -2,11 +2,8 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-Test time-to-first-frame for pipeline API.
-
-This test measures the time from pipeline.start() until the first frame arrives
-for both depth and color streams. It verifies that the startup time does not exceed
-the maximum allowed delay.
+Test time-to-first-frame for pipeline API. Measures startup time from
+pipeline.start() to first frame for depth and color streams.
 
 Note: Using Windows Media Foundation to handle power management between USB actions
 can add ~27ms to the startup time.
@@ -19,7 +16,6 @@ from rspy import log
 import time
 import platform
 
-# Mark this module to run on D400 and D500 devices
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
@@ -27,43 +23,21 @@ pytestmark = [
 ]
 
 
-# ============================================================================
-# Test Fixtures and Setup
-# ============================================================================
+_device_settled = False
 
 @pytest.fixture
-def device_config(module_test_device):
-    """
-    Set up device and determine maximum allowed delays based on product line.
-    """
-    dev, ctx = module_test_device
-
-    # The device starts at D0 (Operational) state, allow time for it to get into idle state
-    time.sleep(3)
-
-    product_name = dev.get_info(rs.camera_info.name)
-
-    max_delay_depth = 1
-    max_delay_color = 1
-
-    # Check if device has color sensor
-    has_color = not any(model in product_name for model in ['D421', 'D405', 'D430'])
-
-    return {
-        'dev': dev,
-        'ctx': ctx,
-        'product_name': product_name,
-        'max_delay_depth': max_delay_depth,
-        'max_delay_color': max_delay_color,
-        'has_color': has_color,
-        'platform': platform.system()
-    }
+def pipeline_device(test_device):
+    """Return (dev, ctx), waiting once for device to reach idle state."""
+    global _device_settled
+    dev, ctx = test_device
+    if not _device_settled:
+        time.sleep(3)  # device starts at D0 (Operational), wait for idle
+        _device_settled = True
+    return dev, ctx
 
 
 def time_to_first_frame(ctx, config):
-    """
-    Measure time from pipeline.start() to first frame arrival.
-    """
+    """Measure time from pipeline.start() to first frame arrival."""
     pipe = rs.pipeline(ctx)
     start_call_stopwatch = Stopwatch()
     pipe.start(config)
@@ -73,19 +47,11 @@ def time_to_first_frame(ctx, config):
     return delay
 
 
-# ============================================================================
-# Tests
-# ============================================================================
-
-def test_pipeline_first_depth_frame_delay(device_config):
-    """
-    Test that the time from pipeline.start() to first depth frame arrival
-    does not exceed the maximum allowed delay.
-    """
-    ctx = device_config['ctx']
-    product_name = device_config['product_name']
-    max_delay = device_config['max_delay_depth']
-    os_name = device_config['platform']
+def test_pipeline_first_depth_frame_delay(pipeline_device):
+    dev, ctx = pipeline_device
+    product_name = dev.get_info(rs.camera_info.name)
+    max_delay = 1
+    os_name = platform.system()
 
     log.i(f"Testing pipeline first depth frame delay on {product_name} device - {os_name} OS")
 
@@ -101,24 +67,18 @@ def test_pipeline_first_depth_frame_delay(device_config):
         f"Depth frame delay {frame_delay:.3f}s exceeds maximum {max_delay:.1f}s"
 
 
-def test_pipeline_first_color_frame_delay(device_config):
-    """
-    Test that the time from pipeline.start() to first color frame arrival
-    does not exceed the maximum allowed delay.
+def test_pipeline_first_color_frame_delay(pipeline_device):
+    dev, ctx = pipeline_device
+    product_name = dev.get_info(rs.camera_info.name)
+    max_delay = 1
+    os_name = platform.system()
 
-    Skipped for devices without a color sensor (D421, D405, D430).
-    """
-    if not device_config['has_color']:
-        pytest.skip(f"Device {device_config['product_name']} has no color sensor")
+    if any(model in product_name for model in ['D421', 'D405', 'D430']):
+        pytest.skip(f"Device {product_name} has no color sensor")
 
     # Allow HKR some time to close the depth pipe completely (runs after depth test)
-    if 'D555' in device_config['product_name']:
+    if 'D555' in product_name:
         time.sleep(1)
-
-    ctx = device_config['ctx']
-    product_name = device_config['product_name']
-    max_delay = device_config['max_delay_color']
-    os_name = device_config['platform']
 
     log.i(f"Testing pipeline first color frame delay on {product_name} device - {os_name} OS")
 
