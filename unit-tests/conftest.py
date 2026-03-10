@@ -281,6 +281,7 @@ def pytest_configure(config):
         if log_cli_level and log_cli_level.upper() == 'DEBUG':
             _debug_requested = True
     log_level_name = 'DEBUG' if _debug_requested else 'INFO'
+    logging.getLogger().setLevel(getattr(logging, log_level_name))
     config.option.log_cli_level = log_level_name
     config.option.log_cli_format = '-%(levelname).1s- %(message)s'
     config.option.log_cli_date_format = ''
