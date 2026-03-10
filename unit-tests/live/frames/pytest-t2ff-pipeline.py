@@ -12,7 +12,8 @@ can add ~27ms to the startup time.
 import pytest
 import pyrealsense2 as rs
 from rspy.stopwatch import Stopwatch
-from rspy import log
+import logging
+log = logging.getLogger(__name__)
 import time
 import platform
 
@@ -53,14 +54,14 @@ def test_pipeline_first_depth_frame_delay(pipeline_device):
     max_delay = 1
     os_name = platform.system()
 
-    log.i(f"Testing pipeline first depth frame delay on {product_name} device - {os_name} OS")
+    log.info(f"Testing pipeline first depth frame delay on {product_name} device - {os_name} OS")
 
     depth_cfg = rs.config()
     depth_cfg.enable_stream(rs.stream.depth, rs.format.z16, 30)
 
     frame_delay = time_to_first_frame(ctx, depth_cfg)
 
-    log.i(f"Delay from pipeline.start() until first depth frame is: {frame_delay:.3f} [sec] "
+    log.info(f"Delay from pipeline.start() until first depth frame is: {frame_delay:.3f} [sec] "
           f"max allowed is: {max_delay:.1f} [sec]")
 
     assert frame_delay < max_delay, \
@@ -80,14 +81,14 @@ def test_pipeline_first_color_frame_delay(pipeline_device):
     if 'D555' in product_name:
         time.sleep(1)
 
-    log.i(f"Testing pipeline first color frame delay on {product_name} device - {os_name} OS")
+    log.info(f"Testing pipeline first color frame delay on {product_name} device - {os_name} OS")
 
     color_cfg = rs.config()
     color_cfg.enable_stream(rs.stream.color, rs.format.rgb8, 30)
 
     frame_delay = time_to_first_frame(ctx, color_cfg)
 
-    log.i(f"Delay from pipeline.start() until first color frame is: {frame_delay:.3f} [sec] "
+    log.info(f"Delay from pipeline.start() until first color frame is: {frame_delay:.3f} [sec] "
           f"max allowed is: {max_delay:.1f} [sec]")
 
     assert frame_delay < max_delay, \

@@ -25,8 +25,14 @@ py_dir = os.path.join(current_dir, 'py')
 if py_dir not in sys.path:
     sys.path.insert(0, py_dir)
 
-from rspy import log, devices, repo
+# Consume --debug before any rspy imports (rspy.log also consumes it from sys.argv)
+_debug_requested = '--debug' in sys.argv
+
+import logging
+from rspy import devices, repo
 from rspy.signals import register_signal_handlers
+
+log = logging.getLogger('librealsense')
 
 
 # ============================================================================
@@ -35,17 +41,25 @@ from rspy.signals import register_signal_handlers
 # The old run-unit-tests.py used flags like -r/--regex that clash with pytest built-ins.
 # We intercept and translate them here, before pytest parses sys.argv.
 
+def _find_flag(flag):
+    """Find a flag in sys.argv, returning its index or None."""
+    try:
+        return sys.argv.index(flag)
+    except ValueError:
+        return None
+
+
 def _consume_flag_with_arg(flags, pytest_equiv):
     """Consume a flag+argument from sys.argv, translate to pytest equivalent."""
     for flag in flags:
-        idx = log.find_flag(flag)
+        idx = _find_flag(flag)
         if idx is not None:
             if idx + 1 >= len(sys.argv):
-                log.f(f'{flag} requires an argument')  # exits
+                print(f'-F- {flag} requires an argument', file=sys.stderr)
+                sys.exit(1)
             value = sys.argv[idx + 1]
             del sys.argv[idx:idx + 2]
             sys.argv.extend([pytest_equiv, value])
-            log.d(f'{flag} {value} -> {pytest_equiv} {value}')
             return value
     return None
 
@@ -63,7 +77,7 @@ if pyrs_dir and pyrs_dir not in sys.path:
 try:
     import pyrealsense2 as rs
 except ImportError:
-    log.w('No pyrealsense2 library available!')
+    log.warning('No pyrealsense2 library available!')
     rs = None
 
 
@@ -91,17 +105,17 @@ def _find_build_dir():
     while True:
         cmake_cache = os.path.join(search_dir, 'CMakeCache.txt')
         if os.path.isfile(cmake_cache):
-            log.d(f'Found build dir: {search_dir}')
+            log.debug(f'Found build dir: {search_dir}')
             return search_dir
         parent = os.path.dirname(search_dir)
         if parent == search_dir:
             if hasattr(repo, 'build') and repo.build:
-                log.d(f'Using repo.build: {repo.build}')
+                log.debug(f'Using repo.build: {repo.build}')
                 return repo.build
             break
         search_dir = parent
 
-    log.d('Could not find build directory, using default')
+    log.debug('Could not find build directory, using default')
     return None
 
 
@@ -120,10 +134,10 @@ def _setup_test_logging(config):
                         parts = line.split('=', 1)
                         if len(parts) == 2:
                             configuration = parts[1].strip()
-                            log.d(f'Found CMAKE_BUILD_TYPE: {configuration}')
+                            log.debug(f'Found CMAKE_BUILD_TYPE: {configuration}')
                             break
         except Exception as e:
-            log.d(f'Could not read CMAKE_BUILD_TYPE from CMakeCache.txt: {e}')
+            log.debug(f'Could not read CMAKE_BUILD_TYPE from CMakeCache.txt: {e}')
 
         if configuration:
             logdir = os.path.join(build_dir, configuration, 'unit-tests')
@@ -133,12 +147,12 @@ def _setup_test_logging(config):
         logdir = os.path.join(current_dir, 'logs')
 
     os.makedirs(logdir, exist_ok=True)
-    log.d(f'Test logs directory: {logdir}')
+    log.debug(f'Test logs directory: {logdir}')
 
     if not config.getoption('--junitxml', default=None):
         junit_xml_path = os.path.join(logdir, 'pytest-results.xml')
         config.option.xmlpath = junit_xml_path
-        log.i(f'JUnit XML results: {junit_xml_path}')
+        log.info(f'JUnit XML results: {junit_xml_path}')
 
     config._test_logdir = logdir
 
@@ -217,7 +231,7 @@ def pytest_configure(config):
     context_str = config.getoption("--context", default="")
     if context_str:
         context_list = context_str.split()
-        log.i(f"Test context: {context_list}")
+        log.info(f"Test context: {context_list}")
 
     # Set up test log directory
     _setup_test_logging(config)
@@ -261,15 +275,17 @@ def pytest_configure(config):
         "markers", "priority(value): test execution priority (lower runs first, default 500)"
     )
 
-    # Enable rspy debug logging:
-    # --debug is consumed by rspy.log at import time and calls log.debug_on()
-    # --log-cli-level=DEBUG is an alternative way to enable it
-    if not log.is_debug_on():
+    # Configure standard logging with format matching legacy rspy.log output
+    global _debug_requested
+    if not _debug_requested:
         log_cli_level = config.getoption('--log-cli-level', default=None)
         if log_cli_level and log_cli_level.upper() == 'DEBUG':
-            log.debug_on()
-    if log.is_debug_on():
-        import logging
+            _debug_requested = True
+    log_level_name = 'DEBUG' if _debug_requested else 'INFO'
+    config.option.log_cli_level = log_level_name
+    config.option.log_cli_format = '-%(levelname).1s- %(message)s'
+    config.option.log_cli_date_format = ''
+    if _debug_requested:
         logging.getLogger('paramiko').setLevel(logging.WARNING)
 
     # Query devices early for test parametrization
@@ -279,7 +295,7 @@ def pytest_configure(config):
         devices.query(hub_reset=hub_reset, disable_dds=not enable_dds)
         devices.map_unknown_ports()
     except Exception as e:
-        log.w(f"Failed to query devices during configuration: {e}")
+        log.warning(f"Failed to query devices during configuration: {e}")
 
 
 def pytest_generate_tests(metafunc):
@@ -408,10 +424,9 @@ def _test_log_name(item):
 def pytest_runtest_protocol(item, nextitem):
     """Wrap each test with log separators and tee output to a per-test log file."""
     _ensure_newline()
-    log.i("-" * 80)
-    log.i(f"Test: {item.nodeid}")
-    log.i("-" * 80)
-    log.debug_indent()
+    log.info("-" * 80)
+    log.info(f"Test: {item.nodeid}")
+    log.info("-" * 80)
 
     # Set up per-test log file if logdir is available
     logdir = getattr(item.config, '_test_logdir', None)
@@ -426,7 +441,7 @@ def pytest_runtest_protocol(item, nextitem):
             original_stdout = sys.stdout
             sys.stdout = _TeeWriter(original_stdout, log_file)
         except Exception as e:
-            log.w(f"Could not create test log file {log_path}: {e}")
+            log.warning(f"Could not create test log file {log_path}: {e}")
             log_file = None
 
     outcome = yield
@@ -442,7 +457,6 @@ def pytest_runtest_protocol(item, nextitem):
 
     # After yield, pytest may have printed a verdict (F/.) without a trailing newline
     _ensure_newline()
-    log.debug_unindent()
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -453,16 +467,16 @@ def pytest_runtest_makereport(item, call):
 
     if call.when == "call":
         _ensure_newline()
-        log.d(f"Test execution took {report.duration:.3f}s")
+        log.debug(f"Test execution took {report.duration:.3f}s")
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Print a clear pass/fail/skip summary at the end of the run."""
     _ensure_newline()
-    log.i("")
-    log.i("=" * 80)
-    log.i("Test Summary")
-    log.i("=" * 80)
+    log.info("")
+    log.info("=" * 80)
+    log.info("Test Summary")
+    log.info("=" * 80)
 
     passed = len(terminalreporter.stats.get('passed', []))
     failed = len(terminalreporter.stats.get('failed', []))
@@ -470,17 +484,17 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     error = len(terminalreporter.stats.get('error', []))
     total = passed + failed + skipped + error
 
-    log.i(f"Total tests run: {total}")
+    log.info(f"Total tests run: {total}")
     if passed > 0:
-        log.i(f"Passed: {passed}")
+        log.info(f"Passed: {passed}")
     if failed > 0:
-        log.i(f"Failed: {failed}")
+        log.info(f"Failed: {failed}")
     if skipped > 0:
-        log.i(f"Skipped: {skipped}")
+        log.info(f"Skipped: {skipped}")
     if error > 0:
-        log.i(f"Errors: {error}")
+        log.info(f"Errors: {error}")
 
-    log.i("=" * 80)
+    log.info("=" * 80)
 
 
 # ============================================================================
@@ -492,7 +506,7 @@ def _cleanup_devices():
     if devices.hub:
         try:
             if devices.hub.is_connected():
-                log.d("Cleanup: disconnecting from hub(s)")
+                log.debug("Cleanup: disconnecting from hub(s)")
                 devices.hub.disable_ports()
                 devices.wait_until_all_ports_disabled()
             devices.hub.disconnect()
@@ -509,34 +523,34 @@ def session_setup_teardown():
     """Runs once per session: log startup info, yield, then clean up hub/devices on exit."""
     register_signal_handlers(_cleanup_devices)
 
-    log.i("")
-    log.i("=" * 80)
-    log.i("Pytest Session Starting")
-    log.i("=" * 80)
+    log.info("")
+    log.info("=" * 80)
+    log.info("Pytest Session Starting")
+    log.info("=" * 80)
 
     if rs:
-        log.i(f"Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
+        log.info(f"Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
 
     if hasattr(repo, 'build'):
-        log.i(f"Build directory: {repo.build}")
+        log.info(f"Build directory: {repo.build}")
 
-    log.i("=" * 80)
-    log.i("")
+    log.info("=" * 80)
+    log.info("")
 
     yield
 
     _ensure_newline()
-    log.i("")
-    log.i("=" * 80)
-    log.i("Pytest Session Ending")
-    log.i("=" * 80)
+    log.info("")
+    log.info("=" * 80)
+    log.info("Pytest Session Ending")
+    log.info("=" * 80)
 
     try:
         _cleanup_devices()
     except Exception as e:
-        log.w(f"Error during cleanup: {e}")
+        log.warning(f"Error during cleanup: {e}")
 
-    log.i("=" * 80)
+    log.info("=" * 80)
 
 
 # ============================================================================
@@ -557,7 +571,7 @@ def module_device_setup(request):
     # Check parametrized serial from device_each
     if hasattr(request.node, 'callspec') and '_test_device_serial' in request.node.callspec.params:
         serial_number = request.node.callspec.params['_test_device_serial']
-        log.d(f"Test using parametrized device: {serial_number}")
+        log.debug(f"Test using parametrized device: {serial_number}")
     else:
         # Fall back to marker-based detection (for device() marker)
         device_markers = []
@@ -566,7 +580,7 @@ def module_device_setup(request):
                 device_markers.append(marker)
 
         if not device_markers:
-            log.d(f"Test {request.node.name} has no device requirements")
+            log.debug(f"Test {request.node.name} has no device requirements")
             yield None
             return
 
@@ -578,24 +592,21 @@ def module_device_setup(request):
             pytest.skip("No devices found matching requirements")
 
         serial_number = serial_numbers[0]
-        log.d(f"Test will use first matching device: {serial_number}")
+        log.debug(f"Test will use first matching device: {serial_number}")
 
     # Enable only this device; recycle unless --no-reset
     device = devices.get(serial_number)
     device_name = device.name if device else serial_number
-    log.i(f"Configuration: {device_name} [{serial_number}]")
-    log.debug_indent()
+    log.info(f"Configuration: {device_name} [{serial_number}]")
+
     try:
         no_reset = request.config.getoption("--no-reset", default=False)
         recycle = not no_reset
-        log.d(f"{'Recycling' if recycle else 'Enabling'} device via hub...")
+        log.debug(f"{'Recycling' if recycle else 'Enabling'} device via hub...")
         devices.enable_only([serial_number], recycle=recycle)
-        log.d(f"Device enabled and ready")
+        log.debug(f"Device enabled and ready")
     except Exception as e:
-        log.debug_unindent()
         pytest.fail(f"Failed to enable device {serial_number}: {e}")
-    finally:
-        log.debug_unindent()
 
     yield serial_number
 
@@ -626,7 +637,7 @@ def test_device(test_context):
         pytest.skip("No device available for test")
 
     dev = devices_list[0]
-    log.d(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
+    log.debug(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
 
     return dev, test_context
 
@@ -671,7 +682,7 @@ def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_exc
     for marker in device_markers:
         if marker.name == 'device_exclude' and marker.args:
             exclude_patterns.append(marker.args[0])
-            log.d(f"Excluding devices matching pattern: {marker.args[0]}")
+            log.debug(f"Excluding devices matching pattern: {marker.args[0]}")
 
     # Add CLI exclusions
     exclude_patterns.extend(cli_excludes)
@@ -682,7 +693,7 @@ def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_exc
             continue
 
         pattern = marker.args[0]
-        log.d(f"Looking for devices matching pattern: {pattern}")
+        log.debug(f"Looking for devices matching pattern: {pattern}")
 
         for sn in all_device_sns:
             device = devices.get(sn)
@@ -696,12 +707,12 @@ def _find_matching_devices(device_markers, each=True, cli_includes=None, cli_exc
             # Check exclusions
             excluded = any(_device_matches_pattern(device, exp) for exp in exclude_patterns)
             if excluded:
-                log.d(f"  Device {device.name} ({sn}) excluded")
+                log.debug(f"  Device {device.name} ({sn}) excluded")
                 continue
 
             if sn not in matching_sns:
                 matching_sns.append(sn)
-                log.d(f"  Found matching device: {device.name} ({sn})")
+                log.debug(f"  Found matching device: {device.name} ({sn})")
 
             if not each:
                 return matching_sns
