@@ -323,7 +323,9 @@ def pytest_configure(config):
     log_level_name = 'DEBUG' if _debug_requested else 'INFO'
     logging.getLogger().setLevel(getattr(logging, log_level_name))
     capture = config.getoption('capture', default='fd')
+    global _live_logging
     if capture == 'no':  # -s passed: stream logs to console
+        _live_logging = True
         config.option.log_cli_level = log_level_name
         config.option.log_cli_format = '-%(levelname).1s- %(message)s'
         config.option.log_cli_date_format = ''
@@ -429,10 +431,14 @@ def pytest_collection_modifyitems(config, items):
     items.sort(key=get_device_group_key)
 
 
+_live_logging = False  # Set in pytest_configure when -s is passed
+
 def _ensure_newline():
-    """Pytest's progress dots (F/.) don't end with newline — force one before our log output."""
-    sys.stdout.write('\n')
-    sys.stdout.flush()
+    """Pytest's progress dots (F/.) don't end with newline — force one before our log output.
+    Only needed when live logging is active (-s), otherwise it breaks -v formatting."""
+    if _live_logging:
+        sys.stdout.write('\n')
+        sys.stdout.flush()
 
 
 def _test_log_name(item):
