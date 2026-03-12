@@ -472,7 +472,7 @@ namespace librealsense
         if( 0x2 == gvd_buf[d400_gvd_offsets::depth_sensor_type] )
             val |= ds_caps::CAP_GLOBAL_SHUTTER;   // e.g. AWGC
         // Option INTER_CAM_SYNC_MODE is not enabled in D405
-        if (_pid != ds::RS405_PID)
+        if (is_d401_usb_device( gvd_buf[d400_gvd_offsets::hw_type_offset] ) || _pid != ds::RS405_PID)
             val |= ds_caps::CAP_INTERCAM_HW_SYNC;
         if (gvd_buf[d400_gvd_offsets::ip65_sealed_offset] == 0x1)
             val |= ds_caps::CAP_IP65;
