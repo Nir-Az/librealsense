@@ -15,7 +15,7 @@ import pyrealsense2 as rs
 from rspy import log, test
 import numpy as np
 import cv2
-from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, get_avg_depth_from_region, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, get_avg_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -80,9 +80,25 @@ def draw_debug(a4_page_bgr, depth_cube, depth_bg, measured_diff):
 dev, ctx = test.find_first_device_or_exit()
 
 
+def create_snapshot(color_roi, depth_roi, depth_cube, depth_bg, measured_diff):
+    """Create an annotated overlay snapshot for artifact saving."""
+    depth_vis = cv2.normalize(depth_roi, None, 0, 255, cv2.NORM_MINMAX)
+    depth_vis = np.uint8(depth_vis)
+    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
+
+    alpha = 0.3
+    overlay = cv2.addWeighted(depth_vis, 1 - alpha, color_roi, alpha, 0)
+    return draw_debug(overlay.copy(), depth_cube, depth_bg, measured_diff)
+
+
 def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
     pipeline = None
     pipeline_profile = None
+    last_color_roi = None
+    last_depth_roi = None
+    last_depth_cube = 0
+    last_depth_bg = 0
+    last_measured_diff = 0
     try:
         pipeline = rs.pipeline(ctx)
         cfg = rs.config()
@@ -132,6 +148,9 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             color_frame_roi = get_roi_from_frame(color_frame)
             depth_frame_roi = get_roi_from_frame(depth_frame)
 
+            last_color_roi = color_frame_roi.copy()
+            last_depth_roi = depth_frame_roi.copy()
+
             # Check cube color (center - should be black)
             cube_b, cube_g, cube_r = (int(v) for v in color_frame_roi[cube_y, cube_x])
             cube_pixel = (cube_r, cube_g, cube_b)
@@ -158,6 +177,10 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             depth_cube = raw_cube  # in mm
             depth_bg = raw_bg  # in mm
             measured_diff = depth_bg - depth_cube  # background should be further than cube
+
+            last_depth_cube = depth_cube
+            last_depth_bg = depth_bg
+            last_measured_diff = measured_diff
 
             if abs(measured_diff - EXPECTED_DEPTH_DIFF) <= DEPTH_TOLERANCE:
                 depth_diff_passes += 1
@@ -194,7 +217,13 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
         log.i(f"Depth difference passed in {depth_diff_passes}/{NUM_FRAMES} frames")
         test.check(depth_diff_passes >= min_passes, "Depth difference failed in too many frames")
 
+        if test.test_failed and last_color_roi is not None and last_depth_roi is not None:
+            save_failure_snapshot(__file__, pipeline,
+                                 create_snapshot(last_color_roi, last_depth_roi,
+                                                 last_depth_cube, last_depth_bg, last_measured_diff))
+
     except Exception as e:
+        save_failure_snapshot(__file__, pipeline)
         test.unexpected_exception()
     finally:
         cv2.destroyAllWindows()

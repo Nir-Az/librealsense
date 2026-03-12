@@ -9,7 +9,7 @@ from rspy import log, test
 import numpy as np
 import cv2
 import time
-from iq_helper import find_roi_location, get_roi_from_frame, get_avg_depth_from_region, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import find_roi_location, get_roi_from_frame, get_avg_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
 
 NUM_FRAMES = 100  # Number of frames to check
 DEPTH_TOLERANCE = 100  # Acceptable deviation from expected depth in mm
@@ -86,7 +86,30 @@ def draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y,
     cv2.waitKey(1)
 
 
+def create_snapshot(depth_roi, cube_x, cube_y, bg_x, bg_y, depth_cube, depth_bg, measured_diff):
+    """Create an annotated depth snapshot image for artifact saving."""
+    depth_vis = cv2.normalize(depth_roi, None, 0, 255, cv2.NORM_MINMAX)
+    depth_vis = np.uint8(depth_vis)
+    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
+
+    half = SAMPLE_REGION_SIZE // 2
+    cv2.circle(depth_vis, (cube_x, cube_y), 6, (0, 0, 255), -1)
+    cv2.circle(depth_vis, (bg_x, bg_y), 6, (0, 255, 0), -1)
+    cv2.rectangle(depth_vis, (cube_x - half, cube_y - half), (cube_x + half, cube_y + half), (0, 0, 255), 2)
+    cv2.rectangle(depth_vis, (bg_x - half, bg_y - half), (bg_x + half, bg_y + half), (0, 255, 0), 2)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(depth_vis, f"cube: {depth_cube:.2f}mm", (cube_x + 10, cube_y - 10), font, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+    cv2.putText(depth_vis, f"bg: {depth_bg:.2f}mm", (bg_x + 10, bg_y - 10), font, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+    cv2.putText(depth_vis, f"diff: {measured_diff:.3f}mm (exp: {EXPECTED_DEPTH_DIFF:.2f}mm)", (10, 30), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+    return depth_vis
+
+
 def run_test(resolution, fps):
+    last_depth_roi = None
+    last_depth_cube = 0
+    last_depth_bg = 0
+    last_measured_diff = 0
     try:
         global pipeline
         pipeline = rs.pipeline(ctx)
@@ -132,6 +155,11 @@ def run_test(resolution, fps):
             depth_bg = raw_bg  # * depth_scale
             measured_diff = depth_bg - depth_cube  # background should be further than cube
 
+            last_depth_roi = depth_image.copy()
+            last_depth_cube = depth_cube
+            last_depth_bg = depth_bg
+            last_measured_diff = measured_diff
+
             if abs(measured_diff - EXPECTED_DEPTH_DIFF) <= DEPTH_TOLERANCE:
                 pass_count += 1
             else:
@@ -149,7 +177,13 @@ def run_test(resolution, fps):
         log.i(f"Depth diff passed in {pass_count}/{NUM_FRAMES} frames")
         test.check(pass_count >= min_passes)
 
+        if test.test_failed and last_depth_roi is not None:
+            save_failure_snapshot(__file__, pipeline,
+                                 create_snapshot(last_depth_roi, cube_x, cube_y, bg_x, bg_y,
+                                                 last_depth_cube, last_depth_bg, last_measured_diff))
+
     except Exception as e:
+        save_failure_snapshot(__file__, pipeline)
         test.fail()
         raise e
     finally:
