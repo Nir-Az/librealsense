@@ -360,6 +360,12 @@ def module_device_setup(request):
     first_setup = (last_device is None)
     recycle = not no_reset and (first_setup or device_changed or is_retry)
 
+    if not recycle and not first_setup:
+        log.debug(f"Device {serial_number} already enabled, skipping hub setup")
+        module._last_test_nodeid = nodeid
+        yield serial_number
+        return
+
     try:
         log.debug(f"{'Recycling' if recycle else 'Enabling'} device via hub...")
         devices.enable_only([serial_number], recycle=recycle)
