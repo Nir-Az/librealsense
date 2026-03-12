@@ -226,7 +226,7 @@ def pytest_runtest_protocol(item, nextitem):
 
     file_handler = start_test_log(item)
     outcome = yield
-    stop_test_log(file_handler)
+    stop_test_log(file_handler, nextitem)
 
     ensure_newline()
 

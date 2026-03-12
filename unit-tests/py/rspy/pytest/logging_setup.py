@@ -20,6 +20,10 @@ _unit_tests_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..',
 # Live-logging state: set to True when -s is passed (stdout not captured)
 live_logging = False
 
+# Per-module+device log handler tracking
+_current_log_key = None       # (fspath, device_id) tuple
+_current_file_handler = None
+
 
 def bridge_rspy_log():
     """Wrap rspy.log.d/i/w/e to also emit via Python logging."""
@@ -120,17 +124,43 @@ def configure_logging(config, debug_requested):
         logging.getLogger('paramiko').setLevel(logging.WARNING)
 
 
+def _log_key(item):
+    """Return (fspath, device_id) for grouping tests into one log file per module+device."""
+    if item is None:
+        return None
+    device_id = None
+    match = re.search(r'\[(.+)\]', item.name)
+    if match:
+        device_id = match.group(1)
+    return (str(item.fspath), device_id)
+
+
 def start_test_log(item):
-    """Create a per-test FileHandler that captures all log output to a .log file.
+    """Open a per-module+device FileHandler. Reuses the existing handler when the key
+    (file + device param) hasn't changed, so all tests for the same module+device
+    share a single .log file.
 
     Returns the FileHandler (to pass to stop_test_log), or None if logging is
     not applicable (e.g. -s mode or no log directory configured).
     """
+    global _current_log_key, _current_file_handler
+
     logdir = getattr(item.config, '_test_logdir', None)
     capture = item.config.getoption('capture', default='fd')
 
     if not logdir or capture == 'no':
         return None
+
+    key = _log_key(item)
+    if key == _current_log_key and _current_file_handler is not None:
+        return None  # reuse existing handler
+
+    # Key changed — close previous handler if any
+    if _current_file_handler is not None:
+        logging.getLogger().removeHandler(_current_file_handler)
+        _current_file_handler.close()
+        _current_file_handler = None
+        _current_log_key = None
 
     log_name = test_log_name(item)
     log_path = os.path.join(logdir, log_name)
@@ -139,17 +169,30 @@ def start_test_log(item):
         file_handler.setFormatter(logging.Formatter('-%(levelname).1s- %(message)s'))
         file_handler.setLevel(logging.DEBUG)
         logging.getLogger().addHandler(file_handler)
+        _current_log_key = key
+        _current_file_handler = file_handler
         return file_handler
     except Exception as e:
         log.warning(f"Could not create test log file {log_path}: {e}")
         return None
 
 
-def stop_test_log(handler):
-    """Remove and close a per-test FileHandler created by start_test_log."""
-    if handler is not None:
-        logging.getLogger().removeHandler(handler)
-        handler.close()
+def stop_test_log(handler, nextitem):
+    """Close the per-module+device FileHandler only when the next test has a different
+    key (different file or device) or when the session is ending (nextitem is None)."""
+    global _current_log_key, _current_file_handler
+
+    if _current_file_handler is None:
+        return
+
+    next_key = _log_key(nextitem)
+    if next_key == _current_log_key:
+        return  # next test shares the same log file
+
+    logging.getLogger().removeHandler(_current_file_handler)
+    _current_file_handler.close()
+    _current_file_handler = None
+    _current_log_key = None
 
 
 def print_terminal_summary(terminalreporter):
@@ -195,12 +238,21 @@ def ensure_newline():
 
 
 def test_log_name(item):
-    """Convert a node id like 'live/frames/pytest-t2ff.py::test_x[D455-SN]' to a log filename."""
+    """Derive log filename from file basename + device param (from brackets in item.name).
+
+    Examples:
+      'live/frames/pytest-t2ff-pipeline.py::test_x[D455-104623060005]' -> 'pytest-t2ff-pipeline_D455-104623060005.log'
+      'live/frames/pytest-t2ff-pipeline.py::test_x'                   -> 'pytest-t2ff-pipeline.log'
+    """
     file_path = item.fspath
     basename = os.path.splitext(os.path.basename(str(file_path)))[0]
 
-    test_name = item.name
+    match = re.search(r'\[(.+)\]', item.name)
+    if match:
+        device_id = match.group(1)
+        log_name = f"{basename}_{device_id}"
+    else:
+        log_name = basename
 
-    log_name = f"{basename}_{test_name}"
     log_name = re.sub(r'[<>:"/\\|?*]', '_', log_name)
     return log_name + ".log"
