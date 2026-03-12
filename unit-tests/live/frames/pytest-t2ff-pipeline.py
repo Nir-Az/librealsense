@@ -51,7 +51,7 @@ def time_to_first_frame(ctx, config):
 def test_pipeline_first_depth_frame_delay(pipeline_device):
     dev, ctx = pipeline_device
     product_name = dev.get_info(rs.camera_info.name)
-    max_delay = 0  # INTENTIONAL FAILURE — testing Jenkins log reporting
+    max_delay = 1
     os_name = platform.system()
 
     log.info(f"Testing pipeline first depth frame delay on {product_name} device - {os_name} OS")
