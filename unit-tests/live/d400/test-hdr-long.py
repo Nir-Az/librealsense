@@ -344,6 +344,7 @@ def hdr_streaming_checking_sequence_id():
 
         pipe.stop()
         depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 0)
 
 
 # CHECKING SEQUENCE ID WHILE STREAMING
@@ -373,6 +374,7 @@ def emitter_on_off_check_sequence_id():
 
         pipe.stop()
         depth_sensor.set_option(rs.option.emitter_on_off, 0)  # disable emitter before next tests
+        test.check(depth_sensor.get_option(rs.option.emitter_on_off) == 0)
 
 
 with test.closure("Emitter on/off - checking sequence id"):
