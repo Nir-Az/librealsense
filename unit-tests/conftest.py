@@ -188,10 +188,7 @@ def pytest_configure(config):
         "markers", "live: tests requiring live devices"
     )
     config.addinivalue_line(
-        "markers", "nightly: tests that only run in nightly context"
-    )
-    config.addinivalue_line(
-        "markers", "dds: tests requiring DDS support"
+        "markers", "context(name): test only runs when name is in --context (e.g., nightly, weekly, dds)"
     )
     config.addinivalue_line(
         "markers", "priority(value): test execution priority (lower runs first, default 500)"

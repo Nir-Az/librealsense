@@ -15,17 +15,19 @@ def filter_and_sort_items(config, items):
     # TODO: move to native pytest flags after migration from old infra
     context = config.getoption("--context", default="").split()
 
-    if not (markexpr and "nightly" in markexpr) and "nightly" not in context:
-        skip_nightly = pytest.mark.skip(reason="Nightly test (use --context nightly or -m nightly to run)")
-        for item in items:
-            if "nightly" in item.keywords:
-                item.add_marker(skip_nightly)
-
-    if not (markexpr and "dds" in markexpr) and "dds" not in context:
-        skip_dds = pytest.mark.skip(reason="DDS test (use --context dds or -m dds to run)")
-        for item in items:
-            if "dds" in item.keywords:
-                item.add_marker(skip_dds)
+    # Generic context gating: tests marked with @pytest.mark.context("X") are skipped
+    # unless "X" appears in --context or -m. No infra changes needed for new contexts.
+    for item in items:
+        for marker in item.iter_markers("context"):
+            if not marker.args:
+                continue
+            required_context = marker.args[0]
+            if required_context in context:
+                continue
+            if markexpr and required_context in markexpr:
+                continue
+            item.add_marker(pytest.mark.skip(
+                reason=f"Requires --context {required_context} (or -m {required_context})"))
 
     # Skip non-device tests when --live is specified
     if config.getoption("--live", default=False):
