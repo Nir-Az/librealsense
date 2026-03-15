@@ -4,10 +4,8 @@
 ######################################
 # This set of tests is valid for any device that supports the HDR feature #
 ######################################
-# Currently disabling running on Jetson as it is failing
 # test:device D400* 
-# test:donotrun:!nightly
-# test:donotrun:jetson
+# test:donotrun:!nightly  
 
 import pyrealsense2 as rs
 from rspy import test, log
