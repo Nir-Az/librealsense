@@ -142,6 +142,10 @@ def pytest_configure(config):
     # Set up test log directory
     setup_test_logging(config)
 
+    # Enable LibRS debug logging if --rslog (once, globally)
+    if rs and config.getoption("--rslog", default=False):
+        rs.log_to_console(rs.log_severity.debug)
+
     # Test discovery defaults (replaces pytest.ini which is .gitignored)
     config.addinivalue_line("python_files", "pytest-*.py")
     config.addinivalue_line("python_classes", "Test*")
@@ -383,10 +387,6 @@ def test_context(request, module_device_setup):
     """Create a fresh rs.context() for the test. Depends on module_device_setup for hub state."""
     if not rs:
         pytest.skip("pyrealsense2 not available")
-
-    # Enable LibRS debug logging if --rslog
-    if request.config.getoption("--rslog", default=False):
-        rs.log_to_console(rs.log_severity.debug)
 
     ctx = rs.context()
 
