@@ -52,7 +52,7 @@ def _find_build_dir():
             return search_dir
         parent = os.path.dirname(search_dir)
         if parent == search_dir:
-            if hasattr(repo, 'build') and repo.build:
+            if repo.build:
                 log.debug(f'Using repo.build: {repo.build}')
                 return repo.build
             break
