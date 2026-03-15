@@ -283,10 +283,12 @@ def _cleanup_devices():
 @pytest.fixture(scope="session", autouse=True)
 def session_setup_teardown():
     """Runs once per session: log startup info, yield, then clean up hub/devices on exit."""
+    # Setup — runs once before the first test
     register_signal_handlers(_cleanup_devices)
 
-    yield
+    yield  # All tests run here
 
+    # Teardown — runs once after the last test
     ensure_newline()
     log.info("")
     log.info("=" * 80)
