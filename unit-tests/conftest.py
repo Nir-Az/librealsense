@@ -203,7 +203,7 @@ def pytest_configure(config):
     # Log build environment info (printed directly — pytest log handlers aren't active yet)
     print(f"-I- {'=' * 80}")
     if rs:
-        print(f"-I- Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
+        print(f"-I- Using pyrealsense2 from: {rs.__file__}")
     if hasattr(repo, 'build'):
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
