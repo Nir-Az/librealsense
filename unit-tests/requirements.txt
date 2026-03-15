@@ -11,6 +11,12 @@ paramiko==3.5.1; platform_machine != "aarch64"
 opencv-python==4.11.0.86
 numpy==2.0.2 # max version currently working on Jetson
 
+# Pytest framework (cross-platform)
+pytest==8.3.5
+pytest-timeout==2.2.0
+pytest-retry==1.6.0
+pytest-repeat==0.9.3
+
 # REST API testing requirements (Only for Linux x86)
 fastapi==0.120.1;        sys_platform == "linux" and platform_machine == "x86_64"
 uvicorn==0.34.0;         sys_platform == "linux" and platform_machine == "x86_64"
