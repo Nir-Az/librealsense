@@ -77,10 +77,10 @@ def pytest_addoption(parser):
         help="Include only devices matching pattern (e.g., --device D455). Can be used multiple times."
     )
     group.addoption(
-        "--device-exclude",
+        "--exclude-device",
         action="append",
         default=[],
-        help="Exclude devices matching pattern (e.g., --device-exclude D455). Can be used multiple times."
+        help="Exclude devices matching pattern (e.g., --exclude-device D455). Can be used multiple times."
     )
     group.addoption(
         "--context",
@@ -336,7 +336,7 @@ def module_device_setup(request):
 
         serial_numbers = find_matching_devices(device_markers, each=False,
                                                   cli_includes=request.config.getoption("--device", default=[]),
-                                                  cli_excludes=request.config.getoption("--device-exclude", default=[]))
+                                                  cli_excludes=request.config.getoption("--exclude-device", default=[]))
 
         if not serial_numbers:
             pytest.skip("No devices found matching requirements")

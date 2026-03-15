@@ -80,7 +80,7 @@ def resolve_device_each_serials(metafunc):
     # Resolve exclusion patterns (markers + CLI) to a set of excluded serial numbers
     exclude_markers = [m for m in metafunc.definition.iter_markers("device_exclude")]
     exclude_patterns = [m.args[0] for m in exclude_markers if m.args]
-    cli_excludes = metafunc.config.getoption("--device-exclude", default=[])
+    cli_excludes = metafunc.config.getoption("--exclude-device", default=[])
     exclude_patterns.extend(cli_excludes)
     excluded_sns = set()
     for pattern in exclude_patterns:
