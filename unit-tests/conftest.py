@@ -219,12 +219,12 @@ def pytest_collection_modifyitems(config, items):
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
     """Wrap each test with log separators and write per-test log file."""
+    file_handler = start_test_log(item)
     ensure_newline()
     log.info("-" * 80)
     log.info(f"Test: {item.nodeid}")
     log.info("-" * 80)
 
-    file_handler = start_test_log(item)
     outcome = yield
     stop_test_log(file_handler, nextitem)
 
