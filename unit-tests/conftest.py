@@ -200,6 +200,14 @@ def pytest_configure(config):
     # Configure standard logging with format matching legacy rspy.log output
     configure_logging(config, _debug_requested)
 
+    # Log build environment info (printed directly — pytest log handlers aren't active yet)
+    print(f"-I- {'=' * 80}")
+    if rs:
+        print(f"-I- Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
+    if hasattr(repo, 'build'):
+        print(f"-I- Build directory: {repo.build}")
+    print(f"-I- {'=' * 80}")
+
     # Query devices early for test parametrization
     try:
         hub_reset = config.getoption("--hub-reset", default=False)
@@ -276,20 +284,6 @@ def _cleanup_devices():
 def session_setup_teardown():
     """Runs once per session: log startup info, yield, then clean up hub/devices on exit."""
     register_signal_handlers(_cleanup_devices)
-
-    log.info("")
-    log.info("=" * 80)
-    log.info("Pytest Session Starting")
-    log.info("=" * 80)
-
-    if rs:
-        log.info(f"Using pyrealsense2 from: {rs.__file__ if hasattr(rs, '__file__') else 'built-in'}")
-
-    if hasattr(repo, 'build'):
-        log.info(f"Build directory: {repo.build}")
-
-    log.info("=" * 80)
-    log.info("")
 
     yield
 
