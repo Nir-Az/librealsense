@@ -204,7 +204,7 @@ def pytest_configure(config):
     print(f"-I- {'=' * 80}")
     if rs:
         print(f"-I- Using pyrealsense2 from: {rs.__file__}")
-    if hasattr(repo, 'build'):
+    if repo.build:
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
 
