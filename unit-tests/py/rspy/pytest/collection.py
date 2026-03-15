@@ -12,15 +12,17 @@ def filter_and_sort_items(config, items):
     Called from the pytest_collection_modifyitems hook.
     """
     markexpr = config.getoption("-m", default="")
+    # TODO: move to native pytest flags after migration from old infra
+    context = config.getoption("--context", default="").split()
 
-    if not (markexpr and "nightly" in markexpr):
-        skip_nightly = pytest.mark.skip(reason="Nightly test (use -m nightly to run)")
+    if not (markexpr and "nightly" in markexpr) and "nightly" not in context:
+        skip_nightly = pytest.mark.skip(reason="Nightly test (use --context nightly or -m nightly to run)")
         for item in items:
             if "nightly" in item.keywords:
                 item.add_marker(skip_nightly)
 
-    if not (markexpr and "dds" in markexpr):
-        skip_dds = pytest.mark.skip(reason="DDS test (use -m dds to run)")
+    if not (markexpr and "dds" in markexpr) and "dds" not in context:
+        skip_dds = pytest.mark.skip(reason="DDS test (use --context dds or -m dds to run)")
         for item in items:
             if "dds" in item.keywords:
                 item.add_marker(skip_dds)
