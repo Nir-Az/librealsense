@@ -18,7 +18,7 @@ HD_RESOLUTION = (1280, 720)
 
 pytestmark = [
     pytest.mark.device("D400*"),
-    pytest.mark.nightly,
+    pytest.mark.context("nightly"),
     pytest.mark.live
 ]
 
