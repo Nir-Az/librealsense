@@ -43,7 +43,7 @@ else()
     option(CHECK_FOR_UPDATES "Checks for versions updates" OFF) 
 endif()
 option(BUILD_WITH_CPU_EXTENSIONS "Enable compiler optimizations using CPU extensions (such as AVX)" ON)
-option(BUILD_WITH_NEON "Enable ARM NEON optimizations when available" ON)
+option(BUILD_WITH_NEON "Enable ARM NEON 64 bit optimizations when available" ON)
 set(UNIT_TESTS_ARGS "" CACHE STRING "Command-line arguments to pass to unit-tests-config.py, e.g. '-t <tag> -r <regex>'")
 #Performance improvement with Ubuntu 18/20
 if(UNIX AND (NOT ANDROID_NDK_TOOLCHAIN_INCLUDED))
