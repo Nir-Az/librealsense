@@ -43,7 +43,7 @@ Some OEM/Vendors choose to lock the kernel for modifications. Unlocking this cap
    sudo apt-get install libudev-dev
    sudo apt-get install libssl-dev pkg-config libgtk-3-dev
    ```
-   > Note: we split the installation as some platforms has dependencies issues, this should order handle it
+   > Note: The installation is split into separate commands because some platforms encounter dependency issues when installing these packages in a single step. Running them separately helps avoid those issues.
    **Cmake Note:** certain _librealsense_ [CMAKE](https://cmake.org/download/) flags (e.g. CUDA) require version 3.8+ which is currently not made available via apt manager for Ubuntu LTS.
 4. Install build tools
    ```sh
