@@ -207,7 +207,11 @@ def print_terminal_summary(terminalreporter):
     failed = len(terminalreporter.stats.get('failed', []))
     skipped = len(terminalreporter.stats.get('skipped', []))
     error = len(terminalreporter.stats.get('error', []))
-    total = passed + failed + skipped + error
+    # Merge setup/teardown errors into failures — they represent tests that did not pass
+    # (e.g. device not visible after hub reset). Keeping them separate hid them from
+    # the Jenkins Groovy report which only reads the "Failed:" line.
+    failed += error
+    total = passed + failed + skipped
 
     def summary(msg):
         log.info(msg)
@@ -224,8 +228,6 @@ def print_terminal_summary(terminalreporter):
         summary(f"Failed: {failed}")
     if skipped > 0:
         summary(f"Skipped: {skipped}")
-    if error > 0:
-        summary(f"Errors: {error}")
     summary("=" * 80)
 
 
