@@ -192,33 +192,8 @@ endif()
 
 set(RS_VIEWER_LIBS ${GTK3_LIBRARIES} Threads::Threads realsense2-gl)
 
-# Shared config applied to both realsense-viewer and realsense-viewer-tests
-macro(viewer_target_config _target)
-    # Link OpenGL (all platforms) and libdl (linux)
-    target_link_libraries(${_target} OpenGL::GL)
-    using_easyloggingpp(${_target} SHARED)
-    target_include_directories(${_target} PRIVATE ../../src)
-    if(WIN32)
-        target_sources(${_target} PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
-            ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc)
-        set_target_properties(${_target} PROPERTIES LINK_FLAGS "/ignore:4199 ${LD_FLAGS_STR}")
-    else()
-        target_link_libraries(${_target} dl)
-    endif()
-    if(CHECK_FOR_UPDATES)
-        message( STATUS "Check for updates capability added to ${_target}" )
-        add_dependencies(${_target} libcurl)
-        set(RS_VIEWER_LIBS ${RS_VIEWER_LIBS} curl)
-    endif()
-    if(IMPORT_DEPTH_CAM_FW)
-        add_definitions(-DINTERNAL_FW)
-        target_link_libraries(${_target} fw)
-    endif()
-    target_link_libraries(${_target} ${DEPENDENCIES} ${RS_VIEWER_LIBS} tclap)
-    set_target_properties(${_target} PROPERTIES CXX_STANDARD 11 FOLDER Tools)
-endmacro()
-viewer_target_config(${PROJECT_NAME})
+include(../tools_common.cmake)
+tools_target_config(${PROJECT_NAME})
 
 if(OPENVINO2019)
     target_compile_definitions(realsense-viewer PRIVATE OPENVINO2019)
@@ -264,14 +239,15 @@ if(BUILD_VIEWER_TESTS)
     set(VIEWER_TEST_SOURCES
         tests/viewer-test-main.cpp
         tests/viewer-test-helpers.cpp
-        tests/hw-reset/test-hw-reset.cpp  # written explicitly to be run first, to check device connected and perform hw reset before other tests run
+        tests/hw-reset/test-hw-reset.cpp  # explicit ordering: runs first to check device connected
         ${VIEWER_TEST_CASES}
     )
     file(GLOB TE_SOURCES ${TE_DIR}/*.cpp)
 
     add_executable(realsense-viewer-tests
         ${RS_VIEWER_CPP} ${VIEWER_TEST_SOURCES} ${TE_SOURCES})
-    viewer_target_config(realsense-viewer-tests)
+    tools_target_config(realsense-viewer-tests)
+    set_target_properties(realsense-viewer-tests PROPERTIES FOLDER "Tools/Tests")
 
     target_compile_definitions(realsense-viewer-tests PRIVATE
         IMGUI_ENABLE_TEST_ENGINE IMGUI_TEST_ENGINE_ENABLE_STD_FUNCTION
