@@ -3046,7 +3046,7 @@ namespace librealsense
             // sending error on ioctl failure
             if (errno == EIO || errno == EAGAIN) // TODO: Log?
                 return false;
-            throw linux_backend_exception(rsutils::string::from() << "xioctl(VIDIOC_G_EXT_CTRLS) failed on control " << control);
+            throw linux_backend_exception(rsutils::string::from() << "xioctl(VIDIOC_G_EXT_CTRLS) failed on control " << static_cast<int>(control) << ", errno=" << errno);
         }
 
         control_range v4l_mipi_device::get_xu_range(const extension_unit& xu, uint8_t control, int len) const
