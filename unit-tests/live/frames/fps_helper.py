@@ -205,4 +205,4 @@ def get_profile(sensor, stream, resolution=None, fps=None):
 def get_profiles(sensor, stream, resolution=None, fps=None):
     return iter(profile for profile in sensor.profiles if profile.stream_type() == stream
                 and (resolution is None or get_resolution(profile) == resolution)
-                and (fps is None or profile.fps()))
+                and (fps is None or profile.fps() == fps))
