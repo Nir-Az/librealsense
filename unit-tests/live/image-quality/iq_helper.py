@@ -2,7 +2,8 @@
 # Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
 
 from rspy import log, test
-import os, numpy as np
+import os
+import numpy as np
 import cv2
 import time
 import pyrealsense2 as rs

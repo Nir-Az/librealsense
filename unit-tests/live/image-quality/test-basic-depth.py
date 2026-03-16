@@ -82,31 +82,11 @@ def draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y,
     cv2.putText(roi_img_disp, diff_label, (10, 30),
                 font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
-    cv2.imshow("ROI with Sampled Points", roi_img_disp)
-    cv2.waitKey(1)
-
-
-def create_snapshot(depth_roi, cube_x, cube_y, bg_x, bg_y, depth_cube, depth_bg, measured_diff):
-    """Create an annotated depth snapshot image for artifact saving."""
-    depth_vis = cv2.normalize(depth_roi, None, 0, 255, cv2.NORM_MINMAX)
-    depth_vis = np.uint8(depth_vis)
-    depth_vis = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
-
-    half = SAMPLE_REGION_SIZE // 2
-    cv2.circle(depth_vis, (cube_x, cube_y), 6, (0, 0, 255), -1)
-    cv2.circle(depth_vis, (bg_x, bg_y), 6, (0, 255, 0), -1)
-    cv2.rectangle(depth_vis, (cube_x - half, cube_y - half), (cube_x + half, cube_y + half), (0, 0, 255), 2)
-    cv2.rectangle(depth_vis, (bg_x - half, bg_y - half), (bg_x + half, bg_y + half), (0, 255, 0), 2)
-
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(depth_vis, f"cube: {depth_cube:.2f}mm", (cube_x + 10, cube_y - 10), font, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-    cv2.putText(depth_vis, f"bg: {depth_bg:.2f}mm", (bg_x + 10, bg_y - 10), font, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-    cv2.putText(depth_vis, f"diff: {measured_diff:.3f}mm (exp: {EXPECTED_DEPTH_DIFF:.2f}mm)", (10, 30), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-    return depth_vis
+    return roi_img_disp
 
 
 def run_test(resolution, fps):
-    last_depth_roi = None
+    last_depth_frame = None
     last_depth_cube = 0
     last_depth_bg = 0
     last_measured_diff = 0
@@ -155,7 +135,7 @@ def run_test(resolution, fps):
             depth_bg = raw_bg  # * depth_scale
             measured_diff = depth_bg - depth_cube  # background should be further than cube
 
-            last_depth_roi = depth_image.copy()
+            last_depth_frame = depth_frame
             last_depth_cube = depth_cube
             last_depth_bg = depth_bg
             last_measured_diff = measured_diff
@@ -167,7 +147,9 @@ def run_test(resolution, fps):
                       f"{EXPECTED_DEPTH_DIFF:.3f}mm (cube: {depth_cube:.3f}mm, bg: {depth_bg:.3f}mm)")
 
             if DEBUG_MODE:
-                draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y, depth_cube, depth_bg, measured_diff)
+                dbg = draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y, depth_cube, depth_bg, measured_diff)
+                cv2.imshow("ROI with Sampled Points", dbg)
+                cv2.waitKey(1)
 
         # wait for close
         # if DEBUG_MODE:
@@ -177,10 +159,10 @@ def run_test(resolution, fps):
         log.i(f"Depth diff passed in {pass_count}/{NUM_FRAMES} frames")
         test.check(pass_count >= min_passes)
 
-        if test.test_failed and last_depth_roi is not None:
+        if test.test_failed and last_depth_frame:
             save_failure_snapshot(__file__, pipeline,
-                                 create_snapshot(last_depth_roi, cube_x, cube_y, bg_x, bg_y,
-                                                 last_depth_cube, last_depth_bg, last_measured_diff))
+                                 draw_debug(last_depth_frame, cube_x, cube_y, bg_x, bg_y,
+                                            last_depth_cube, last_depth_bg, last_measured_diff))
 
     except Exception as e:
         save_failure_snapshot(__file__, pipeline)
