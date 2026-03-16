@@ -73,24 +73,26 @@ def test_depth_laser_on(test_device):
 
         pipeline = rs.pipeline(ctx)
         pipeline.start(cfg)
-        pipeline.wait_for_frames()
-        time.sleep(2)
+        try:
+            pipeline.wait_for_frames()
+            time.sleep(2)
 
-        # Enable laser
-        sensor = pipeline.get_active_profile().get_device().first_depth_sensor()
-        if sensor.supports(rs.option.laser_power):
-            sensor.set_option(rs.option.laser_power, sensor.get_option_range(rs.option.laser_power).max)
-        sensor.set_option(rs.option.emitter_enabled, 1)
+            # Enable laser
+            sensor = pipeline.get_active_profile().get_device().first_depth_sensor()
+            if sensor.supports(rs.option.laser_power):
+                sensor.set_option(rs.option.laser_power, sensor.get_option_range(rs.option.laser_power).max)
+            sensor.set_option(rs.option.emitter_enabled, 1)
 
-        log.info(f"Testing depth frame - laser ON - {product_name}")
+            log.info(f"Testing depth frame - laser ON - {product_name}")
 
-        has_depth = False
-        for frame_num in range(FRAMES_TO_CHECK):
-            has_depth, blank_pixels = is_depth_fill_rate_enough(pipeline)
-            if has_depth:
-                break
+            has_depth = False
+            for frame_num in range(FRAMES_TO_CHECK):
+                has_depth, blank_pixels = is_depth_fill_rate_enough(pipeline)
+                if has_depth:
+                    break
+        finally:
+            pipeline.stop()
 
-        pipeline.stop()
         assert has_depth, f"Depth fill rate too low on {product_name} after {FRAMES_TO_CHECK} frames"
     finally:
         tw.stop_wrapper(dev)

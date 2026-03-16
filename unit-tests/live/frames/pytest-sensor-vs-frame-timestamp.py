@@ -2,7 +2,7 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-Test that HW frame timestamp is right before sensor timestamp (delta > 0 and < frame time).
+Test that HW frame timestamp is right before sensor timestamp (delta >= 0 and < frame time).
 Verifies for both depth and color sensors with global time disabled (HW domain).
 """
 
