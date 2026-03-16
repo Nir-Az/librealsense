@@ -62,38 +62,47 @@ with test.closure("Restore Depth original time domain"):
 #############################################################################################
 
 
-color_sensor = dev.first_color_sensor()
-is_global_time_enabled_orig = False
-fps = 30
-has_at_least_one_frame_arrived = False
+product_name = dev.get_info(rs.camera_info.name)
+color_sensor = None
+try:
+    color_sensor = dev.first_color_sensor()
+except RuntimeError as rte:
+    if 'D421' not in product_name and 'D405' not in product_name and 'D401' not in product_name: # Cameras with no color sensor may fail.
+        test.unexpected_exception()
 
-##################### COLOR SENSOR ##########################################################
-#############################################################################################
-with test.closure("Set Color stream time domain to HW"):
-    is_global_time_enabled_orig = color_sensor.get_option(rs.option.global_time_enabled)
-    if is_global_time_enabled_orig:
-        color_sensor.set_option(rs.option.global_time_enabled, 0)
-    test.check_equal(int(color_sensor.get_option(rs.option.global_time_enabled)), 0)
+if color_sensor:
+    is_global_time_enabled_orig = False
+    fps = 30
+    has_at_least_one_frame_arrived = False
 
-#############################################################################################
-with test.closure("Get Color frame timestamp and compare it to sensor timestamp"):
-    color_profile = next(p for p in
-                         color_sensor.profiles if p.fps() == fps
-                         and p.stream_type() == rs.stream.color
-                         and p.format() == rs.format.rgb8
-                         and p.as_video_stream_profile().width() == 1280
-                         and p.as_video_stream_profile().height() == 720)
+    ##################### COLOR SENSOR ##########################################################
+    #############################################################################################
+    with test.closure("Set Color stream time domain to HW"):
+        is_global_time_enabled_orig = color_sensor.get_option(rs.option.global_time_enabled)
+        if is_global_time_enabled_orig:
+            color_sensor.set_option(rs.option.global_time_enabled, 0)
+        test.check_equal(int(color_sensor.get_option(rs.option.global_time_enabled)), 0)
 
-    color_sensor.open(color_profile)
-    color_sensor.start(check_hw_ts_right_before_sensor_ts)
-    time.sleep(1)
-    test.check(has_at_least_one_frame_arrived)
-    color_sensor.stop()
-    color_sensor.close()
+    #############################################################################################
+    with test.closure("Get Color frame timestamp and compare it to sensor timestamp"):
+        color_profile = next(p for p in
+                             color_sensor.profiles if p.fps() == fps
+                             and p.stream_type() == rs.stream.color
+                             and p.format() == rs.format.rgb8
+                             and p.as_video_stream_profile().width() == 1280
+                             and p.as_video_stream_profile().height() == 720)
 
-#############################################################################################
-with test.closure("Restore Color original time domain"):
-    if is_global_time_enabled_orig:
-        color_sensor.set_option(rs.option.global_time_enabled, 1)
-    test.check_equal(int(color_sensor.get_option(rs.option.global_time_enabled)), 1)
+        color_sensor.open(color_profile)
+        color_sensor.start(check_hw_ts_right_before_sensor_ts)
+        time.sleep(1)
+        test.check(has_at_least_one_frame_arrived)
+        color_sensor.stop()
+        color_sensor.close()
+
+    #############################################################################################
+    with test.closure("Restore Color original time domain"):
+        if is_global_time_enabled_orig:
+            color_sensor.set_option(rs.option.global_time_enabled, 1)
+        test.check_equal(int(color_sensor.get_option(rs.option.global_time_enabled)), 1)
+
 test.print_results_and_exit()

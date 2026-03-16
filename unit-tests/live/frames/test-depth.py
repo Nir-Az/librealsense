@@ -151,7 +151,8 @@ test.start("Testing depth frame - laser ON -", dev.get_info(rs.camera_info.name)
 sensor = pipeline_profile.get_device().first_depth_sensor()
 if sensor.supports(rs.option.laser_power):
     sensor.set_option(rs.option.laser_power, sensor.get_option_range(rs.option.laser_power).max)
-sensor.set_option(rs.option.emitter_enabled, 1)  # should be set to 0 for laser off
+if sensor.supports(rs.option.emitter_enabled):
+    sensor.set_option(rs.option.emitter_enabled, 1)  # should be set to 0 for laser off
 
 has_depth = False
 

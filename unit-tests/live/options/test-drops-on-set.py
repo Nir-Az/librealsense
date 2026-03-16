@@ -21,7 +21,7 @@ color_sensor = None
 try:
     color_sensor = dev.first_color_sensor()
 except RuntimeError as rte:
-    if 'D421' not in product_name and 'D405' not in product_name: # Cameras with no color sensor may fail.
+    if 'D421' not in product_name and 'D405' not in product_name and 'D401' not in product_name: # Cameras with no color sensor may fail.
         test.unexpected_exception()
 
 previous_depth_frame_number = -1
@@ -82,15 +82,16 @@ if color_sensor:
 
 test.start("Checking for frame drops when setting laser power several times")
 
-curr_value = depth_sensor.get_option(rs.option.laser_power)
-opt_range = depth_sensor.get_option_range(rs.option.laser_power)
+if depth_sensor.supports(rs.option.laser_power):
+    curr_value = depth_sensor.get_option(rs.option.laser_power)
+    opt_range = depth_sensor.get_option_range(rs.option.laser_power)
 
-new_value = opt_range.min
-while new_value <= opt_range.max:   
-   set_new_value(depth_sensor, rs.option.laser_power, new_value)
-   new_value += opt_range.step
+    new_value = opt_range.min
+    while new_value <= opt_range.max:
+       set_new_value(depth_sensor, rs.option.laser_power, new_value)
+       new_value += opt_range.step
 
-set_new_value(depth_sensor, rs.option.laser_power, curr_value) # Restore
+    set_new_value(depth_sensor, rs.option.laser_power, curr_value) # Restore
 
 test.finish()
 

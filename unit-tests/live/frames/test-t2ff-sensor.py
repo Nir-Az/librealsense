@@ -98,7 +98,7 @@ cs = None
 try:
     cs = dev.first_color_sensor()
 except RuntimeError as rte:
-    if 'D421' not in product_name and 'D405' not in product_name: # Cameras with no color sensor may fail.
+    if 'D421' not in product_name and 'D405' not in product_name and 'D401' not in product_name: # Cameras with no color sensor may fail.
         test.unexpected_exception()
 
 if cs:
