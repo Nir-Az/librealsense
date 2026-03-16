@@ -195,7 +195,7 @@ namespace rs2
         // Ensure progress is fully complete before marking as done
         _progress = 100.f;
 
-        // Mark as done after hardware reset completes
+        // Mark as done after sending hardware reset command
         _done = true;
     }
 
