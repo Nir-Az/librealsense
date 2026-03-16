@@ -12,7 +12,6 @@ def filter_and_sort_items(config, items):
     Called from the pytest_collection_modifyitems hook.
     """
     markexpr = config.getoption("-m", default="")
-    # TODO: move to native pytest flags after migration from old infra
     context = config.getoption("--context", default="").split()
 
     # Generic context gating: tests marked with @pytest.mark.context("X") are skipped
