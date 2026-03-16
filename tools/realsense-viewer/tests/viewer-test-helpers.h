@@ -13,6 +13,9 @@
 #include <string>
 
 
+// Thrown by helpers that need to abort the current test
+struct test_exit {};
+
 // ---------------------------------------------------------------------------
 // viewer_test — wraps helpers as methods for cleaner test bodies
 // ---------------------------------------------------------------------------
@@ -73,21 +76,31 @@ public:
     rs2::device_models_list & device_models;
     rs2::viewer_model &       viewer_model;
 
-    // Open a sensor's collapsible panel, optionally expanding the controls section too
-    void expand_sensor_panel( std::shared_ptr< rs2::subdevice_model > sub,
-                              rs2::device_model & model,
-                              bool open_controls = false );
-    // Close a sensor's collapsible panel, optionally collapsing the controls section first
-    void collapse_sensor_panel( std::shared_ptr< rs2::subdevice_model > sub,
-                                rs2::device_model & model,
-                                bool close_controls = false );
+    // Return the first connected device; throws if none found
+    rs2::device_model & find_first_device_or_exit();
 
-    // Start streaming on a sensor by clicking its toggle button; throws if already streaming
-    void click_stream_toggle_on( std::shared_ptr< rs2::subdevice_model > sub,
-                          rs2::device_model & model );
-    // Stop streaming on a sensor by clicking its toggle button; throws if already stopped
-    void click_stream_toggle_off( std::shared_ptr< rs2::subdevice_model > sub,
-                           rs2::device_model & model );
+    // Open a sensor's collapsible panel
+    void expand_sensor_panel( rs2::device_model & model,
+                              std::shared_ptr< rs2::subdevice_model > sub );
+    // Close a sensor's collapsible panel
+    void collapse_sensor_panel( rs2::device_model & model,
+                                std::shared_ptr< rs2::subdevice_model > sub );
+    // Open a sensor's controls section
+    void expand_controls( rs2::device_model & model,
+                          std::shared_ptr< rs2::subdevice_model > sub );
+    // Close a sensor's controls section
+    void collapse_controls( rs2::device_model & model,
+                            std::shared_ptr< rs2::subdevice_model > sub );
+
+    // Start streaming on a sensor; throws if already streaming
+    void click_stream_toggle_on( rs2::device_model & model,
+                                 std::shared_ptr< rs2::subdevice_model > sub );
+    // Stop streaming on a sensor; throws if already stopped
+    void click_stream_toggle_off( rs2::device_model & model,
+                                  std::shared_ptr< rs2::subdevice_model > sub );
+
+    // Wait real wall-clock time (not skipped in --auto mode)
+    void sleep( float seconds ) { imgui->SleepNoSkip( seconds, 1.0f ); }
 
     // Poll a condition up to max_attempts times, sleeping interval seconds between checks
     template< typename Pred >
@@ -99,24 +112,30 @@ public:
     }
 
     // Open a device's hamburger menu and click the named item
-    void click_device_menu_item( rs2::device_model & model, const char * item );
+    void click_device_menu_item( rs2::device_model & model, const std::string & item );
 
-    // Type a numeric value into a slider option's edit field
-    void set_option_value( std::shared_ptr< rs2::subdevice_model > sub,
-                           rs2::device_model & model,
-                           rs2_option option, const char * value );
-    // Click a checkbox option to flip its state
-    void toggle_option( std::shared_ptr< rs2::subdevice_model > sub,
-                        rs2::device_model & model,
-                        rs2_option option );
-    // Query whether a checkbox option is currently checked
-    bool is_option_checked( std::shared_ptr< rs2::subdevice_model > sub,
-                            rs2::device_model & model,
-                            rs2_option option );
-    // Open a combo dropdown and select the named item
-    void select_combo_item( std::shared_ptr< rs2::subdevice_model > sub,
-                            rs2::device_model & model,
-                            const char * combo_label, const char * item );
+    // Set a control option via the UI, auto-detecting the control type (slider, checkbox, or enum)
+    void set_control_value( rs2::device_model & model,
+                            std::shared_ptr< rs2::subdevice_model > sub,
+                            rs2_option option, const std::string & value );
+    // Read the current value of a control option as a string
+    std::string get_control_value( rs2::device_model & model,
+                                   std::shared_ptr< rs2::subdevice_model > sub,
+                                   rs2_option option );
+
+    // Open a combo dropdown by ID and select the named item
+    void select_combo_item( ImGuiID combo_id, const std::string & item );
+    // Select a resolution from the sensor's resolution combo box
+    void select_resolution( rs2::device_model & model,
+                            std::shared_ptr< rs2::subdevice_model > sub,
+                            const std::string & resolution );
+    // Select an FPS value from the sensor's shared FPS combo box
+    void select_fps( rs2::device_model & model,
+                     std::shared_ptr< rs2::subdevice_model > sub,
+                     const std::string & fps );
+
+    // Check if a sensor has a writable option
+    bool has_option( std::shared_ptr< rs2::subdevice_model > sub, rs2_option option );
 
     // Wait until all active streams are receiving frames
     bool all_streams_alive( int max_attempts = 30, float interval = 0.5f );
@@ -125,12 +144,12 @@ public:
     // Internal helpers — build ImGui labels and ID seeds for the control panel
     // -----------------------------------------------------------------------
 private:
-    std::string sensor_label( std::shared_ptr< rs2::subdevice_model > sub,
-                               rs2::device_model & model );
-    std::string controls_label( std::shared_ptr< rs2::subdevice_model > sub,
-                                 rs2::device_model & model );
-    ImGuiID sensor_id_seed( std::shared_ptr< rs2::subdevice_model > sub,
-                             rs2::device_model & model );
-    ImGuiID controls_id_seed( std::shared_ptr< rs2::subdevice_model > sub,
-                               rs2::device_model & model );
+    std::string sensor_label( rs2::device_model & model,
+                              std::shared_ptr< rs2::subdevice_model > sub );
+    std::string controls_label( rs2::device_model & model,
+                                std::shared_ptr< rs2::subdevice_model > sub );
+    ImGuiID sensor_id_seed( rs2::device_model & model,
+                            std::shared_ptr< rs2::subdevice_model > sub );
+    ImGuiID controls_id_seed( rs2::device_model & model,
+                              std::shared_ptr< rs2::subdevice_model > sub );
 };

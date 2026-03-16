@@ -2,7 +2,6 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "viewer-test-helpers.h"
-#include "imgui_te_context.h"
 
 
 // Check that the viewer's device list is non-empty, i.e. at least one camera is connected and visible on the viewer
@@ -15,9 +14,9 @@ VIEWER_TEST( "device", "device_detected" )
 // Reset the device via the UI menu and verify it disconnects and reconnects
 VIEWER_TEST( "device", "hardware_reset" )
 {
-    IM_CHECK( !test.device_models.empty() );
+    auto & model = test.find_first_device_or_exit();
 
-    test.click_device_menu_item( *test.device_models[0], "Hardware Reset" );
+    test.click_device_menu_item( model, "Hardware Reset" );
 
     // Disconnect can be brief — poll at 50ms to catch it; allow up to 10s
     IM_CHECK( test.wait_until( 200, 0.05f, [&] { return test.device_models.empty(); } ) );

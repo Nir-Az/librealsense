@@ -31,7 +31,8 @@ static void register_viewer_tests( ImGuiTestEngine *       engine,
         t->TestFunc = [fn, &device_models, &viewer_model]( ImGuiTestContext * ctx )
         {
             viewer_test vtc{ ctx, device_models, viewer_model };
-            fn( vtc );
+            try { fn( vtc ); }
+            catch( const test_exit & ) {}
         };
     }
 }

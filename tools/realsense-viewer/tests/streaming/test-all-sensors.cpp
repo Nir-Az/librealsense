@@ -2,25 +2,23 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "viewer-test-helpers.h"
-#include "imgui_te_context.h"
 
 
 // Start all sensors simultaneously and verify all streams are alive
 VIEWER_TEST( "streaming", "stream_all_sensors" )
 {
-    IM_CHECK( !test.device_models.empty() );
-    auto & model = *test.device_models[0];
+    auto & model = test.find_first_device_or_exit();
 
     for( auto && sub : model.subdevices )
-        test.click_stream_toggle_on( sub, model );
+        test.click_stream_toggle_on( model, sub );
 
-    test.imgui->SleepNoSkip( 1.0f, 0.5f );
+    test.sleep( 1.0f );
     IM_CHECK( test.all_streams_alive() );
 
-    test.imgui->SleepNoSkip( 2.0f, 1.0f );
+    test.sleep( 2.0f );
 
     for( auto && sub : model.subdevices )
-        test.click_stream_toggle_off( sub, model );
+        test.click_stream_toggle_off( model, sub );
 
     IM_CHECK( !model.is_streaming() );
 }
