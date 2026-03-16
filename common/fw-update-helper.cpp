@@ -175,8 +175,6 @@ namespace rs2
             if (next < steps.size() && _progress >= steps[next].first)
             {
                 log(steps[next].second);
-                if (steps[next].first >= 100.f)
-                    _done = true;
                 ++next;
             }
         });
@@ -193,6 +191,9 @@ namespace rs2
 
         // Restart the device to reconstruct with the new version information
         _dev.hardware_reset();
+
+        // Mark as done after hardware reset completes
+        _done = true;
     }
 
     void firmware_update_manager::backup_firmware(updatable& upd, int& next_progress, const std::string& serial)
