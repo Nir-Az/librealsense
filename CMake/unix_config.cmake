@@ -27,9 +27,11 @@ macro(os_set_flags)
             set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -mfpu=neon -mfloat-abi=hard -ftree-vectorize -latomic")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -mfloat-abi=hard -ftree-vectorize -latomic")
         else()
-            # Keep float-abi consistent to avoid ABI incompatibilities; use VFPv3 without NEON
-            set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -mfpu=vfpv3-d16 -mfloat-abi=hard -ftree-vectorize -latomic")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=vfpv3-d16 -mfloat-abi=hard -ftree-vectorize -latomic")
+            # When NEON is disabled, use compiler defaults for FPU to ensure compatibility
+            # Most ARM toolchains will select appropriate FPU settings for the target
+            message(STATUS "Building for ARM without NEON - using compiler default FPU settings")
+            set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -ftree-vectorize -latomic")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftree-vectorize -latomic")
         endif()
     elseif(${MACHINE} MATCHES "powerpc64(le)?-linux-gnu")
         set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -ftree-vectorize")
