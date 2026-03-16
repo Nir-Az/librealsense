@@ -192,6 +192,9 @@ namespace rs2
         // Restart the device to reconstruct with the new version information
         _dev.hardware_reset();
 
+        // Ensure progress is fully complete before marking as done
+        _progress = 100.f;
+
         // Mark as done after hardware reset completes
         _done = true;
     }
