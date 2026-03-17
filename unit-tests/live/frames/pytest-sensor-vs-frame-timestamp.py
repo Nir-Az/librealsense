@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device("D400*"),
+    pytest.mark.device_exclude("D401"),
     pytest.mark.live
 ]
 
