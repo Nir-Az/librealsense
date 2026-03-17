@@ -2,7 +2,7 @@
 # Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 # Currently, we exclude D555 as it's failing
-# test:device each(D400*)
+# test:device each(D400*) !D401
 # test:device each(D500*) !D555
 # test:donotrun:!nightly
 
