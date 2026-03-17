@@ -6,7 +6,7 @@
 #include "uvc-device-info.h"
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
-
+#include <fstream>
 
 namespace librealsense {
 namespace platform {
@@ -143,7 +143,6 @@ std::vector< uvc_device_info > filter_by_mi( const std::vector< uvc_device_info 
 }
 
 #ifdef __linux__
-#include <fstream>
 
 std::string get_jetson_driver_version()
 {
