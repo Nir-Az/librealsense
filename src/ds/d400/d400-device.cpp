@@ -1001,6 +1001,15 @@ namespace librealsense
         else
             register_info(RS2_CAMERA_INFO_CONNECTION_TYPE, "GMSL");
 
+        // Register MIPI driver version for Jetson platform
+        auto uvc_dev = raw_depth_sensor->get_uvc_device();
+        if (uvc_dev && uvc_dev->is_platform_jetson())
+        {
+            std::string driver_version = platform::get_jetson_driver_version();
+            if (!driver_version.empty())
+                register_info(RS2_CAMERA_INFO_MIPI_DRIVER_VERSION, driver_version);
+        }
+
         std::string curr_version= _fw_version;
 
         register_features();

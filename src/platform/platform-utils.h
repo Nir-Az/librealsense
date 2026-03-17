@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <set>
+#include <string>
 #include <cstdint>
 
 
@@ -34,6 +35,9 @@ std::vector< uvc_device_info > filter_by_mi( const std::vector< uvc_device_info 
 std::vector< usb_device_info > filter_by_product( const std::vector< usb_device_info > & devices,
                                                   const std::set< uint16_t > & pid_list );
 void trim_device_list( std::vector< usb_device_info > & devices, const std::vector< usb_device_info > & chosen );
+
+// Get driver version on Jetson platform by querying modinfo
+std::string get_jetson_driver_version();
 
 
 }  // namespace platform
