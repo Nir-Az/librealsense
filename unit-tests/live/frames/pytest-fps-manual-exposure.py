@@ -18,7 +18,6 @@ pytestmark = [
     pytest.mark.device_each("D500*"),
     pytest.mark.device_exclude("D555"),
     pytest.mark.skip(reason="Test disabled (donotrun)"),
-    pytest.mark.live
 ]
 
 TESTED_FPS =          [5,   6,   15,  30,  60,  90]

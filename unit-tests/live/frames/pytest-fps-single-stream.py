@@ -19,7 +19,6 @@ pytestmark = [
     pytest.mark.device_exclude("D555"),
     pytest.mark.device_exclude("D401"),
     pytest.mark.context("nightly"),
-    pytest.mark.live
 ]
 
 TESTED_FPS =          [5,  6,  15, 30, 60, 90]

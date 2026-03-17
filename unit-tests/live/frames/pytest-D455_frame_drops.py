@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device("D455"),
     pytest.mark.skip(reason="Test disabled (donotrun)"),
-    pytest.mark.live
 ]
 
 ITERATIONS = 60

@@ -20,7 +20,6 @@ import platform
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
-    pytest.mark.live
 ]
 
 
