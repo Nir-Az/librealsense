@@ -143,31 +143,23 @@ std::vector< uvc_device_info > filter_by_mi( const std::vector< uvc_device_info 
 }
 
 #ifdef __linux__
-#include <cstdio>
-#include <array>
+#include <fstream>
 
 std::string get_jetson_driver_version()
 {
-    // Cache the result to avoid running modinfo command multiple times
+    // Cache the result to avoid reading the file multiple times
     static bool queried = false;
     static std::string cached_version;
     
     if (queried)
         return cached_version;
     
-    // Execute modinfo command and parse first version line
-    FILE* pipe = popen("modinfo d4xx 2>/dev/null | grep -m1 '^version:' | awk '{print $2}'", "r");
-    if (pipe)
+    // Read driver version from sysfs
+    std::ifstream version_file("/sys/module/d4xx/version");
+    if (version_file.is_open())
     {
-        std::array<char, 128> buffer;
-        if (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
-        {
-            cached_version = buffer.data();
-            // Remove trailing newline
-            if (!cached_version.empty() && cached_version.back() == '\n')
-                cached_version.pop_back();
-        }
-        pclose(pipe);
+        std::getline(version_file, cached_version);
+        version_file.close();
     }
     
     queried = true;

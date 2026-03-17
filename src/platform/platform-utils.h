@@ -36,7 +36,7 @@ std::vector< usb_device_info > filter_by_product( const std::vector< usb_device_
                                                   const std::set< uint16_t > & pid_list );
 void trim_device_list( std::vector< usb_device_info > & devices, const std::vector< usb_device_info > & chosen );
 
-// Get MIPI driver version on Jetson platform by querying modinfo
+// Get MIPI driver version on Jetson platform
 // (cached after first call)
 std::string get_jetson_driver_version();
 
