@@ -148,24 +148,30 @@ std::vector< uvc_device_info > filter_by_mi( const std::vector< uvc_device_info 
 
 std::string get_jetson_driver_version()
 {
-    std::string version;
+    // Cache the result to avoid running modinfo command multiple times
+    static bool queried = false;
+    static std::string cached_version;
+    
+    if (queried)
+        return cached_version;
     
     // Execute modinfo command and parse first version line
     FILE* pipe = popen("modinfo d4xx 2>/dev/null | grep -m1 '^version:' | awk '{print $2}'", "r");
-    if (!pipe)
-        return version;
-    
-    std::array<char, 128> buffer;
-    if (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+    if (pipe)
     {
-        version = buffer.data();
-        // Remove trailing newline
-        if (!version.empty() && version.back() == '\n')
-            version.pop_back();
+        std::array<char, 128> buffer;
+        if (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+        {
+            cached_version = buffer.data();
+            // Remove trailing newline
+            if (!cached_version.empty() && cached_version.back() == '\n')
+                cached_version.pop_back();
+        }
+        pclose(pipe);
     }
     
-    pclose(pipe);
-    return version;
+    queried = true;
+    return cached_version;
 }
 #else
 std::string get_jetson_driver_version()
