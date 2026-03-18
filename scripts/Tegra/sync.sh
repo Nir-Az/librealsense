@@ -59,10 +59,10 @@ LDK_DIR=$SCRIPT_DIR
 
 # Git server constants.
 # nv-tegra.nvidia.com is being deprecated by NVIDIA in favour of GitLab.
-# detect_git_server() probes both and selects whichever responds first.
+# detect_git_server() probes both in priority order and selects the first reachable server.
 NV_TEGRA_HOST="nv-tegra.nvidia.com"
-GITLAB_HOST="gitlab.com/nvidia/nv-tegra"
-GIT_SERVER="${NV_TEGRA_HOST}"
+GITLAB_BASE="gitlab.com/nvidia/nv-tegra"  # host + org path prefix, not just a hostname
+GIT_SERVER="${NV_TEGRA_HOST}"  # default; overwritten by detect_git_server()
 # info about sources.
 # NOTE: *Add only kernel repos here. Add new repos separately below. Keep related repos together*
 # NOTE: nvethrnetrm.git should be listed after "linux-nv-oot.git" due to nesting of sync path
@@ -146,7 +146,11 @@ function UpdateTags {
 }
 
 function detect_git_server {
-	local SERVERS=("${GITLAB_HOST}" "${NV_TEGRA_HOST}")
+	if ! which curl > /dev/null 2>&1; then
+		echo -e "\e[33mWarning: curl not found; skipping git server detection, defaulting to ${GIT_SERVER}\e[0m" >&2
+		return 0
+	fi
+	local SERVERS=("${GITLAB_BASE}" "${NV_TEGRA_HOST}")
 	local SERVER
 	echo "Detecting available git server…"
 	for SERVER in "${SERVERS[@]}"; do
@@ -159,8 +163,7 @@ function detect_git_server {
 			return 0
 		fi
 	done
-	echo -e "\e[31mERROR: Could not reach any git server. Check your network connection and try again.\e[0m" >&2
-	exit 1
+	echo -e "\e[33mWarning: Could not reach either git server; defaulting to ${GIT_SERVER}. Network operations may fail.\e[0m" >&2
 }
 
 function DownloadAndSync {
