@@ -52,6 +52,7 @@ macro(global_set_flags)
     endif()
 
     if (BUILD_WITH_CUDA)
+        message(STATUS "Building with CUDA")
         add_definitions(-DRS2_USE_CUDA)
     endif()
 
