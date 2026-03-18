@@ -289,7 +289,8 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
                 detected_sns.add(sn)
                 device = Device( sn, dev )
                 _device_by_sn[sn] = device
-                log.d( f'... port {device.port or "?"}: {sn} {dev}' )
+                port_str = f'port {device.port}: ' if device.port is not None else ''
+                log.d( f'...{port_str}{sn} {dev}' )
 
                 name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
                 d555_found = "D555" in name        
