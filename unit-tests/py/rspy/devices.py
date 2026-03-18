@@ -589,28 +589,28 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
             # Disable ports that are currently on before re-enabling.
             # When state is unknown (None), disable all (safe default).
             if _enabled_ports is None:
-                log.d( 'recycling virtual ports via hub:', list( wanted_ports ),
+                log.d( 'recycling virtual ports via hub:', sorted( wanted_ports ),
                        '(disabling all - first run)' )
                 enabled_devices = { sn for sn in enabled() if get( sn ).port is not None }
                 hub.disable_ports( )
                 _enabled_ports = set()
                 _wait_until_removed( enabled_devices, timeout = timeout )
             elif _enabled_ports:
-                log.d( 'enabling ports', list( wanted_ports ),
-                       'disabling previously enabled ports', list( _enabled_ports ) )
+                log.d( 'enabling ports', sorted( wanted_ports ),
+                       'disabling previously enabled ports', sorted( _enabled_ports ) )
                 sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
-                hub.disable_ports( list( _enabled_ports ) )
+                hub.disable_ports( sorted( _enabled_ports ) )
                 _enabled_ports = set()
                 _wait_until_removed( sns_to_remove, timeout = timeout )
             #
             if wanted_ports:
-                hub.enable_ports( list( wanted_ports ) )
+                hub.enable_ports( sorted( wanted_ports ) )
                 _enabled_ports = set( wanted_ports )
             #
         else:
             #
             if wanted_ports:
-                hub.enable_ports( list( wanted_ports ), disable_other_ports = True )
+                hub.enable_ports( sorted( wanted_ports ), disable_other_ports = True )
                 _enabled_ports = set( wanted_ports )
             else:
                 log.d( 'no hub ports to enable; leaving hub as-is' )
