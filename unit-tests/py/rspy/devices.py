@@ -581,14 +581,14 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
             #
             if hub_ports:
                 # Only recycle if there are actual hub devices to manage
-                log.d( 'recycling ports via hub:', ports )
+                log.d( 'recycling virtual ports via hub:', hub_ports )
                 #
-                # Only wait for removal of devices that are actually on hub ports (exclude DDS devices)
-                enabled_devices = { sn for sn in enabled() if get( sn ).port is not None }
-                hub.disable_ports( )
-                _wait_until_removed( enabled_devices, timeout = timeout )
+                # Only wait for removal of the devices we're recycling (not all hub devices)
+                recycled_sns = { sn for sn in serial_numbers if get( sn ).port is not None }
+                hub.disable_ports( hub_ports )
+                _wait_until_removed( recycled_sns, timeout = timeout )
                 #
-                hub.enable_ports( hub_ports )
+                hub.enable_ports( hub_ports, disable_other_ports = True )
             else:
                 log.d( 'no hub ports to recycle; leaving hub as-is' )
             #

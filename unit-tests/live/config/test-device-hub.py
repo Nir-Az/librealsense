@@ -4,8 +4,6 @@
 # test:donotrun:!nightly
 # test:device each(D400*)
 # test:device each(D500*)
-# wait_for_device can block. Timeout early in case of error.
-# test:timeout 60
 
 import time
 import pyrealsense2 as rs
@@ -53,11 +51,16 @@ while not caught_once and attempt <= MAX_TRIES:
 test.check(caught_once, f"Failed to observe a disconnect in {MAX_TRIES} hardware reset attempt(s)")
 test.finish()
 
-test.start("device_hub: wait for reconnection")
-# Exiting the test will cause hub to disconnect port. We saw problems on CI when disconnecting like this when device is powering down/up so we wait for it to finish reset.
-# (Unifi Hub stuck disconnecting port, D555 recovery OS -> domain set to 0)
-new_dev = hub.wait_for_device()
-test.check(new_dev is not None)
+# -------- Wait for device to come back after hardware reset --------
+# The last reset left the device disconnected; wait for it to re-enumerate so the
+# test framework doesn't try to power-cycle the port while the device is mid-reset.
+test.start("device_hub: wait for device to reconnect after reset")
+try:
+    reconnected_dev = hub.wait_for_device()
+    test.check(reconnected_dev is not None, "Device did not reconnect after hardware_reset")
+    test.check(hub.is_connected(reconnected_dev), "Reconnected device should be reported as connected")
+except:
+    test.unexpected_exception()
 test.finish()
 
 test.print_results_and_exit()
