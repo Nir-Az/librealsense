@@ -242,10 +242,13 @@ def pytest_runtest_protocol(item, nextitem):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Log test duration after each test call phase."""
+    """Log test duration and any failures/errors."""
     outcome = yield
     report = outcome.get_result()
 
+    if report.failed and call.excinfo:
+        ensure_newline()
+        log.error(f"{call.when} {report.outcome}: {call.excinfo.typename}: {call.excinfo.value}")
     if call.when == "call":
         ensure_newline()
         log.debug(f"Test execution took {report.duration:.3f}s")

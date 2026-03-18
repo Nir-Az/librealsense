@@ -37,8 +37,9 @@ sys.path.insert( 1, pyrs_dir )
 
 MAX_ENUMERATION_TIME = 20  # [sec]
 
-# Track which hub ports are currently enabled so we only send delta commands
-_enabled_ports = set()
+# Track which hub ports are currently enabled so we only send delta commands.
+# None means unknown state — first enable_only call will disable all (safe default).
+_enabled_ports = None
 
 # We need both pyrealsense2 and hub. We can work without hub, but
 # without pyrealsense2 no devices at all will be returned.
@@ -166,7 +167,7 @@ def map_unknown_ports():
     is there.
     """
     global _enabled_ports
-    _enabled_ports = set()  # after query + port mapping, all ports are off
+    _enabled_ports = None  # state is unknown after discovery; first enable_only will disable all
     if not hub:
         return
     global _device_by_sn
@@ -585,22 +586,26 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
         #
         if recycle:
             #
-            if wanted_ports or _enabled_ports:
-                # Disable only ports that are currently on — no need to send commands
-                # for ports that are already off
-                if _enabled_ports:
-                    log.d( 'recycling virtual ports via hub:', list( wanted_ports ),
-                           '(disabling', list( _enabled_ports ), ')' )
-                    sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
-                    hub.disable_ports( list( _enabled_ports ) )
-                    _enabled_ports = set()
-                    _wait_until_removed( sns_to_remove, timeout = timeout )
-                # Enable the wanted ports
-                if wanted_ports:
-                    hub.enable_ports( list( wanted_ports ) )
-                    _enabled_ports = set( wanted_ports )
-            else:
-                log.d( 'no hub ports to recycle; leaving hub as-is' )
+            # Disable ports that are currently on before re-enabling.
+            # When state is unknown (None), disable all (safe default).
+            if _enabled_ports is None:
+                log.d( 'recycling virtual ports via hub:', list( wanted_ports ),
+                       '(disabling all - first run)' )
+                enabled_devices = { sn for sn in enabled() if get( sn ).port is not None }
+                hub.disable_ports( )
+                _enabled_ports = set()
+                _wait_until_removed( enabled_devices, timeout = timeout )
+            elif _enabled_ports:
+                log.d( 'recycling virtual ports via hub:', list( wanted_ports ),
+                       '(disabling', list( _enabled_ports ), ')' )
+                sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
+                hub.disable_ports( list( _enabled_ports ) )
+                _enabled_ports = set()
+                _wait_until_removed( sns_to_remove, timeout = timeout )
+            #
+            if wanted_ports:
+                hub.enable_ports( list( wanted_ports ) )
+                _enabled_ports = set( wanted_ports )
             #
         else:
             #
