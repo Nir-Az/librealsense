@@ -249,8 +249,7 @@ def pytest_runtest_makereport(item, call):
     if report.skipped:
         ensure_newline()
         reason = report.longrepr[-1] if isinstance(report.longrepr, tuple) else str(report.longrepr)
-        reason = reason.removeprefix("Skipped: ")
-        log.info(f"SKIPPED: {reason}")
+        log.info(reason)
     if report.failed and call.excinfo:
         ensure_newline()
         log.error(f"{call.when} {report.outcome}: {call.excinfo.typename}: {call.excinfo.value}")
