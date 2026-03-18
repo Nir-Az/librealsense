@@ -276,26 +276,27 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
 
     d555_found = False
     try:
-        devices = _context.query_devices()
-        for dev in devices:
-            try:
-                sn = dev.get_info( rs.camera_info.firmware_update_id )
-            except RuntimeError as e:
-                log.e( f'Found device but trying to get fw-update-id failed: {e}' )
-                continue
-
-            if sn not in detected_sns:
-                # New device detected
-                detected_sns.add(sn)
-                device = Device( sn, dev )
-                _device_by_sn[sn] = device
-                port_str = f'port {device.port}: ' if device.port is not None else ''
-                log.d( f'...{port_str}{sn} {dev}' )
-
-                name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
-                d555_found = "D555" in name        
+        devices = list( _context.query_devices() )
     except RuntimeError as e:
-        log.d( 'FAILED to query devices:', e )
+        log.e( f'FAILED to query devices: {e}' )
+        devices = []
+    for dev in devices:
+        try:
+            sn = dev.get_info( rs.camera_info.firmware_update_id )
+        except RuntimeError as e:
+            log.e( f'Found device but trying to get fw-update-id failed: {e}' )
+            continue
+
+        if sn not in detected_sns:
+            # New device detected
+            detected_sns.add(sn)
+            device = Device( sn, dev )
+            _device_by_sn[sn] = device
+            port_str = f'port {device.port}: ' if device.port is not None else ''
+            log.d( f'...{port_str}{sn} {dev}' )
+
+            name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
+            d555_found = "D555" in name
 
     if hub and not d555_found:
         # All CI machines with a D555 connected have a hub. Detect camera even in case domain have reset to 0 so applicable tests will run.
