@@ -596,8 +596,8 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
                 _enabled_ports = set()
                 _wait_until_removed( enabled_devices, timeout = timeout )
             elif _enabled_ports:
-                log.d( 'recycling virtual ports via hub:', list( wanted_ports ),
-                       '(disabling', list( _enabled_ports ), ')' )
+                log.d( 'enabling ports', list( wanted_ports ),
+                       'disabling previously enabled ports', list( _enabled_ports ) )
                 sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
                 hub.disable_ports( list( _enabled_ports ) )
                 _enabled_ports = set()
