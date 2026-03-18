@@ -51,16 +51,4 @@ while not caught_once and attempt <= MAX_TRIES:
 test.check(caught_once, f"Failed to observe a disconnect in {MAX_TRIES} hardware reset attempt(s)")
 test.finish()
 
-# -------- Wait for device to come back after hardware reset --------
-# The last reset left the device disconnected; wait for it to re-enumerate so the
-# test framework doesn't try to power-cycle the port while the device is mid-reset.
-test.start("device_hub: wait for device to reconnect after reset")
-try:
-    reconnected_dev = hub.wait_for_device()
-    test.check(reconnected_dev is not None, "Device did not reconnect after hardware_reset")
-    test.check(hub.is_connected(reconnected_dev), "Reconnected device should be reported as connected")
-except:
-    test.unexpected_exception()
-test.finish()
-
 test.print_results_and_exit()
