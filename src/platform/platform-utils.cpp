@@ -6,6 +6,7 @@
 #include "uvc-device-info.h"
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
+#include <rsutils/version.h>
 #include <fstream>
 
 namespace librealsense {
@@ -148,21 +149,25 @@ std::string get_jetson_driver_version()
 {
     // Cache the result to avoid reading the file multiple times
     static bool queried = false;
-    static std::string cached_version;
+    static rsutils::version cached_version;
     
     if (queried)
-        return cached_version;
+        return cached_version.is_valid() ? cached_version.to_string() : std::string();
     
     // Read driver version from sysfs
     std::ifstream version_file("/sys/module/d4xx/version");
     if (version_file.is_open())
     {
-        std::getline(version_file, cached_version);
+        std::string version_str;
+        std::getline(version_file, version_str);
         version_file.close();
+        
+        if (!version_str.empty())
+            cached_version = rsutils::version(version_str);
     }
     
     queried = true;
-    return cached_version;
+    return cached_version.is_valid() ? cached_version.to_string() : std::string();
 }
 #else
 std::string get_jetson_driver_version()
