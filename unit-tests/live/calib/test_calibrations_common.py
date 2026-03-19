@@ -129,8 +129,10 @@ def measure_average_depth(config, pipe, width=640, height=480, fps=30, frames=10
     Valid depth pixels are > 0 (raw units). Invalid (<=0) are ignored.
 
     Args:
-        ctx (rs.context|None): Optional existing context; created if None.
-        width, height, fps (int): Stream configuration for depth.
+        config (rs.config): Configuration associated with the depth stream used by ``pipe``.
+        pipe (rs.pipeline): Pipeline providing depth frames; expected to be configured/started elsewhere.
+        width, height, fps (int): Optional depth stream parameters, expected to match the active stream.
+        These parameters are not used by this function to configure the stream.
         frames (int): Maximum number of frames to sample.
         timeout_s (float): Overall timeout for the sampling loop.
         enable_emitter (bool): Attempt to enable emitter for more reliable data.

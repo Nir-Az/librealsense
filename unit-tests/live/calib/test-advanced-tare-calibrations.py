@@ -1,6 +1,9 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
                                                           ##
+#test:device each(D400*)
+#test:donotrun
+
 import sys
 import time
 import pyrealsense2 as rs
@@ -17,8 +20,6 @@ from test_calibrations_common import (
     measure_average_depth,
     is_d555
 )
-
-#test:donotrun
 def tare_calibration_json(tare_json_file, host_assistance):
     tare_json = None
     if tare_json_file is not None:
@@ -60,7 +61,7 @@ def calculate_target_z():
 
     def cb(frame):
         nonlocal counter, warmup_counter
-        if counter > number_of_images:
+        if counter >= number_of_images:
             return
         for f in frame.as_frameset():
             if warmup_counter < warmup_frames:
@@ -267,7 +268,7 @@ if not is_mipi_device() and not is_d555():
             test.fail()
         finally:
             if calib_dev is not None:
-                log.i("Restoring calibration table after test failure")                
+                log.i("Restoring calibration table after test failure")
                 restore_calibration_table(calib_dev, None)
 
 """
