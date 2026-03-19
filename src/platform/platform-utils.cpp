@@ -7,6 +7,7 @@
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
 #include <rsutils/version.h>
+#include <rsutils/easylogging/easyloggingpp.h>
 #include <fstream>
 
 namespace librealsense {
@@ -163,7 +164,10 @@ std::string get_jetson_driver_version()
         version_file.close();
         
         if (!version_str.empty())
+        {
             cached_version = rsutils::version(version_str);
+            LOG_DEBUG("MIPI driver version detected: " << cached_version.to_string());
+        }
     }
     
     queried = true;
