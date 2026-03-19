@@ -232,7 +232,9 @@ if version_lt "$PATCHES_REV" "6.0"; then # for JetPack 4-5
 else
 	echo -e "\e[32mCompiling hid support, accelerometer and gyro modules\e[0m"
 	make -j$(($(nproc)-1)) M=drivers/hid modules
-	KBUILD_EXTRA_SYMBOLS+=" drivers/hid/Module.symvers"
+	if [[ -n ${KBUILD_EXTRA_SYMBOLS} ]]; then
+		grep -w drivers/hid ${KBUILD_EXTRA_SYMBOLS} || KBUILD_EXTRA_SYMBOLS+=" drivers/hid/Module.symvers"
+	fi
 	make -j$(($(nproc)-1)) M=drivers/iio modules
 fi
 if [[ "$PATCHES_REV" = "4.4" ]]; then # for JetPack 4.4 only
