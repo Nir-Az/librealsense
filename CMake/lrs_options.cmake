@@ -43,11 +43,9 @@ else()
     option(CHECK_FOR_UPDATES "Checks for versions updates" OFF) 
 endif()
 option(BUILD_WITH_CPU_EXTENSIONS "Enable compiler optimizations using CPU extensions (such as AVX)" ON)
-# Enable NEON by default only on ARM platforms
+# Enable NEON option only on ARM platforms
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm.*|ARM.*|aarch64.*|AARCH64.*)")
     option(BUILD_WITH_NEON "Enable ARM NEON optimizations when available" ON)
-else()
-    option(BUILD_WITH_NEON "Enable ARM NEON optimizations when available" OFF)
 endif()
 set(UNIT_TESTS_ARGS "" CACHE STRING "Command-line arguments to pass to unit-tests-config.py, e.g. '-t <tag> -r <regex>'")
 #Performance improvement with Ubuntu 18/20
