@@ -283,7 +283,13 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
                 detected_sns.add(sn)
                 device = Device( sn, dev )
                 _device_by_sn[sn] = device
-                log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, 'detected and added to devices list' )
+                
+                log_msg_parts = ['... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, 'detected and added to devices list']
+                if device.connection_type == "GMSL" and dev.supports(rs.camera_info.mipi_driver_version):
+                    driver_version = dev.get_info(rs.camera_info.mipi_driver_version)
+                    if driver_version:
+                        log_msg_parts.append(f'(MIPI driver: {driver_version})')
+                log.d(*log_msg_parts)
 
                 name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
                 d555_found = "D555" in name        
