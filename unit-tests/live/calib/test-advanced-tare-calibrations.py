@@ -2,6 +2,7 @@
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
                                                           ##
 #test:device each(D400*)
+#test:device each(D500*)
 #test:donotrun
 
 import sys
