@@ -37,8 +37,8 @@ sys.path.insert( 1, pyrs_dir )
 
 MAX_ENUMERATION_TIME = 20  # [sec]
 
-# Track which hub ports are currently enabled so we only send delta commands.
-# None means unknown state — first enable_only call will disable all (safe default).
+# Cache of hub ports we've enabled — avoids querying the hub each time.
+# Initialized from hub.ports() on first use; kept in sync by enable_only().
 _enabled_ports = None
 
 # We need both pyrealsense2 and hub. We can work without hub, but
@@ -166,8 +166,6 @@ def map_unknown_ports():
     Fill in unknown ports in devices by enabling one port at a time, finding out which device
     is there.
     """
-    global _enabled_ports
-    _enabled_ports = None  # state is unknown after discovery; first enable_only will disable all
     if not hub:
         return
     global _device_by_sn
@@ -586,23 +584,17 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
         # DDS (and other non-hub) devices have port=None; filter them out of hub operations
         wanted_ports = set( p for p in ports if p is not None )
         #
+        # Initialize cache from hub on first call (single query, then cached)
+        if _enabled_ports is None:
+            _enabled_ports = set( hub.ports() )
+        #
         if recycle:
             #
             if not wanted_ports and not _enabled_ports:
                 log.d( 'no hub ports to recycle; leaving hub as-is' )
-            #
-            # Disable ports that are currently on before re-enabling.
-            # When state is unknown (None), disable all (safe default).
-            elif _enabled_ports is None:
-                log.d( 'recycling virtual ports via hub:', sorted( wanted_ports ),
-                       '(disabling all - first run)' )
-                enabled_devices = { sn for sn in enabled() if get( sn ).port is not None }
-                hub.disable_ports( )
-                _enabled_ports = set()
-                _wait_until_removed( enabled_devices, timeout = timeout )
             elif _enabled_ports:
                 log.d( 'enabling ports', sorted( wanted_ports ),
-                       'disabling previously enabled ports', sorted( _enabled_ports ) )
+                       'disabling currently enabled ports', sorted( _enabled_ports ) )
                 sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
                 hub.disable_ports( sorted( _enabled_ports ) )
                 _enabled_ports = set()
