@@ -5,14 +5,32 @@
 #test:device D400*
 
 from rspy import log, repo, test, config_file
+import subprocess, platform
 import time
 
+
+def kill_all_dds_adapters():
+    """Kill any leftover rs-dds-adapter processes (e.g. from a previous crashed test run)"""
+    try:
+        if platform.system() == 'Windows':
+            subprocess.run( ['taskkill', '/F', '/IM', 'rs-dds-adapter.exe'],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL )
+        else:
+            subprocess.run( ['pkill', '-9', '-f', 'rs-dds-adapter'],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL )
+    except Exception:
+        pass
+
+
 adapter_process = None
+
+with test.closure( 'Kill leftover rs-dds-adapter processes' ):
+    kill_all_dds_adapters()
+    time.sleep( 0.5 )  # let the OS release resources
 
 with test.closure( 'Run rs-dds-adapter', on_fail=test.ABORT ):
     adapter_path = repo.find_built_exe( 'tools/dds/dds-adapter', 'rs-dds-adapter' )
     if test.check( adapter_path ):
-        import subprocess, signal
         cmd = [adapter_path, '--domain-id', str(config_file.get_domain_from_config_file_or_default())]
         if log.is_debug_on():
             cmd.append( '--debug' )
@@ -88,15 +106,13 @@ finally:
     # Always ensure the adapter process is terminated, even if test fails
     with test.closure( 'Stop rs-dds-adapter', on_fail=test.ABORT ):
         try:
-            # Try graceful termination first
-            adapter_process.send_signal( signal.SIGTERM )
-            adapter_process.wait( timeout=2 )
-            log.d( 'rs-dds-adapter terminated gracefully' )
-        except (subprocess.TimeoutExpired, Exception) as e:
-            # Force kill if graceful termination fails
-            log.e( f'Error terminating rs-dds-adapter: {e}' )
             adapter_process.kill()
-            adapter_process.wait( timeout=2 )
+            adapter_process.wait( timeout=5 )
+            log.d( 'rs-dds-adapter killed' )
+        except Exception as e:
+            log.e( f'Error killing rs-dds-adapter: {e}' )
+        # Safety net: kill any orphaned adapter processes by name
+        kill_all_dds_adapters()
 
 test.print_results_and_exit()
 
