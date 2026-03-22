@@ -4,8 +4,8 @@
 ######################################
 # This set of tests is valid for any device that supports the HDR feature #
 ######################################
-# test:device D400* 
-# test:donotrun:!nightly  
+# test:device D400*
+# test:donotrun:!nightly
 
 import pyrealsense2 as rs
 from rspy import test, log
