@@ -1,5 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2019-2024 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 #
 # Shared build configuration for graphical tool targets (realsense-viewer, rs-depth-quality, realsense-viewer-tests)
 # Expects the caller to set RS_VIEWER_LIBS and (on Windows) LD_FLAGS_STR before calling this macro.

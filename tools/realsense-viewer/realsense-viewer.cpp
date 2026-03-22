@@ -642,7 +642,7 @@ int run_viewer( int argc, const char ** argv,
 
         // Check if we need to close the window
         if( keep_alive && !keep_alive() )
-            glfwSetWindowShouldClose( static_cast< GLFWwindow * >( window ), GLFW_TRUE );
+            glfwSetWindowShouldClose( window, GLFW_TRUE );
         }
 
     if( on_teardown )
