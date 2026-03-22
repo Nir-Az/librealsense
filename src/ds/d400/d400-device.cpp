@@ -999,7 +999,28 @@ namespace librealsense
             register_info(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR, usb_type_str);
         }
         else
+        {
             register_info(RS2_CAMERA_INFO_CONNECTION_TYPE, "GMSL");
+
+            // Register MIPI driver version for Jetson platform (GMSL devices only)
+            auto uvc_dev = raw_depth_sensor->get_uvc_device();
+            if (uvc_dev && uvc_dev->is_platform_jetson())
+            {
+                rsutils::version driver_version = platform::get_jetson_driver_version();
+                if (driver_version.is_valid())
+                {
+                    register_info(RS2_CAMERA_INFO_MIPI_DRIVER_VERSION, driver_version.to_string());
+                    
+                    // Log driver version only once across all devices
+                    static bool logged = false;
+                    if (!logged)
+                    {
+                        LOG_INFO("MIPI driver version detected: " << driver_version.to_string());
+                        logged = true;
+                    }
+                }
+            }
+        }
 
         std::string curr_version= _fw_version;
 
