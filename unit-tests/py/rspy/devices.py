@@ -582,33 +582,33 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
         #
         ports = [ get( sn ).port for sn in serial_numbers ]
         # DDS (and other non-hub) devices have port=None; filter them out of hub operations
-        wanted_ports = set( p for p in ports if p is not None )
+        wanted_ports = sorted( p for p in ports if p is not None )
         #
         # Initialize cache from hub on first call (single query, then cached)
         if _enabled_ports is None:
-            _enabled_ports = set( hub.ports() )
+            _enabled_ports = list( hub.ports() )
         #
         if recycle:
             #
             if not wanted_ports and not _enabled_ports:
                 log.d( 'no hub ports to recycle; leaving hub as-is' )
             elif _enabled_ports:
-                log.d( 'enabling ports', sorted( wanted_ports ),
-                       'disabling currently enabled ports', sorted( _enabled_ports ) )
+                log.d( 'enabling ports', wanted_ports,
+                       'disabling currently enabled ports', _enabled_ports )
                 sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
-                hub.disable_ports( sorted( _enabled_ports ) )
-                _enabled_ports = set()
+                hub.disable_ports( _enabled_ports )
+                _enabled_ports = []
                 _wait_until_removed( sns_to_remove, timeout = timeout )
             #
             if wanted_ports:
-                hub.enable_ports( sorted( wanted_ports ) )
-                _enabled_ports = set( wanted_ports )
+                hub.enable_ports( wanted_ports )
+                _enabled_ports = list( wanted_ports )
             #
         else:
             #
             if wanted_ports:
-                hub.enable_ports( sorted( wanted_ports ), disable_other_ports = True )
-                _enabled_ports = set( wanted_ports )
+                hub.enable_ports( wanted_ports, disable_other_ports = True )
+                _enabled_ports = list( wanted_ports )
             else:
                 log.d( 'no hub ports to enable; leaving hub as-is' )
         #
