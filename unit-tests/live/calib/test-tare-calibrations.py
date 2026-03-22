@@ -52,14 +52,13 @@ def calculate_target_z():
 
     def cb(frame):
         nonlocal counter, warmup_counter
-        if counter > number_of_images:
+        if counter >= number_of_images:
             return
-        for f in frame.as_frameset():
-            if warmup_counter < warmup_frames:
-                warmup_counter += 1
-                return
-            q.enqueue(f)
-            counter += 1
+        if warmup_counter < warmup_frames:
+            warmup_counter += 1
+            return
+        q.enqueue(frame)
+        counter += 1
 
     ctx = rs.context()
     pipe = rs.pipeline(ctx)
