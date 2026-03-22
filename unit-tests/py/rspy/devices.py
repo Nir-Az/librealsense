@@ -129,8 +129,8 @@ class Device:
         return self._physical_port
 
     @property
-    def usb_location( self ):
-        return self._usb_location
+    def location( self ):
+        return self._location
 
     @property
     def port( self ):
