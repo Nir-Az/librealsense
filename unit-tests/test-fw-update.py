@@ -283,21 +283,9 @@ if result.returncode != 0:
 device, ctx = test.find_first_device_or_exit()
 current_fw_version = rsutils.version( device.get_info( rs.camera_info.firmware_version ))
 
-# Detect flash lock: if the device reports camera_locked == YES, the flash is locked
-if device.supports( rs.camera_info.camera_locked ):
-    try:
-        camera_locked_info = device.get_info( rs.camera_info.camera_locked )
-    except Exception as ex:
-        log.w( 'Failed to read camera_locked info from device:', ex )
-    else:
-        if camera_locked_info == 'YES':
-            log.w( 'Device is flash-locked after FW update; resetting downgrade counter' )
-            reset_downgrade_counter( device )
-            log.d( 'Downgrade counter reset; device may need a reboot to clear lock state' )
-        else:
-            log.d( 'camera_locked:', camera_locked_info )
-else:
-    log.d( 'Device does not expose camera_locked info; skipping flash-lock check' )
+# camera_locked returns "YES" (locked) or "NO" (unlocked)
+if device.supports( rs.camera_info.camera_locked ) and device.get_info( rs.camera_info.camera_locked ) == 'YES':
+    log.w( 'Device is flash-locked' )
 
 expected_fw_version = custom_fw_version if custom_fw_path else bundled_fw_version
 test.check_equal(current_fw_version, expected_fw_version)
