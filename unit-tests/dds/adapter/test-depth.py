@@ -116,18 +116,15 @@ finally:
     # Always ensure the adapter process is terminated, even if test fails
     with test.closure( 'Stop rs-dds-adapter', on_fail=test.ABORT ):
         try:
-            adapter_process.terminate()
+            # Try graceful termination first (SIGTERM lets adapter release DDS resources on Linux)
+            adapter_process.send_signal( signal.SIGTERM )
             adapter_process.wait( timeout=2 )
             log.d( 'rs-dds-adapter terminated gracefully' )
-        except Exception:
-            try:
-                adapter_process.kill()
-                adapter_process.wait( timeout=5 )
-                log.d( 'rs-dds-adapter killed' )
-            except Exception as e:
-                log.e( f'Error killing rs-dds-adapter: {e}' )
-        # Safety net: kill any orphaned adapter processes by name
-        kill_all_dds_adapters()
+        except (subprocess.TimeoutExpired, Exception) as e:
+            log.e( f'Error terminating rs-dds-adapter: {e}' )
+        finally:
+            # Safety net: force kill any remaining adapter processes by name
+            kill_all_dds_adapters()
 
 test.print_results_and_exit()
 
