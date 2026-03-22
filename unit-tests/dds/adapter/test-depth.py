@@ -5,7 +5,7 @@
 #test:device D400*
 
 from rspy import log, repo, test, config_file
-import subprocess, platform
+import subprocess, platform, signal, os
 import time
 
 
@@ -23,6 +23,16 @@ def kill_all_dds_adapters():
 
 
 adapter_process = None
+
+def _sigterm_handler( signum, frame ):
+    """Kill the adapter on SIGTERM (e.g. Jenkins abort) before we exit"""
+    kill_all_dds_adapters()
+    signal.signal( signal.SIGTERM, signal.SIG_DFL )
+    os.kill( os.getpid(), signal.SIGTERM )
+
+signal.signal( signal.SIGTERM, _sigterm_handler )
+if platform.system() == 'Windows':
+    signal.signal( signal.SIGBREAK, _sigterm_handler )
 
 with test.closure( 'Kill leftover rs-dds-adapter processes' ):
     kill_all_dds_adapters()
@@ -106,11 +116,16 @@ finally:
     # Always ensure the adapter process is terminated, even if test fails
     with test.closure( 'Stop rs-dds-adapter', on_fail=test.ABORT ):
         try:
-            adapter_process.kill()
-            adapter_process.wait( timeout=5 )
-            log.d( 'rs-dds-adapter killed' )
-        except Exception as e:
-            log.e( f'Error killing rs-dds-adapter: {e}' )
+            adapter_process.terminate()
+            adapter_process.wait( timeout=2 )
+            log.d( 'rs-dds-adapter terminated gracefully' )
+        except Exception:
+            try:
+                adapter_process.kill()
+                adapter_process.wait( timeout=5 )
+                log.d( 'rs-dds-adapter killed' )
+            except Exception as e:
+                log.e( f'Error killing rs-dds-adapter: {e}' )
         # Safety net: kill any orphaned adapter processes by name
         kill_all_dds_adapters()
 
