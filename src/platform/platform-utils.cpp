@@ -7,7 +7,6 @@
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
 #include <rsutils/version.h>
-#include <rsutils/easylogging/easyloggingpp.h>
 #include <fstream>
 
 namespace librealsense {
@@ -146,14 +145,14 @@ std::vector< uvc_device_info > filter_by_mi( const std::vector< uvc_device_info 
 
 #ifdef __linux__
 
-std::string get_jetson_driver_version()
+rsutils::version get_jetson_driver_version()
 {
     // Cache the result to avoid reading the file multiple times
     static bool queried = false;
     static rsutils::version cached_version;
     
     if (queried)
-        return cached_version.is_valid() ? cached_version.to_string() : std::string();
+        return cached_version.is_valid() ? cached_version : rsutils::version(0, 0, 0, 0);
     
     // Read driver version from sysfs
     std::ifstream version_file("/sys/module/d4xx/version");
@@ -164,19 +163,16 @@ std::string get_jetson_driver_version()
         version_file.close();
         
         if (!version_str.empty())
-        {
             cached_version = rsutils::version(version_str);
-            LOG_DEBUG("MIPI driver version detected: " << cached_version.to_string());
-        }
     }
     
     queried = true;
-    return cached_version.is_valid() ? cached_version.to_string() : std::string();
+    return cached_version.is_valid() ? cached_version : rsutils::version(0, 0, 0, 0);
 }
 #else
-std::string get_jetson_driver_version()
+rsutils::version get_jetson_driver_version()
 {
-    return std::string();
+    return rsutils::version(0, 0, 0, 0);
 }
 #endif
 

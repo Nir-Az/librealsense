@@ -8,6 +8,7 @@
 #include <string>
 #include <cstdint>
 
+namespace rsutils { struct version; }
 
 namespace librealsense {
 namespace platform {
@@ -38,7 +39,8 @@ void trim_device_list( std::vector< usb_device_info > & devices, const std::vect
 
 // Get MIPI driver version on Jetson platform
 // (cached after first call)
-std::string get_jetson_driver_version();
+// Returns 0.0.0.0 if no driver version is found
+rsutils::version get_jetson_driver_version();
 
 
 }  // namespace platform
