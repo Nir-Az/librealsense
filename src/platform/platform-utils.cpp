@@ -152,7 +152,7 @@ rsutils::version get_jetson_driver_version()
     static rsutils::version cached_version;
     
     if (queried)
-        return cached_version.is_valid() ? cached_version : rsutils::version(0, 0, 0, 0);
+        return cached_version.is_valid() ? cached_version : rsutils::version();
     
     // Read driver version from sysfs
     std::ifstream version_file("/sys/module/d4xx/version");
@@ -167,12 +167,12 @@ rsutils::version get_jetson_driver_version()
     }
     
     queried = true;
-    return cached_version.is_valid() ? cached_version : rsutils::version(0, 0, 0, 0);
+    return cached_version.is_valid() ? cached_version : rsutils::version();
 }
 #else
 rsutils::version get_jetson_driver_version()
 {
-    return rsutils::version(0, 0, 0, 0);
+    return rsutils::version();
 }
 #endif
 
