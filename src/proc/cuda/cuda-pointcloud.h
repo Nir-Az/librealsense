@@ -6,13 +6,13 @@
 
 // When both CUDA and NEON are available, inherit from pointcloud_neon
 // to get NEON optimizations for methods not accelerated by CUDA
-#if defined(__ARM_NEON) && !defined(ANDROID)
+#if defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
 #include "../neon/neon-pointcloud.h"
 #endif
 
 namespace librealsense
 {
-#if defined(__ARM_NEON) && !defined(ANDROID)
+#if defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     class pointcloud_cuda : public pointcloud_neon
 #else
     class pointcloud_cuda : public pointcloud

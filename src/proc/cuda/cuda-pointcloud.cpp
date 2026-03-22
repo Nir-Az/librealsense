@@ -9,7 +9,7 @@
 namespace librealsense
 {
     pointcloud_cuda::pointcloud_cuda()
-#if defined(__ARM_NEON) && !defined(ANDROID)
+#if defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
         // When NEON is available, inherit from pointcloud_neon which calls pointcloud("Pointcloud (NEON)")
         // We keep the NEON name since this is a hybrid using CUDA for depth_to_points and NEON for get_texture_map
         : pointcloud_neon()
