@@ -244,12 +244,20 @@ process_rs_video_devices() {
     # Handle streaming devices
     if [ "${dev_name}" = "tegra-video" ]; then
       sensor_name=$(identify_dev_type $vid)
+      if [[ -z "$sensor_name" ]]; then
+        echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
+        continue
+      fi
       sensor_idx=$(get_dev_num $sensor_name)
       local dev_ln="/dev/video-rs-${sensor_name}-${sensor_idx}"
       create_video_link "$vid" "$dev_ln" "$bus" "$sensor_idx" "$sensor_name" "Streaming"
       increment_dev_num $sensor_name
     # Handle metadata devices  
     elif [ "${dev_name}" = "tegra-embedded" ]; then
+      if [[ -z "$sensor_name" ]]; then
+        echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
+        continue
+      fi
       local dev_md_ln="/dev/video-rs-${sensor_name}-md-${sensor_idx}"
       create_video_link "$vid" "$dev_md_ln" "$bus" "$sensor_idx" "$sensor_name" "Metadata"
     else
