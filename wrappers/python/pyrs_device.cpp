@@ -56,6 +56,8 @@ void init_device(py::module &m) {
                 ss << "  FW: " << self.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION);
             if (self.supports(RS2_CAMERA_INFO_SMCU_FW_VERSION))
                 ss << "  SMCU: " << self.get_info(RS2_CAMERA_INFO_SMCU_FW_VERSION);
+            if (self.supports(RS2_CAMERA_INFO_MIPI_DRIVER_VERSION))
+                ss << "  MIPI DRIVER: " << self.get_info(RS2_CAMERA_INFO_MIPI_DRIVER_VERSION);
             if( self.supports( RS2_CAMERA_INFO_CAMERA_LOCKED )
                 && strcmp( "YES", self.get_info( RS2_CAMERA_INFO_CAMERA_LOCKED ) ) )
                 ss << "  UNLOCKED";
