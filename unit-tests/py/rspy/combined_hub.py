@@ -109,7 +109,7 @@ class CombinedHub(device_hub.device_hub):
         for name, hub in self.hubs.items():
             target = targets[name]
             # Skip hubs with no target ports (unless we need to disable their other ports)
-            if target is not None and not target and not disable_other_ports:
+            if target == [] and not disable_other_ports:
                 continue
             ok = hub.enable_ports(target, disable_other_ports)
             success = success and ok
@@ -140,7 +140,7 @@ class CombinedHub(device_hub.device_hub):
         for name, hub in self.hubs.items():
             target = targets[name]
             # Skip hubs with no target ports
-            if target is not None and not target:
+            if target == []:
                 continue
             ok = hub.disable_ports(target)
             success = success and ok
