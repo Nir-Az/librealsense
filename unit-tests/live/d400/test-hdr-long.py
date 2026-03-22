@@ -12,14 +12,16 @@ from rspy import test, log
 import time
 import pyrsutils as rsutils
 
-with test.closure("HDR Long Test - FW check"):
-    device, ctx = test.find_first_device_or_exit()
-    if device.supports(rs.camera_info.firmware_version):
-        fw_version = rsutils.version(device.get_info(rs.camera_info.firmware_version))
-        if fw_version < rsutils.version(5, 17, 2, 11):
-            test.exit_and_skip_test("Test requires firmware version 5.17.2.11 or above")
-    else:
-        test.exit_and_skip_test("Device does not support firmware version info")
+device, ctx = test.find_first_device_or_exit()
+
+if not device.supports(rs.camera_info.firmware_version):
+    log.i("Device does not support firmware version info, skipping test...")
+    test.print_results_and_exit()
+
+fw_version = rsutils.version(device.get_info(rs.camera_info.firmware_version))
+if fw_version < rsutils.version(5, 17, 2, 11):
+    log.i(f"FW version {fw_version} is below required 5.17.2.11, skipping test...")
+    test.print_results_and_exit()
 
 
 def retry_on_exception(func, max_retries=10):
