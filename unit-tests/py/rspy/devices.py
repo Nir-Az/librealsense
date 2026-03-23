@@ -37,10 +37,6 @@ sys.path.insert( 1, pyrs_dir )
 
 MAX_ENUMERATION_TIME = 20  # [sec]
 
-# Cache of hub ports we've enabled — avoids querying the hub each time.
-# Initialized from hub.ports() on first use; kept in sync by enable_only().
-_enabled_ports = None
-
 # We need both pyrealsense2 and hub. We can work without hub, but
 # without pyrealsense2 no devices at all will be returned.
 from rspy import device_hub
@@ -577,38 +573,31 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
                     re-enabling
     :param timeout: The maximum seconds to wait to make sure the devices are indeed online
     """
-    global _enabled_ports
     if hub:
         #
         ports = [ get( sn ).port for sn in serial_numbers ]
         # DDS (and other non-hub) devices have port=None; filter them out of hub operations
         wanted_ports = sorted( p for p in ports if p is not None )
-        #
-        # Initialize cache from hub on first call (single query, then cached)
-        if _enabled_ports is None:
-            _enabled_ports = list( hub.ports() )
+        enabled_ports = [ get( sn ).port for sn in enabled() if get( sn ).port is not None ]
         #
         if recycle:
             #
-            if not wanted_ports and not _enabled_ports:
+            if not wanted_ports and not enabled_ports:
                 log.d( 'no hub ports to recycle; leaving hub as-is' )
-            elif _enabled_ports:
+            elif enabled_ports:
                 log.d( 'enabling ports', wanted_ports,
-                       'disabling currently enabled ports', _enabled_ports )
-                sns_to_remove = { sn for sn in enabled() if get( sn ).port in _enabled_ports }
-                hub.disable_ports( _enabled_ports )
-                _enabled_ports = []
+                       'disabling currently enabled ports', enabled_ports )
+                sns_to_remove = { sn for sn in enabled() if get( sn ).port in enabled_ports }
+                hub.disable_ports( enabled_ports )
                 _wait_until_removed( sns_to_remove, timeout = timeout )
             #
             if wanted_ports:
                 hub.enable_ports( wanted_ports )
-                _enabled_ports = list( wanted_ports )
             #
         else:
             #
             if wanted_ports:
                 hub.enable_ports( wanted_ports, disable_other_ports = True )
-                _enabled_ports = list( wanted_ports )
             else:
                 log.d( 'no hub ports to enable; leaving hub as-is' )
         #
