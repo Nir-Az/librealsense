@@ -159,11 +159,11 @@ def pytest_configure(config):
         config.option.timeout_method = "thread"
 
     # Suppress verbose failure tracebacks — per-test log files have full details.
-    # Keep short "FAILED" one-liners (-rf) so Jenkins Groovy can parse them for log file links.
+    # Keep short one-liners (-rfE) so Jenkins Groovy can parse them for log file links.
     # pytest-retry's verbose report is also suppressed (details are in per-test log files).
     if config.getoption("--tb") == "auto":
         config.option.tbstyle = "no"
-    config.option.reportchars = "f"
+    config.option.reportchars = "fE"
     try:
         from pytest_retry.retry_plugin import retry_manager
         retry_manager.build_retry_report = lambda *args, **kwargs: None
@@ -244,10 +244,17 @@ def pytest_runtest_protocol(item, nextitem):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Log test duration after each test call phase."""
+    """Log test duration and any failures/errors."""
     outcome = yield
     report = outcome.get_result()
 
+    if report.skipped:
+        ensure_newline()
+        reason = report.longrepr[-1]
+        log.info(reason)
+    if report.failed and call.excinfo:
+        ensure_newline()
+        log.error(f"{call.when} {report.outcome}: {call.excinfo.typename}: {call.excinfo.value}")
     if call.when == "call":
         ensure_newline()
         log.debug(f"Test execution took {report.duration:.3f}s")

@@ -125,8 +125,8 @@ class Device:
         return self._physical_port
 
     @property
-    def usb_location( self ):
-        return self._usb_location
+    def location( self ):
+        return self._location
 
     @property
     def port( self ):
@@ -270,25 +270,27 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
 
     d555_found = False
     try:
-        devices = _context.query_devices()
-        for dev in devices:
-            try:
-                sn = dev.get_info( rs.camera_info.firmware_update_id )
-            except RuntimeError as e:
-                log.e( f'Found device but trying to get fw-update-id failed: {e}' )
-                continue
-
-            if sn not in detected_sns:
-                # New device detected
-                detected_sns.add(sn)
-                device = Device( sn, dev )
-                _device_by_sn[sn] = device
-                log.d( '... port {}:'.format( device.port is None and '?' or device.port ), sn, dev, 'detected and added to devices list' )
-
-                name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
-                d555_found = "D555" in name        
+        devices = list( _context.query_devices() )
     except RuntimeError as e:
-        log.d( 'FAILED to query devices:', e )
+        log.e( f'FAILED to query devices: {e}' )
+        devices = []
+    for dev in devices:
+        try:
+            sn = dev.get_info( rs.camera_info.firmware_update_id )
+        except RuntimeError as e:
+            log.e( f'Found device but trying to get fw-update-id failed: {e}' )
+            continue
+
+        if sn not in detected_sns:
+            # New device detected
+            detected_sns.add(sn)
+            device = Device( sn, dev )
+            _device_by_sn[sn] = device
+            port_str = f'port {device.port}: ' if device.port is not None else ''
+            log.d( f'...{port_str}{sn} {dev}' )
+
+            name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
+            d555_found = "D555" in name
 
     if hub and not d555_found:
         # All CI machines with a D555 connected have a hub. Detect camera even in case domain have reset to 0 so applicable tests will run.
@@ -575,27 +577,27 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
         #
         ports = [ get( sn ).port for sn in serial_numbers ]
         # DDS (and other non-hub) devices have port=None; filter them out of hub operations
-        hub_ports = [ p for p in ports if p is not None ]
+        wanted_ports = sorted( p for p in ports if p is not None )
+        enabled_ports = [ get( sn ).port for sn in enabled() if get( sn ).port is not None ]
         #
         if recycle:
             #
-            if hub_ports:
-                # Only recycle if there are actual hub devices to manage
-                log.d( 'recycling ports via hub:', ports )
-                #
-                # Only wait for removal of devices that are actually on hub ports (exclude DDS devices)
-                enabled_devices = { sn for sn in enabled() if get( sn ).port is not None }
-                hub.disable_ports( )
-                _wait_until_removed( enabled_devices, timeout = timeout )
-                #
-                hub.enable_ports( hub_ports )
-            else:
+            if not wanted_ports and not enabled_ports:
                 log.d( 'no hub ports to recycle; leaving hub as-is' )
+            elif enabled_ports:
+                log.d( 'enabling ports', wanted_ports,
+                       'disabling currently enabled ports', enabled_ports )
+                sns_to_remove = { sn for sn in enabled() if get( sn ).port in enabled_ports }
+                hub.disable_ports( enabled_ports )
+                _wait_until_removed( sns_to_remove, timeout = timeout )
+            #
+            if wanted_ports:
+                hub.enable_ports( wanted_ports )
             #
         else:
             #
-            if hub_ports:
-                hub.enable_ports( hub_ports, disable_other_ports = True )
+            if wanted_ports:
+                hub.enable_ports( wanted_ports, disable_other_ports = True )
             else:
                 log.d( 'no hub ports to enable; leaving hub as-is' )
         #
