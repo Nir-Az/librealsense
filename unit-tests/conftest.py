@@ -340,12 +340,15 @@ def module_device_setup(request):
             yield None
             return
 
-        serial_numbers = find_matching_devices(device_markers, each=False,
+        serial_numbers, had_candidates = find_matching_devices(device_markers, each=False,
                                                   cli_includes=request.config.getoption("--device", default=[]),
                                                   cli_excludes=request.config.getoption("--exclude-device", default=[]))
 
         if not serial_numbers:
-            pytest.fail("No devices found matching requirements")
+            if had_candidates:
+                pytest.skip("All matching devices were excluded")
+            else:
+                pytest.fail("No devices found matching requirements")
 
         serial_number = serial_numbers[0]
         log.debug(f"Test will use first matching device: {serial_number}")
