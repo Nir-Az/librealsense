@@ -35,7 +35,7 @@ from rspy.pytest.logging_setup import (
     setup_test_logging, bridge_rspy_log, ensure_newline, configure_logging,
     start_test_log, stop_test_log, print_terminal_summary,
 )
-from rspy.pytest.cli import consume_legacy_flags
+from rspy.pytest.cli import consume_legacy_flags, apply_pending_flags
 from rspy.pytest.device_helpers import find_matching_devices, resolve_device_each_serials
 from rspy.pytest.collection import filter_and_sort_items
 
@@ -132,6 +132,8 @@ context_list = []
 def pytest_configure(config):
     """Early setup: register markers, configure defaults, and query connected devices."""
     global context_list
+
+    apply_pending_flags(config)
 
     # Parse and store context
     context_str = config.getoption("--context", default="")
