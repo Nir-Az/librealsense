@@ -34,9 +34,7 @@ Both frameworks share the same device/hub infrastructure (`rspy/devices.py`, `rs
 
 - CI machines may have multiple hubs (e.g., Acroname + UniFi) wrapped in a `CombinedHub`
 - `CombinedHub` assigns **virtual port numbers** sequentially: Acroname ports first (0-7), then UniFi ports (8-11)
-- `devices.py` tracks `_enabled_ports` to only send delta commands (disable what's on, enable what's needed)
-- First call uses `_enabled_ports = None` (unknown state) → falls back to disable-all as safe default
-- Subsequent calls only disable/enable the difference
+- `devices.py` `enable_only()` derives currently enabled ports from `enabled()` + port mapping each call — no global cache
 
 ### Log file naming
 
@@ -202,7 +200,7 @@ def test_long_running(test_device):
 
 ```
 -D- configuration: [D400* -> D455_<SN>]
--D-     enabling ports [4] disabling previously enabled ports [8]
+-D-     enabling ports [4] disabling currently enabled ports [8]
 -D-     Disabling ports [1] on Unifi Switch        ← only hubs with ports to change
 -D-     Enabling ports [4] on Acroname              ← only the needed hub
 -D-     device removed: <old_SN>
@@ -220,7 +218,7 @@ def test_long_running(test_device):
 -D- Test using parametrized device: <SN>
 -I- Configuration: D455 [<SN>]
 -D- Recycling device via hub...
--D- enabling ports [4] disabling previously enabled ports [8]
+-D- enabling ports [4] disabling currently enabled ports [8]
 -D- Device enabled and ready
 -D- Test using device: Intel RealSense D455
 -I- <test output>
@@ -230,7 +228,7 @@ def test_long_running(test_device):
 ### Red flags to investigate
 
 - **Wrong device in test**: Log says "D585S" test but error mentions D435 features → port management bug, wrong device was enabled
-- **Missing device setup logs**: No "Enabling ports" / "Disabling ports" lines → `_enabled_ports` tracking may be wrong
+- **Missing device setup logs**: No "Enabling ports" / "Disabling ports" lines → port management may be wrong
 - **"no device matches configuration"**: Device wasn't detected at all — could be port not enabled, or device genuinely missing
 - **Test log cuts off without result**: Exception killed the test before it could log the outcome — check for `-E-` error lines
 - **`ERROR` vs `FAILED` in pytest**: `ERROR` = fixture/setup failure, `FAILED` = test assertion failure. Both should appear in the report with clickable links.
