@@ -162,21 +162,25 @@ namespace librealsense
         named_mutex::named_mutex(const std::string& device_path, unsigned timeout)
             : _device_path(device_path),
               _timeout(timeout), // TODO: try to lock with timeout
-              _fildes( open( _device_path.c_str(), O_RDWR, 0 ) ),
+              _fildes(-1),
               _lock_counter(0)
         {
-            if( _fildes < 0)
-                throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << _device_path << "'" );
+            // File descriptor will be opened lazily when lock() is called
+            // This prevents holding open file descriptors across hardware resets
         }
 
         named_mutex::~named_mutex()
         {
             try
             {
-                // OFD lock will automatically release if locked only when file description closes (not file descriptor)
-                // If process was forked or cloned and unlock() was not properly called after a lock() then file will
-                // remain locked for the child process
-                close( _fildes );
+                // Close file descriptor if it was opened
+                if (_fildes >= 0)
+                {
+                    // OFD lock will automatically release if locked only when file description closes (not file descriptor)
+                    // If process was forked or cloned and unlock() was not properly called after a lock() then file will
+                    // remain locked for the child process
+                    close( _fildes );
+                }
             }
             catch(...)
             {
@@ -188,6 +192,17 @@ namespace librealsense
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
+                // Open file descriptor only when first lock is acquired
+                if (_fildes < 0)
+                {
+                    _fildes = open(_device_path.c_str(), O_RDWR, 0);
+                    if (_fildes < 0)
+                    {
+                        _lock_counter.fetch_add( -1 );
+                        throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << _device_path << "'" );
+                    }
+                }
+
                 // Using OFD locks to synchronize both interprocess and interthread.
                 // flock() is not good if we have multiple instances of the same device. i.e.
                 //     auto devs = context.query_devices();
@@ -223,6 +238,13 @@ namespace librealsense
                 auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
                 if( 0 != ret )
                     throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": unlocking failed" );
+
+                // Close file descriptor when last lock is released
+                if (_fildes >= 0)
+                {
+                    close( _fildes );
+                    _fildes = -1;
+                }
             }
         }
 
@@ -230,6 +252,17 @@ namespace librealsense
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
+                // Open file descriptor only when first lock is acquired
+                if (_fildes < 0)
+                {
+                    _fildes = open(_device_path.c_str(), O_RDWR, 0);
+                    if (_fildes < 0)
+                    {
+                        _lock_counter.fetch_add( -1 );
+                        return false;
+                    }
+                }
+
                 struct flock fl;
                 memset( &fl, 0, sizeof( fl ) );
                 fl.l_whence = SEEK_SET;
