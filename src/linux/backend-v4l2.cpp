@@ -188,39 +188,51 @@ namespace librealsense
             }
         }
 
+        void named_mutex::ensure_fd_open()
+        {
+            if (_fildes < 0)
+            {
+                _fildes = open(_device_path.c_str(), O_RDWR, 0);
+                if (_fildes < 0)
+                {
+                    throw linux_backend_exception( rsutils::string::from() << "named_mutex: Cannot open '" << _device_path << "'" );
+                }
+            }
+        }
+
         void named_mutex::lock()
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
-                // Open file descriptor only when first lock is acquired
-                if (_fildes < 0)
+                try
                 {
-                    _fildes = open(_device_path.c_str(), O_RDWR, 0);
-                    if (_fildes < 0)
+                    // Open file descriptor only when first lock is acquired
+                    ensure_fd_open();
+
+                    // Using OFD locks to synchronize both interprocess and interthread.
+                    // flock() is not good if we have multiple instances of the same device. i.e.
+                    //     auto devs = context.query_devices();
+                    //     auto dev1 = devs[0];
+                    //     auto dev2 = devs[0];
+                    // Closing file descriptor for one instance will unlock file for other instances.
+                    // Note - OFD locks are linux standart not POSIX.
+                    struct flock fl;
+                    memset( &fl, 0, sizeof( fl ) );
+                    fl.l_whence = SEEK_SET;
+                    fl.l_start = 0;
+                    fl.l_len = 0; // Lock the entire file
+                    fl.l_type = F_WRLCK;
+                    auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
+                    if( 0 != ret )
                     {
                         _lock_counter.fetch_add( -1 );
-                        throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << _device_path << "'" );
+                        throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
                     }
                 }
-
-                // Using OFD locks to synchronize both interprocess and interthread.
-                // flock() is not good if we have multiple instances of the same device. i.e.
-                //     auto devs = context.query_devices();
-                //     auto dev1 = devs[0];
-                //     auto dev2 = devs[0];
-                // Closing file descriptor for one instance will unlock file for other instances.
-                // Note - OFD locks are linux standart not POSIX.
-                struct flock fl;
-                memset( &fl, 0, sizeof( fl ) );
-                fl.l_whence = SEEK_SET;
-                fl.l_start = 0;
-                fl.l_len = 0; // Lock the entire file
-                fl.l_type = F_WRLCK;
-                auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
-                if( 0 != ret )
+                catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
-                    throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
+                    throw;
                 }
             }
         }
@@ -252,25 +264,25 @@ namespace librealsense
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
-                // Open file descriptor only when first lock is acquired
-                if (_fildes < 0)
+                try
                 {
-                    _fildes = open(_device_path.c_str(), O_RDWR, 0);
-                    if (_fildes < 0)
+                    // Open file descriptor only when first lock is acquired
+                    ensure_fd_open();
+
+                    struct flock fl;
+                    memset( &fl, 0, sizeof( fl ) );
+                    fl.l_whence = SEEK_SET;
+                    fl.l_start = 0;
+                    fl.l_len = 0; // Lock the entire file
+                    fl.l_type = F_WRLCK;
+                    auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
+                    if( 0 != ret && errno == EAGAIN)
                     {
                         _lock_counter.fetch_add( -1 );
                         return false;
                     }
                 }
-
-                struct flock fl;
-                memset( &fl, 0, sizeof( fl ) );
-                fl.l_whence = SEEK_SET;
-                fl.l_start = 0;
-                fl.l_len = 0; // Lock the entire file
-                fl.l_type = F_WRLCK;
-                auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
-                if( 0 != ret && errno == EAGAIN)
+                catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
                     return false;
