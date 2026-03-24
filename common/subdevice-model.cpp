@@ -33,7 +33,8 @@ namespace rs2
     {
         try
         {
-            for( rs2::option_value option : s->get_supported_option_values() )
+            auto supported_options = s->get_supported_option_values();
+            for( rs2::option_value option : supported_options )
             {
                 options_metadata[option->id]
                     = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
@@ -389,8 +390,8 @@ namespace rs2
         {
             error_message = error_to_string(e);
         }
-        populate_options(ss.str().c_str(), &_options_invalidated, error_message);
-
+        _opt_base_label = ss.str();
+        populate_options(_opt_base_label.c_str(), &_options_invalidated, error_message);
     }
 
     subdevice_model::~subdevice_model()
@@ -403,6 +404,12 @@ namespace rs2
         catch( ... )
         {
         }
+    }
+
+    void subdevice_model::repopulate_options()
+    {
+        std::string error_message;
+        populate_options(_opt_base_label.c_str(), &_options_invalidated, error_message);
     }
 
     bool subdevice_model::is_post_processing_enabled_in_config_file() const
@@ -1510,11 +1517,21 @@ namespace rs2
     void subdevice_model::pause()
     {
         _pause = true;
+        auto playback_dev = dev.as<rs2::playback>();
+        if (playback_dev && playback_dev.current_status() == RS2_PLAYBACK_STATUS_PLAYING)
+        {
+            playback_dev.pause();
+        }
     }
 
     void subdevice_model::resume()
     {
         _pause = false;
+        auto playback_dev = dev.as<rs2::playback>();
+        if (playback_dev && playback_dev.current_status() == RS2_PLAYBACK_STATUS_PAUSED)
+        {
+            playback_dev.resume();
+        }
     }
 
     //The function decides if specific frame should be sent to the syncer
@@ -1646,7 +1663,7 @@ namespace rs2
             auto next = supported_options[next_option];
             if (options_metadata.find(static_cast<rs2_option>(next)) != options_metadata.end())
             {
-                auto& opt_md = options_metadata[static_cast<rs2_option>(next)];
+                auto& opt_md = options_metadata.at(static_cast<rs2_option>(next));
                 opt_md.update_all_fields(error_message, notifications);
 
                 if (next == RS2_OPTION_ENABLE_AUTO_EXPOSURE)
@@ -1763,7 +1780,8 @@ namespace rs2
                     break;
                 }
             }
-            _extrinsics_from_depth = depth_profile.get_extrinsics_to(lpc_profile);
+            if (depth_profile && lpc_profile)
+                _extrinsics_from_depth = depth_profile.get_extrinsics_to(lpc_profile);
         }
     }
 

@@ -206,6 +206,38 @@ namespace rs2
         }
     }
 
+    bool device_model::should_bundle_fw_be_recommended(const std::string& pid, const std::string& fw, const std::string& recommended_fw_ver) const
+    {
+        bool recommend_fw = false;
+
+        // Don't suggest to update FW as the bundle fw doesn't support
+        std::vector<std::string> recommended_fw_blacklisted_pid;
+        recommended_fw_blacklisted_pid.push_back("1156"); // D436
+        recommended_fw_blacklisted_pid.push_back("ABCC"); // D401_GMSL
+        recommended_fw_blacklisted_pid.push_back("ABCF"); // D415_GMSL
+
+        bool is_pid_backlisted = (std::find(recommended_fw_blacklisted_pid.begin(), recommended_fw_blacklisted_pid.end(), pid)
+                != recommended_fw_blacklisted_pid.end());
+
+        bool is_mipi_device = dev.supports(RS2_CAMERA_INFO_CONNECTION_TYPE)
+                              && (std::string(dev.get_info(RS2_CAMERA_INFO_CONNECTION_TYPE)) == "GMSL");
+
+        bool is_mipi_recovery = (pid == "BBCD");
+
+        // bellow logic has been added because all mipi devices are update_device
+        if (is_mipi_device)
+        {
+            recommend_fw = is_mipi_recovery || is_upgradeable( fw, recommended_fw_ver);
+        }
+        else
+        {
+            recommend_fw = dev.is<update_device>() || is_upgradeable( fw, recommended_fw_ver);
+        }
+
+        return ( recommend_fw && !is_pid_backlisted );
+    }
+
+
     bool device_model::check_for_bundled_fw_update(const rs2::context &ctx, std::shared_ptr<notifications_model> not_model , bool reset_delay )
     {
         // LibRS can have a "bundled" FW binary downloaded during CMake. That's the version
@@ -270,9 +302,7 @@ namespace rs2
             }
 
             auto dev_name = get_device_name(dev);
-
-            // TODO - D436. Don't suggest to update FW as it doesn't support D436. Revert after next release with bundle supporting FW
-            if( ( dev.is<update_device>() || is_upgradeable( fw, recommended_fw_ver) ) && pid != "1156") //0x1156 is pid for D436
+            if( should_bundle_fw_be_recommended(pid, fw, recommended_fw_ver) )
             {
                 std::stringstream msg;
 
@@ -864,11 +894,21 @@ namespace rs2
         bool yes_was_chosen = false;
         if (yes_no_dialog("Advanced Mode", message_text, yes_was_chosen, window, error_message))
         {
+            // meaning the user confirmed the advanced mode toggling
             if (yes_was_chosen)
             {
                 dev.as<advanced_mode>().toggle_advanced_mode(enable_advanced_mode);
                 restarting_device_info = get_device_info(dev, false);
                 view.not_model->add_log(enable_advanced_mode ? "Turning on advanced mode..." : "Turning off  advanced mode...");
+                
+                for( auto&& subdevice : subdevices )
+                {
+                    if( subdevice->s->is< rs2::depth_sensor >() )
+                    {
+                        subdevice->repopulate_options();
+                        break;
+                    }
+                }
             }
             keep_showing = false;
         }
@@ -876,7 +916,7 @@ namespace rs2
     }
 
 
-    bool device_model::draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message)
+    bool device_model::draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message, bool is_streaming)
     {
         bool was_set = false;
 
@@ -900,6 +940,10 @@ namespace rs2
                     if( _is_d500_device )  // D500 cannot toggle Advanced Mode
                     {
                         ImGui::TextColored( redish, "Device FW does not support advanced mode" );
+                    }
+                    else if (is_streaming)
+                    {
+                        ImGui::TextColored( redish, "Advanced mode cannot be enabled\nwhen streaming" );
                     }
                     else
                     {
@@ -1357,7 +1401,7 @@ namespace rs2
                     const bool is_advanced_mode_enabled = adv.is_enabled();
                     bool selected = is_advanced_mode_enabled;
                     // D500 cannot toggle Advanced Mode
-                    if( ! _is_d500_device && ImGui::MenuItem( "Advanced Mode", nullptr, &selected ) )
+                    if( ! _is_d500_device && ImGui::MenuItem( "Advanced Mode", nullptr, &selected, !is_streaming ) )
                     {
                         show_advanced_mode_popup = true;
 
@@ -2075,11 +2119,14 @@ namespace rs2
                             error_message = error_to_string(e);
                         }
 
+                        ImGui::PopStyleColor(1);
                         ImGui::PopItemWidth();
                         return is_clicked;
                     };
-                    sub->options_metadata[RS2_OPTION_VISUAL_PRESET].custom_draw_method = draw_preset_combo_box;
-                    ImGui::PopStyleColor(1);
+
+                    auto & visual_preset_opt_model = sub->options_metadata.at(RS2_OPTION_VISUAL_PRESET);
+                    visual_preset_opt_model.custom_draw_method = draw_preset_combo_box;
+                    
                     if (sub->draw_option(RS2_OPTION_VISUAL_PRESET, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;
@@ -2718,7 +2765,7 @@ namespace rs2
                 }
                 if (dev.is<advanced_mode>() && sub->s->is<depth_sensor>())
                 {
-                    if (draw_advanced_controls(viewer, window, error_message))
+                    if (draw_advanced_controls(viewer, window, error_message, is_streaming))
                     {
                         sub->_options_invalidated = true;
                         selected_file_preset.clear();

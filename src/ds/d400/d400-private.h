@@ -176,7 +176,7 @@ namespace librealsense
             {RS435_RGB_PID, "5.8.15.0" },
             {RS405U_PID, "5.8.15.0" },
             {RS435I_PID, "5.12.7.100" },
-            {RS436_PID, "5.17.0.100" },
+            {RS436_PID, "5.17.0.213" },
             {RS416_PID, "5.8.15.0" },
             {RS430I_PID, "5.8.15.0" },
             {RS416_RGB_PID, "5.8.15.0" },
@@ -186,7 +186,7 @@ namespace librealsense
             {RS400_MIPI_RECOVERY_PID, "5.16.0.1" },
             {RS430_GMSL_PID, "5.16.8.0" },
             {RS415_GMSL_PID, "5.17.1.1" },
-            {RS401_GMSL_PID, "5.17.2.100" } // TO BE UPDATED!!!
+            {RS401_GMSL_PID, "5.17.2.2" }
         };
 
         std::vector<platform::uvc_device_info> filter_d400_device_by_capability(
@@ -211,6 +211,27 @@ namespace librealsense
             uint8_t min_gvd_version = cap->second;
             return min_gvd_version <= cur_gvd_version;
         }
+
+        namespace d400_gvd_offsets 
+        {
+            constexpr size_t version_offset = 0;
+            constexpr size_t gvd_version_offset = 2;
+            constexpr size_t camera_fw_version_offset = 12;
+            constexpr size_t is_camera_locked_offset = 25;
+            constexpr size_t module_serial_offset = 48;
+            constexpr size_t module_asic_serial_offset = 64;
+            constexpr size_t fisheye_sensor_lb = 112;
+            constexpr size_t fisheye_sensor_hb = 113;
+            constexpr size_t imu_acc_chip_id = 124;
+            constexpr size_t hw_type_offset = 158;
+            constexpr size_t ip65_sealed_offset = 161;
+            constexpr size_t ir_filter_offset = 164;
+            constexpr size_t depth_sensor_type = 166;
+            constexpr size_t active_projector = 170;
+            constexpr size_t rgb_sensor = 174;
+            constexpr size_t imu_sensor = 178;
+            constexpr size_t motion_module_fw_version_offset = 212;
+        } 
 
         std::string extract_firmware_version_string( const std::vector< uint8_t > & fw_image );
 

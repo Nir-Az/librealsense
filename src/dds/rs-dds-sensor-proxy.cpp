@@ -31,11 +31,15 @@
 #include <rsutils/string/nocase.h>
 #include <rsutils/json.h>
 
+#include <dds/rs-dds-device-proxy.h>
 #include <dds/rs-dds-embedded-decimation-filter.h>
 #include <dds/rs-dds-embedded-temporal-filter.h>
 
+#include <src/ds/ds-private.h>
+
 #include "rs-dds-depth-sensor-proxy.h"
 
+#include <cmath>
 
 using namespace realdds;
 using rsutils::json;
@@ -48,6 +52,7 @@ dds_sensor_proxy::dds_sensor_proxy( std::string const & sensor_name,
                                     software_device * owner,
                                     std::shared_ptr< realdds::dds_device > const & dev )
     : software_sensor( sensor_name, owner )
+    , global_time_interface()
     , _dev( dev )
     , _name( sensor_name )
     , _md_enabled( dev->supports_metadata() )
@@ -354,14 +359,15 @@ void dds_sensor_proxy::handle_video_data( std::vector< uint8_t > && buffer,
     frame_additional_data data;  // with NO metadata by default!
     data.system_time = time_service::get_time();  // time of arrival in system clock
     data.backend_timestamp                        // time when the underlying backend (DDS) received it
-        = static_cast<rs2_time_t>(realdds::time_to_double( dds_sample.reception_timestamp ) * 1e3);
+        = static_cast< rs2_time_t >( realdds::time_to_double( dds_sample.reception_timestamp ) * SECONDS_TO_MILLISEC );
     data.timestamp               // in ms
-        = static_cast< rs2_time_t >( realdds::time_to_double( timestamp ) * 1e3 );
-    data.last_timestamp = streaming.last_timestamp.exchange( data.timestamp );
+        = static_cast< rs2_time_t >( realdds::time_to_double( timestamp ) * SECONDS_TO_MILLISEC );
     data.timestamp_domain;  // from metadata, or leave default (hardware domain)
     data.depth_units;       // from metadata
     data.frame_number;      // filled in only once metadata is known
     data.raw_size = static_cast< uint32_t >( buffer.size() );
+
+    update_timestamp_if_needed( data, streaming );
 
     auto vid_profile = dynamic_cast< video_stream_profile_interface * >( profile.get() );
     if( ! vid_profile )
@@ -405,14 +411,15 @@ void dds_sensor_proxy::handle_motion_data( realdds::topics::imu_msg && imu,
     frame_additional_data data;  // with NO metadata by default!
     data.system_time = time_service::get_time();  // time of arrival in system clock
     data.backend_timestamp                        // time when the underlying backend (DDS) received it
-        = static_cast<rs2_time_t>(realdds::time_to_double( sample.reception_timestamp ) * 1e3);
+        = static_cast< rs2_time_t >( realdds::time_to_double( sample.reception_timestamp ) * SECONDS_TO_MILLISEC );
     data.timestamp               // in ms
-        = static_cast< rs2_time_t >( realdds::time_to_double( imu.timestamp() ) * 1e3 );
-    data.last_timestamp = streaming.last_timestamp.exchange( data.timestamp );
+        = static_cast< rs2_time_t >( realdds::time_to_double( imu.timestamp() ) * SECONDS_TO_MILLISEC );
     data.timestamp_domain;  // leave default (hardware domain)
     data.last_frame_number = streaming.last_frame_number.fetch_add( 1 );
     data.frame_number = data.last_frame_number + 1;
     data.raw_size = sizeof( rs2_combined_motion );
+
+    update_timestamp_if_needed( data, streaming );
 
     auto new_frame_interface = allocate_new_frame( RS2_EXTENSION_MOTION_FRAME, profile.get(), std::move( data ) );
     if( ! new_frame_interface )
@@ -501,8 +508,8 @@ void dds_sensor_proxy::add_frame_metadata( frame * const f,
     // purposes, so we ignore here. The domain is optional, and really only rs-dds-adapter communicates it
     // because the source is librealsense...
     f->additional_data.timestamp;
-    md_header.nested( realdds::topics::metadata::header::key::timestamp_domain )
-        .get_ex( f->additional_data.timestamp_domain );
+    if( ! _handle_global_timestamp_locally )
+        md_header.nested( realdds::topics::metadata::header::key::timestamp_domain ).get_ex( f->additional_data.timestamp_domain );
 
     if( ! md.empty() )
     {
@@ -531,6 +538,9 @@ void dds_sensor_proxy::start( rs2_frame_callback_sptr callback )
 {
     // Remove leftovers from previous starts.
     _streaming_by_name.clear();
+
+    if( _handle_global_timestamp_locally )
+        enable_time_diff_keeper( true );
 
     for( auto & profile : sensor_base::get_active_streams() )
     {
@@ -631,6 +641,9 @@ void dds_sensor_proxy::stop()
     // and after software_sensor::stop cause to make sure _is_streaming is false
     // Removed here, same reason of killing on_frame_ready lambda instance. Moved to start()
     //_streaming_by_name.clear();
+
+    if( _handle_global_timestamp_locally )
+        enable_time_diff_keeper( false );
 }
 
 
@@ -725,6 +738,67 @@ void dds_sensor_proxy::add_option( std::shared_ptr< realdds::dds_option > option
     }
 }
 
+void dds_sensor_proxy::add_local_options()
+{
+    // If device has global time option (e.g. rs-dds-adapter), we don't add local handling.
+    auto global_timestamp_option = _options_by_id.find( RS2_OPTION_GLOBAL_TIME_ENABLED );
+    if( global_timestamp_option == _options_by_id.end() )
+    {
+        auto global_timestamp_option = std::make_shared< global_time_option >(); // Default to enabled
+        register_option( RS2_OPTION_GLOBAL_TIME_ENABLED, global_timestamp_option );
+        // options_watcher registration not needed for this option as it's local only
+        _handle_global_timestamp_locally = true;
+    }
+}
+
+
+void dds_sensor_proxy::update_timestamp_if_needed( librealsense::frame_additional_data & data, streaming_impl & streaming )
+{
+    if( _handle_global_timestamp_locally &&
+        // If handling locally then we know the option is of global_time_option type
+        std::dynamic_pointer_cast< global_time_option >( _options_by_id[RS2_OPTION_GLOBAL_TIME_ENABLED] )->is_true() )
+    {
+        // Override with global timestamp if time keeper ready
+        // Timekeeper updates clock wraps around every 32bit microseconds. Truncate our 64bit input to match.
+        static constexpr const uint64_t TRUNCATION_LIMIT = 0x100000000ULL;
+        uint64_t timestamp_us = static_cast< uint64_t >( data.timestamp * MILLISEC_TO_MICROSEC );
+        uint64_t truncated_timestamp_us = timestamp_us % TRUNCATION_LIMIT;
+        double truncated_timestamp_ms = truncated_timestamp_us * MICROSEC_TO_MILLISEC;
+        bool is_tf_ready = false;
+        double updated_timestamp_ms = _tf_keeper->get_system_hw_time( truncated_timestamp_ms, is_tf_ready );
+        if( is_tf_ready )
+        {
+            data.timestamp = updated_timestamp_ms;
+            data.timestamp_domain = RS2_TIMESTAMP_DOMAIN_GLOBAL_TIME; // timestamp not changed if not ready, so leave domain
+        }
+    }
+
+    // Update here when final data.timestamp is set
+    data.last_timestamp = streaming.last_timestamp.exchange( data.timestamp );
+}
+
+
+double dds_sensor_proxy::get_device_time_ms()
+{
+    if( auto device_proxy = dynamic_cast< debug_interface * >( _owner ) )
+    {
+        auto cmd = device_proxy->build_command( ds::MRD, ds::REGISTER_CLOCK_0, ds::REGISTER_CLOCK_0 + 4 );
+        auto res = device_proxy->send_receive_raw_data( cmd );
+
+        if( res.size() < ( sizeof( int32_t ) * 2 ) ) // opcode + timestamp
+            throw std::runtime_error( "Invalid response size getting device time" );
+
+        uint32_t const & code = *reinterpret_cast< uint32_t const * >( res.data() );
+        if( code != ds::MRD )
+            throw std::runtime_error( rsutils::string::from() << "Error getting device time: " << code );
+
+        uint32_t ts_micro = *reinterpret_cast< uint32_t const * >( res.data() + sizeof( code ) );
+        return ts_micro * MICROSEC_TO_MILLISEC;
+    }
+    else
+        throw std::runtime_error( "Expected owner to be dds-device-proxy" );
+}
+
 
 static bool processing_block_exists( processing_blocks const & blocks, std::string const & block_name )
 {
@@ -759,6 +833,7 @@ void dds_sensor_proxy::add_processing_block( std::string const & filter_name )
         LOG_ERROR( "Failed to create processing block '" << filter_name << "': " << e.what() );
     }
 }
+
 
 void dds_sensor_proxy::add_processing_block_settings( const std::string & filter_name,
                                                       std::shared_ptr< librealsense::processing_block_interface > & ppb ) const
@@ -844,8 +919,6 @@ void dds_sensor_proxy::add_embedded_filter( std::shared_ptr< realdds::dds_embedd
     {
         throw librealsense::invalid_value_exception("Filter '" + embedded_filter->get_name() + "' not supported");
     }
-
-    
 
     if (auto depth_sensor_proxy = dynamic_cast<dds_depth_sensor_proxy*>(this))
     {

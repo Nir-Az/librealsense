@@ -10,7 +10,6 @@
 #include "device.h"
 #include "image.h"
 #include "metadata-parser.h"
-#include "context.h"
 
 #include <src/core/matcher-factory.h>
 
@@ -35,11 +34,12 @@
 
 #include <src/ds/features/auto-exposure-limit-feature.h>
 #include <src/ds/features/gain-limit-feature.h>
-#include <src/ds/features/gyro-sensitivity-feature.h>
 
 namespace librealsense
 {
     // PSR
+    // default d400 device
+    // used as fallback for partial device creation when enabled by config
     class rs400_device : public d400_nonmonochrome,
                          public ds_advanced_mode_base,
                          public firmware_logger_device
@@ -79,7 +79,7 @@ namespace librealsense
     };
 
     class rs401_gmsl_device : public d400_color,
-                              public d400_nonmonochrome,
+                              //public d400_nonmonochrome,
                               public d400_mipi_device,
                               public firmware_logger_device
     {
@@ -89,7 +89,7 @@ namespace librealsense
             , backend_device( dev_info, register_device_notifications )
             , d400_device( dev_info )
             , d400_color( dev_info )
-            , d400_nonmonochrome( dev_info )
+            //, d400_nonmonochrome( dev_info )
             , d400_mipi_device()
             , firmware_logger_device( dev_info, d400_device::_hw_monitor, get_firmware_logs_command(), get_flash_logs_command() )
         {
@@ -101,7 +101,33 @@ namespace librealsense
         {
             std::vector<tagged_profile> tags;
 
-            tags.push_back({ RS2_STREAM_DEPTH, -1, 640, 480, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            int depth_width = 848;
+            int depth_height = 480;
+            int color_width = 848;
+            int color_height = 480;
+            int fps = 30;
+
+            tags.push_back( { RS2_STREAM_COLOR,
+                              -1,  // index
+                              color_width,
+                              color_height,
+                              get_color_format(),
+                              fps,
+                              profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+            tags.push_back( { RS2_STREAM_DEPTH,
+                              -1,  // index
+                              depth_width,
+                              depth_height,
+                              RS2_FORMAT_Z16,
+                              fps,
+                              profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+            tags.push_back( { RS2_STREAM_INFRARED,
+                              -1,  // index
+                              depth_width,
+                              depth_height,
+                              get_ir_format(),
+                              fps,
+                              profile_tag::PROFILE_TAG_SUPERSET } );
             return tags;
         };
     };
@@ -707,6 +733,7 @@ namespace librealsense
             , d400_mipi_device()
             , firmware_logger_device( dev_info, d400_device::_hw_monitor, get_firmware_logs_command(), get_flash_logs_command() )
         {
+            store_sensors_indices({_depth_device_idx,_color_device_idx, _motion_module_device_idx});
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override;
@@ -820,9 +847,7 @@ namespace librealsense
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
 #if !defined(__APPLE__) // Motion sensors not supported on macOS
-            if( _fw_version >= firmware_version( 5, 16, 0, 0 ) )
-                register_feature(
-                    std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
+            register_gyro_sensitivity();
 #endif
         }
 
@@ -870,7 +895,7 @@ namespace librealsense
             , firmware_logger_device( dev_info, d400_device::_hw_monitor, get_firmware_logs_command(), get_flash_logs_command())
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
-            register_feature(std::make_shared< gyro_sensitivity_feature >(get_raw_motion_sensor(), get_motion_sensor()));
+            register_gyro_sensitivity();
         }
 
 
@@ -1033,9 +1058,7 @@ namespace librealsense
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
 #if !defined(__APPLE__) // Motion sensors not supported on macOS
-            if( _fw_version >= firmware_version( 5, 16, 0, 0 ) )
-                register_feature(
-                    std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
+            register_gyro_sensitivity();
 #endif
         }
 
@@ -1141,16 +1164,10 @@ namespace librealsense
         }
         catch( const std::exception& e )
         {
-            auto ctx = get_context();
-            if( ctx && is_partial_device_allowed( ctx ) )
-            {
-                LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
-                                                   << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
-                // Create a device with partial capabilities when allowed instead of failing
-                return std::make_shared< rs400_device >( dev_info, register_device_notifications );
-            }
-            else
-                throw; // rethrowing exception
+            LOG_ERROR( rsutils::string::from() << "Failed to create device for PID 0x" << std::hex << std::setw( 4 )
+                                               << std::setfill( '0' ) << (int)pid << "! (" << e.what() << ")" );
+            // Create a device with partial capabilities instead of failing
+            return std::make_shared< rs400_device >( dev_info, register_device_notifications );
         }
     }
 
@@ -1345,9 +1362,12 @@ namespace librealsense
     {
         std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
         // TODO - A proper matcher for High-FPS sensor is required
-        std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(), 
-                                                      _ds_motion_common->get_gyro_stream().get()};
-        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        if (!_has_motion_module_failed)
+        {
+            std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
+                                                          _ds_motion_common->get_gyro_stream().get()};
+            streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        }
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 
@@ -1355,9 +1375,12 @@ namespace librealsense
     {
         std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
         // TODO - A proper matcher for High-FPS sensor is required
-        std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
-                                                      _ds_motion_common->get_gyro_stream().get() };
-        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        if (!_has_motion_module_failed)
+        {
+            std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
+                                                          _ds_motion_common->get_gyro_stream().get()};
+            streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        }
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 
@@ -1396,9 +1419,12 @@ namespace librealsense
     std::shared_ptr<matcher> rs455_device::create_matcher(const frame_holder& frame) const
     {
         std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
-        std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
-                                                      _ds_motion_common->get_gyro_stream().get()};
-        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        if (!_has_motion_module_failed)
+        {
+            std::vector<stream_interface*> mm_streams = { _ds_motion_common->get_accel_stream().get(),
+                                                          _ds_motion_common->get_gyro_stream().get()};
+            streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
+        }
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 }

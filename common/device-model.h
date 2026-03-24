@@ -312,7 +312,7 @@ namespace rs2
                                           bool reset_delay = false );
 
         int draw_playback_panel(ux_window& window, ImFont* font, viewer_model& view);
-        bool draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message);
+        bool draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message, bool is_streaming = false);
         void draw_controls(float panel_width, float panel_height,
             ux_window& window,
             std::string& error_message,
@@ -413,6 +413,8 @@ namespace rs2
         void draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
             ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
             std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+
+        bool should_bundle_fw_be_recommended(const std::string& pid, const std::string& fw, const std::string& recommended_fw_ver) const;
 
         std::thread check_for_device_updates_thread;
         std::mutex dev_mutex;

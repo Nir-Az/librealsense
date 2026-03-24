@@ -57,6 +57,7 @@ bool dds_device::wait_until_ready( size_t timeout_ms, bool allow_partial_capabil
                 _impl->set_state( impl::state_t::READY );
                 return false;
             }
+            _impl->set_state( impl::state_t::OFFLINE ); // Avoid "zombie" devices that are not fully initialized, but still show up as online
             DDS_THROW( runtime_error, "[" << debug_name() << "] timeout waiting to get ready" );
         }
         std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
@@ -135,7 +136,7 @@ void dds_device::on_discovery_restored( topics::device_info const & new_info )
         DDS_THROW( runtime_error, "device serial number cannot change" );
 
     _impl->_info = new_info;
-    _impl->set_state( impl::state_t::ONLINE );
+    _impl->set_state( impl::state_t::INITIALIZING );
     // NOTE: still not ready - pending handshake/reinitialization
 }
 
