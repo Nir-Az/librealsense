@@ -276,21 +276,24 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
         devices = []
     for dev in devices:
         try:
-            sn = dev.get_info( rs.camera_info.firmware_update_id )
+            sn = dev.get_info( rs.camera_info.serial_number ) if dev.supports( rs.camera_info.serial_number ) \
+                 else dev.get_info( rs.camera_info.firmware_update_id )
         except RuntimeError as e:
-            log.e( f'Found device but trying to get fw-update-id failed: {e}' )
+            log.e( f'Found device but failed to get serial number: {e}' )
             continue
 
-        if sn not in detected_sns:
-            # New device detected
-            detected_sns.add(sn)
-            device = Device( sn, dev )
-            _device_by_sn[sn] = device
-            port_str = f'port {device.port}: ' if device.port is not None else ''
-            log.d( f'...{port_str}{sn} {dev}' )
+        if sn in detected_sns:
+            name = dev.get_info( rs.camera_info.name ) if dev.supports( rs.camera_info.name ) else 'Unknown'
+            log.w( f'Duplicate serial number detected: {sn} ({name}) — skipping' )
+            continue
+        detected_sns.add( sn )
+        device = Device( sn, dev )
+        _device_by_sn[sn] = device
+        port_str = f'port {device.port}: ' if device.port is not None else ''
+        log.d( f'...{port_str}{sn} {dev}' )
 
-            name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
-            d555_found = "D555" in name
+        name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
+        d555_found = "D555" in name
 
     if hub and not d555_found:
         # All CI machines with a D555 connected have a hub. Detect camera even in case domain have reset to 0 so applicable tests will run.
@@ -300,7 +303,8 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
             name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else ""
             if "D555" in name:
                 log.i("Found D555 device with domain 0, not same as in configuration file")
-                sn = dev.get_info( rs.camera_info.firmware_update_id ) # Supported by D555 devices
+                sn = dev.get_info( rs.camera_info.serial_number ) if dev.supports( rs.camera_info.serial_number ) \
+                     else dev.get_info( rs.camera_info.firmware_update_id )
                 device = Device( sn, dev )
                 _device_by_sn[sn] = device
 
@@ -323,7 +327,8 @@ def _device_change_callback( info ):
             device._removed = True
             log.d( 'device removed:', device.serial_number )
     for handle in info.get_new_devices():
-        sn = handle.get_info( rs.camera_info.firmware_update_id )
+        sn = handle.get_info( rs.camera_info.serial_number ) if handle.supports( rs.camera_info.serial_number ) \
+             else handle.get_info( rs.camera_info.firmware_update_id )
         log.d( 'device added:', sn, handle )
         if sn in _device_by_sn:
             device = _device_by_sn[sn]
