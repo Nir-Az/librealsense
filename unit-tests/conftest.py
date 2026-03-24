@@ -340,12 +340,15 @@ def module_device_setup(request):
             yield None
             return
 
-        serial_numbers = find_matching_devices(device_markers, each=False,
+        serial_numbers, had_candidates = find_matching_devices(device_markers, each=False,
                                                   cli_includes=request.config.getoption("--device", default=[]),
                                                   cli_excludes=request.config.getoption("--exclude-device", default=[]))
 
         if not serial_numbers:
-            pytest.skip("No devices found matching requirements")
+            if had_candidates:
+                pytest.skip("All matching devices were excluded")
+            else:
+                pytest.fail("No devices found matching requirements")
 
         serial_number = serial_numbers[0]
         log.debug(f"Test will use first matching device: {serial_number}")
@@ -400,10 +403,10 @@ def test_context(request, module_device_setup):
 
 @pytest.fixture
 def test_device(test_context):
-    """Return (device, context) for the first visible device, or skip if none found."""
+    """Return (device, context) for the first visible device, or fail if none found."""
     devices_list = list(test_context.devices)
     if not devices_list:
-        pytest.skip("No device available for test")
+        pytest.fail("No device available for test")
 
     dev = devices_list[0]
     log.debug(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
