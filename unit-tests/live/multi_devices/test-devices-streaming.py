@@ -202,8 +202,12 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
     all_counts = []
     active_sensors = []
 
+    counting = False
+
     def make_callback(ctr, cnt):
         def callback(frame):
+            if not counting:
+                return
             st = frame.get_profile().stream_type()
             cnt[st] += 1
             if frame.supports_frame_metadata(rs.frame_metadata_value.frame_counter):
@@ -226,6 +230,7 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
             sensors = dev.query_sensors()
             profiles_by_idx = defaultdict(list)
             for stream_type, stream_index, w, h, fmt, fps in stream_configs:
+                found = False
                 for idx, sensor in enumerate(sensors):
                     for p in sensor.get_stream_profiles():
                         if not p.is_video_stream_profile():
@@ -236,36 +241,41 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
                                 and vp.width() == w and vp.height() == h
                                 and vp.fps() == fps and idx_match):
                             profiles_by_idx[idx].append(p)
+                            found = True
                             break
-                    else:
-                        continue
-                    break
+                    if found:
+                        break
+                if not found:
+                    log.f(f"No matching profile for {stream_type} on {name}")
 
             for idx, profiles in profiles_by_idx.items():
-                sensors[idx].open(profiles)
-                sensors[idx].start(cb)
-                active_sensors.append(sensors[idx])
+                sensor = sensors[idx]
+                sensor.open(profiles)
+                active_sensors.append(sensor)
+                sensor.start(cb)
         log.i(f"Stabilizing for {STABILIZATION_TIME_SEC} seconds...")
         time.sleep(STABILIZATION_TIME_SEC)
 
-        # Reset counters so stabilization frames don't count
-        for ctr, cnt in zip(all_counters, all_counts):
-            ctr.clear()
-            cnt.clear()
-
+        counting = True
         log.i(f"Streaming for {duration_sec} seconds...")
+        start_time = time.time()
         time.sleep(duration_sec)
+        actual_duration = time.time() - start_time
+        counting = False
     finally:
         for s in active_sensors:
             try:
                 s.stop()
+            except Exception as e:
+                log.d(f"Stop error: {e}")
+            try:
                 s.close()
             except Exception as e:
-                log.d(f"Cleanup error: {e}")
+                log.d(f"Close error: {e}")
 
     # Feed into existing analysis
-    all_framesets = [sum(cnt.values()) for cnt in all_counts]
-    return aggregate_results(all_counters, all_framesets, all_counts, device_info, duration_sec)
+    all_frames = [sum(cnt.values()) for cnt in all_counts]
+    return aggregate_results(all_counters, all_frames, all_counts, device_info, actual_duration)
 
 
 #
