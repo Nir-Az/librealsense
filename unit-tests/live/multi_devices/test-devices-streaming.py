@@ -198,20 +198,20 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
     :return: Tuple of (success, list of drop_percentages, stats)
     """
     device_info = []
-    all_counters = []
-    all_counts = []
+    all_frame_counters = []
+    all_stream_frame_counts = []
     active_sensors = []
 
     counting = False
 
-    def make_callback(ctr, cnt):
+    def make_callback(frame_counters, frame_counts):
         def callback(frame):
             if not counting:
                 return
             st = frame.get_profile().stream_type()
-            cnt[st] += 1
+            frame_counts[st] += 1
             if frame.supports_frame_metadata(rs.frame_metadata_value.frame_counter):
-                ctr[st].append(frame.get_frame_metadata(rs.frame_metadata_value.frame_counter))
+                frame_counters[st].append(frame.get_frame_metadata(rs.frame_metadata_value.frame_counter))
         return callback
 
     try:
@@ -220,11 +220,11 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
             name = dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else "Unknown"
             device_info.append({'sn': sn, 'name': name})
 
-            counters = defaultdict(list)
-            counts = defaultdict(int)
-            all_counters.append(counters)
-            all_counts.append(counts)
-            cb = make_callback(counters, counts)
+            frame_counters = defaultdict(list)
+            frame_counts = defaultdict(int)
+            all_frame_counters.append(frame_counters)
+            all_stream_frame_counts.append(frame_counts)
+            cb = make_callback(frame_counters, frame_counts)
 
             # Group profiles by sensor index (depth+IR share stereo module, color is separate)
             sensors = dev.query_sensors()
@@ -274,8 +274,8 @@ def stream_multi_and_check_frames(*devs, stream_configs, duration_sec=STREAM_DUR
                 log.d(f"Close error: {e}")
 
     # Feed into existing analysis
-    all_frames = [sum(cnt.values()) for cnt in all_counts]
-    return aggregate_results(all_counters, all_frames, all_counts, device_info, actual_duration)
+    all_frames = [sum(cnt.values()) for cnt in all_stream_frame_counts]
+    return aggregate_results(all_frame_counters, all_frames, all_stream_frame_counts, device_info, actual_duration)
 
 
 #
