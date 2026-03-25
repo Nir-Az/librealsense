@@ -712,7 +712,7 @@ def hw_reset( serial_numbers, timeout = MAX_ENUMERATION_TIME ):
     else:
         # normally we will get here with a mipi device,
         # we want to allow some time for the device to reinitialize as it was not disconnected
-        time.sleep(3)
+        time.sleep(8)
     #
     return _wait_for( serial_numbers, timeout = timeout )
 
