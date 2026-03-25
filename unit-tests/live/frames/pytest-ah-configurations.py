@@ -17,7 +17,7 @@ VGA_RESOLUTION = (640, 360)
 HD_RESOLUTION = (1280, 720)
 
 pytestmark = [
-    pytest.mark.device("D585S"),
+    pytest.mark.device_each("D585S"),
     pytest.mark.context("nightly"),
 ]
 
