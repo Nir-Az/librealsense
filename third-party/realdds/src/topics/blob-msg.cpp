@@ -58,6 +58,12 @@ blob_msg::take_next( dds_topic_reader & reader, blob_msg * output, dds_sample * 
 
 dds_sequence_number blob_msg::write_to( dds_topic_writer & writer ) const
 {
+    return write_to( writer, []() { return false; } );
+}
+
+
+dds_sequence_number blob_msg::write_to( dds_topic_writer & writer, std::function< bool() > should_stop ) const
+{
     eprosima::fastrtps::rtps::WriteParams params;
     bool success = DDS_API_CALL(
         writer.get()->write( const_cast< udds::blob * >( static_cast< udds::blob const * >( this ) ), params ) );
@@ -66,6 +72,24 @@ dds_sequence_number blob_msg::write_to( dds_topic_writer & writer ) const
         LOG_ERROR( "Error writing message" );
         return 0;
     }
+    
+    // We assume ASYNCHRONOUS mode, so write() returned quickly.
+    // Now wait for ACKs with periodic check.
+    dds_time wait_time;
+    wait_time.seconds = 0;
+    wait_time.nanosec = 100000000; // 0.1s
+    
+    while( DDS_API_CALL( writer.get()->wait_for_acknowledgments( wait_time ) != ReturnCode_t::RETCODE_OK ) )
+    {
+        if( should_stop() )
+        {
+            LOG_DEBUG( "Aborting write of blob message" );
+            size_t removed = 0;
+            DDS_API_CALL( writer.get()->clear_history( &removed ) );
+            return 0;
+        }
+    }
+
     // The params will contain, after the write, the sequence number (incremented automatically) for the sample that was
     // sent. The source_timestamp is always INVALID for some reason.
     return params.sample_identity().sequence_number().to64long();

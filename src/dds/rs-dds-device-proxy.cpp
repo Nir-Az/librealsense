@@ -745,6 +745,7 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
         std::mutex mutex;
         std::condition_variable cv;
         json dfu_ready;
+        std::atomic_bool should_stop( false );
         auto subscription = _dds_dev->on_notification(
             [&]( std::string const & id, json const & notification )
             {
@@ -752,6 +753,10 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
                     return;
                 std::unique_lock< std::mutex > lock( mutex );
                 dfu_ready = notification;
+                std::string tmp_error_str;
+                realdds::dds_device::check_reply( dfu_ready, &tmp_error_str );
+                if( ! tmp_error_str.empty() )
+                    should_stop = true;  // Break early on error. writer->wait_for_acks should return immediately. 
                 cv.notify_all();
             } );
 
@@ -769,7 +774,7 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
             throw std::runtime_error( "timeout waiting for DFU subscriber" );
         LOG_DEBUG( "transmitting image: " << image.size() << " bytes; crc= " << crc );
         auto blob = realdds::topics::blob_msg( std::vector< uint8_t >( image ) );
-        blob.write_to( *writer );
+        blob.write_to( *writer, [&should_stop]() { return should_stop.load(); } );
 
         double timeout = 5.;  // seconds
         if( auto controller
