@@ -43,7 +43,7 @@ namespace librealsense
                     {
                         strong->invoke_devices_changed_callbacks(devs, {});
                         // MIPI devices do not re-enumerate so we need to give them some time to restart
-                        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+                        std::this_thread::sleep_for(std::chrono::seconds(5));
                     }
                     if (auto strong = ctx.lock())
                         strong->invoke_devices_changed_callbacks({}, devs);
