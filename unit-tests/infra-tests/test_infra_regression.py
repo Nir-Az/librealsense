@@ -534,7 +534,8 @@ exec(compile(_src, _conftest_path, "exec"), globals())
 '''
 
 # Disable installed plugins that interfere with pytester subprocess
-_NO_PLUGINS = ["-p", "no:retry", "-p", "no:timeout", "-p", "no:repeat"]
+_NO_PLUGINS = ["-p", "no:retry", "-p", "no:timeout", "-p", "no:repeat",
+               "-p", "no:asyncio", "-p", "no:anyio", "-p", "no:typeguard"]
 
 
 @pytest.fixture
@@ -549,7 +550,15 @@ def pytester_with_infra(pytester):
 
     # Always run as subprocess with plugin isolation
     _original = pytester.runpytest_subprocess
-    pytester.runpytest = lambda *args, **kw: _original(*_NO_PLUGINS, *args, **kw)
+
+    def _run(*args, **kw):
+        result = _original(*_NO_PLUGINS, *args, **kw)
+        # If subprocess crashed before producing output, dump stderr for debugging
+        if not result.outlines and result.errlines:
+            pytest.fail(f"pytester subprocess crashed:\n" + "\n".join(result.errlines))
+        return result
+
+    pytester.runpytest = _run
     return pytester
 
 
