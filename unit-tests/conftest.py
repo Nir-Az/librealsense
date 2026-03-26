@@ -18,6 +18,10 @@ and fixtures that pytest requires in conftest.py for auto-discovery.
 import pytest
 import sys
 import os
+
+# pytester plugin is needed by infra-tests/ (E2E regression tests for the pytest infra itself).
+# It must be registered at the top-level conftest — pytest rejects pytest_plugins in subdirectories.
+pytest_plugins = ["pytester"]
 import logging
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
