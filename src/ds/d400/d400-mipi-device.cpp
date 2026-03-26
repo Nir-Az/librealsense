@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include "d400-mipi-device.h"
+#include "librealsense-exception.h"
 
 namespace librealsense
 {
@@ -67,7 +68,8 @@ namespace librealsense
                     (RS2_CAMERA_INFO_PHYSICAL_PORT):(RS2_CAMERA_INFO_DFU_DEVICE_PATH);
 
         // Write signed firmware to appropriate file descriptor
-        std::ofstream fw_path_in_device(get_info(_dfu_port_info), std::ios::binary);
+        std::string dfu_path = get_info(_dfu_port_info);
+        std::ofstream fw_path_in_device(dfu_path, std::ios::binary);
         if (fw_path_in_device)
         {
             bool burn_done = false;
@@ -89,8 +91,8 @@ namespace librealsense
         }
         else
         {
-            throw std::runtime_error("Firmware Update failed - DFU path: "
-                + std::string(get_info(_dfu_port_info)) + " - wrong path or permissions missing");
+            throw librealsense::io_exception("Firmware Update failed - DFU path: " + dfu_path
+                + " - wrong path or permissions missing");
         }
         LOG_INFO("FW update process completed successfully.");
         fw_path_in_device.close();
