@@ -345,10 +345,13 @@ def module_device_setup(request):
                                                   cli_excludes=request.config.getoption("--exclude-device", default=[]))
 
         if not serial_numbers:
+            has_required = any(m.name == 'device' for m in device_markers)
             if had_candidates:
                 pytest.skip("All matching devices were excluded")
-            else:
+            elif has_required:
                 pytest.fail("No devices found matching requirements")
+            else:
+                pytest.skip("No devices found matching requirements")
 
         serial_number = serial_numbers[0]
         log.debug(f"Test will use first matching device: {serial_number}")
