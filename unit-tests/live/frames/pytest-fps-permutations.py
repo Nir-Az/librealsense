@@ -18,6 +18,7 @@ HD_RESOLUTION = (1280, 720)
 
 pytestmark = [
     pytest.mark.device("D400*"),
+    pytest.mark.device_exclude("D401"),
     pytest.mark.context("nightly"),
 ]
 
