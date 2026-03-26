@@ -67,7 +67,6 @@ namespace librealsense
                     (RS2_CAMERA_INFO_PHYSICAL_PORT):(RS2_CAMERA_INFO_DFU_DEVICE_PATH);
 
         // Write signed firmware to appropriate file descriptor
-        LOG_INFO("MIPI FW update DFU path: " << get_info(_dfu_port_info));
         std::ofstream fw_path_in_device(get_info(_dfu_port_info), std::ios::binary);
         if (fw_path_in_device)
         {
@@ -90,7 +89,8 @@ namespace librealsense
         }
         else
         {
-            throw std::runtime_error("Firmware Update failed - wrong path or permissions missing");
+            throw std::runtime_error("Firmware Update failed - DFU path: "
+                + std::string(get_info(_dfu_port_info)) + " - wrong path or permissions missing");
         }
         LOG_INFO("FW update process completed successfully.");
         fw_path_in_device.close();

@@ -269,15 +269,15 @@ log.d( 'running:', cmd )
 sys.stdout.flush()
 result = subprocess.run( cmd )   # may throw
 
-# Wait for the camera to finish rebooting before doing anything else;
-# the test exit flow may cut USB power (hub port disable) so we must not exit mid-reboot
-wait_for_reboot( same_version )
-
 if result.returncode != 0:
     log.e( 'rs-fw-update returned exit code', result.returncode )
     test.check( False, description='rs-fw-update should return exit code 0' )
     test.finish()
     test.print_results_and_exit()
+
+# Wait for the camera to finish rebooting before doing anything else;
+# the test exit flow may cut USB power (hub port disable) so we must not exit mid-reboot
+wait_for_reboot( same_version )
 
 # make sure update worked and check FW version and update counter
 device, ctx = test.find_first_device_or_exit()
