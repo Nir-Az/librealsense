@@ -244,7 +244,9 @@ if (current_fw_version == bundled_fw_version and not custom_fw_path) or \
 
 downgrade_counter = get_downgrade_counter( device )
 log.d( 'downgrade counter:', downgrade_counter )
-if downgrade_counter >= 19:
+if downgrade_counter == 0xFFFF:
+    log.d( 'downgrade counter is uninitialized (0xFFFF), skipping reset' )
+elif downgrade_counter >= 19:
     log.d( 'resetting downgrade counter (was', str(downgrade_counter) + ')' )
     reset_downgrade_counter( device )
     log.d( 'sleeping for 3 sec...' )
