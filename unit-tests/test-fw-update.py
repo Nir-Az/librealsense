@@ -247,6 +247,11 @@ log.d( 'downgrade counter:', downgrade_counter )
 if downgrade_counter >= 19:
     log.d( 'resetting downgrade counter (was', str(downgrade_counter) + ')' )
     reset_downgrade_counter( device )
+    log.d( 'sleeping for 3 sec...' )
+    time.sleep( 3 )
+    downgrade_counter = get_downgrade_counter( device )
+    log.d( 'downgrade counter after reset is:', str(downgrade_counter))
+    test.check_equal( downgrade_counter, 0 )
     downgrade_counter = 0
 
 fw_version_regex = bundled_fw_version.to_string()
