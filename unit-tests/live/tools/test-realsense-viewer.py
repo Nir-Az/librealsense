@@ -5,7 +5,7 @@
 #test:donotrun:!nightly
 #test:donotrun:!gui
 
-import os, platform, re, shutil, subprocess, sys, time
+import os, platform, re, shutil, subprocess, sys, threading, time
 from rspy import log, repo, test
 
 ansi_escape = re.compile( rb'\x1b\[[0-9;]*m' )
@@ -51,25 +51,33 @@ if viewer_tests and platform.system() == 'Windows':
 if viewer_tests:
     cmd += [viewer_tests, '--auto']
     log.d( 'running:', *cmd )
+    # Strip ANSI color codes and replace frame counts with elapsed time
+    def print_stdout( pipe ):
+        test_start = time.monotonic()
+        for line in pipe:
+            line = ansi_escape.sub( b'', line )
+            m = frame_prefix.search( line )
+            if m:
+                elapsed = time.monotonic() - test_start
+                line = line[:m.start()] + f'[{elapsed:5.1f}s] '.encode() + line[m.end():]
+            sys.stdout.buffer.write( line )
+
+    # Filter Mesa glCopyTexImage2D warnings that are irrelevant with software rendering
+    def print_stderr( pipe ):
+        for line in pipe:
+            if b'glCopyTexImage2D' not in line:
+                sys.stderr.buffer.write( line )
+
     p = subprocess.Popen( cmd,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
                           env=env )
-    # Strip ANSI color codes and replace frame counts with elapsed time
-    test_start = time.monotonic()
-    for line in p.stdout:
-        line = ansi_escape.sub( b'', line )
-        m = frame_prefix.search( line )
-        if m:
-            elapsed = time.monotonic() - test_start
-            line = line[:m.start()] + f'[{elapsed:5.1f}s] '.encode() + line[m.end():]
-        sys.stdout.buffer.write( line )
-        sys.stdout.buffer.flush()
-    # When using Mesa, we get warnings about glCopyTexImage2D when using the IMU, filtering them as they're irrelevant
-    # to the test results and expected with Mesa's OpenGL implementation
-    for line in p.stderr:
-        if b'glCopyTexImage2D' not in line:
-            sys.stderr.buffer.write( line )
+    stdout_thread = threading.Thread( target=print_stdout, args=( p.stdout, ) )
+    stderr_thread = threading.Thread( target=print_stderr, args=( p.stderr, ) )
+    stdout_thread.start()
+    stderr_thread.start()
+    stdout_thread.join()
+    stderr_thread.join()
     p.wait()
     if p.returncode != 0:
         log.e( 'realsense-viewer-tests exited with code', p.returncode )
