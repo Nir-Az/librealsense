@@ -4,7 +4,7 @@
 
 - **Base branch**: `origin/development`
 - **PR target**: `origin/development`
-- **Push to**: `fork` remote
+- **Push to**: `fork` remote (if no `fork` remote ask the user where to push to and remember the answer for next time)
 
 ## Commit Messages
 
