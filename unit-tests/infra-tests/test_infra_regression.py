@@ -86,7 +86,10 @@ def fake_get(sn):
 
 def make_mock_item(name="test_example", markers=None, module_name="fake_module",
                    device_serial=None):
-    """Build a mock pytest Item for unit-testing collection/filter logic.
+    """Build a fake pytest Item for unit-testing collection/filter logic.
+
+    Uses SimpleNamespace so that `hasattr(item, 'callspec')` is genuinely False
+    when no device_serial is set (MagicMock auto-creates attributes on access).
 
     Args:
         name:          Test name (shown in output).
@@ -94,18 +97,18 @@ def make_mock_item(name="test_example", markers=None, module_name="fake_module",
         module_name:   Module name for device-grouping sort key.
         device_serial: If set, simulates a parametrized device_each test.
     """
-    item = MagicMock()
+    marks = list(markers or [])
+
+    item = types.SimpleNamespace()
     item.name = name
     item.module = types.ModuleType(module_name)
+    item.add_marker = MagicMock()  # trackable for assert_called/assert_not_called
 
-    # Parametrized device serial (from device_each)
+    # Only set callspec when parametrized — otherwise leave it absent
     if device_serial:
-        item.callspec = MagicMock()
-        item.callspec.params = {'_test_device_serial': device_serial}
-    else:
-        del item.callspec  # so hasattr(item, 'callspec') is False
-
-    marks = list(markers or [])
+        item.callspec = types.SimpleNamespace(
+            params={'_test_device_serial': device_serial}
+        )
 
     def iter_markers(match_name=None):
         for m in marks:
