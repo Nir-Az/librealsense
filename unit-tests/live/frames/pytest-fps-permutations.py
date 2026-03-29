@@ -2,7 +2,7 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-Test FPS accuracy for all pairwise sensor stream combinations on D400 devices.
+Test FPS accuracy for all pairwise sensor stream combinations.
 Generates all (N choose 2) pairs of streams and verifies FPS for each.
 """
 
@@ -17,7 +17,8 @@ VGA_RESOLUTION = (640, 360)
 HD_RESOLUTION = (1280, 720)
 
 pytestmark = [
-    pytest.mark.device("D400*"),
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_each("D555"),
     pytest.mark.device_exclude("D401"),
     pytest.mark.context("nightly"),
 ]
