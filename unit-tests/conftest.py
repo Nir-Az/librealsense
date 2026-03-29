@@ -19,9 +19,6 @@ import pytest
 import sys
 import os
 
-# pytester plugin is needed by infra-tests/ but pytest_plugins must be in the root conftest.
-# It only adds a few inert fixtures — no side effects on live/device tests.
-pytest_plugins = ["pytester"]
 import logging
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests

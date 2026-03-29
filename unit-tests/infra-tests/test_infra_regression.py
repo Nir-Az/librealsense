@@ -12,7 +12,11 @@ Run with:
 
 import sys
 import os
+import re
 import types
+import subprocess
+import tempfile
+import textwrap
 from unittest.mock import MagicMock
 import pytest
 
@@ -442,140 +446,151 @@ class TestLogNaming:
 
 
 # =============================================================================
-# 8. End-to-end integration tests (pytester subprocess)
+# 8. End-to-end integration tests (subprocess)
 #
-# These tests spawn a real pytest subprocess. The subprocess conftest mocks
-# only hardware (rspy.devices + pyrealsense2), then exec()s the REAL
-# unit-tests/conftest.py. So all hooks, fixtures, and logic come from
-# production code — if someone changes conftest.py, these tests break.
+# These tests spawn a real pytest subprocess using sys.executable (same Python
+# that's running the tests — guaranteed to find pytest). The subprocess conftest
+# mocks only hardware, then exec()s the REAL unit-tests/conftest.py.
 # =============================================================================
 
-_MOCK_CONFTEST = r'''
-"""
-Pytester conftest: mock ONLY the hardware layer, then exec() the REAL conftest.py.
-If someone changes conftest.py, these tests exercise the real change.
-"""
-import sys, os, types
+# Path to the mock conftest template (written to temp dirs for each E2E test)
+_E2E_CONFTEST_PATH = os.path.join(os.path.dirname(__file__), '_e2e_conftest.py')
 
-# --- Paths ---
-_py_dir = r"{py_dir}"
-if _py_dir not in sys.path:
-    sys.path.insert(0, _py_dir)
-
-# --- Fake pyrealsense2 (just enough for the real conftest to load) ---
-_rs = types.ModuleType("pyrealsense2")
-_rs.__file__ = "fake_pyrealsense2"
-_rs.log_to_console = lambda level: None
-class _CameraInfo:
-    name = "name"
-    product_line = "product_line"
-    physical_port = "physical_port"
-    connection_type = "connection_type"
-_rs.camera_info = _CameraInfo
-class _LogSeverity:
-    debug = 0
-_rs.log_severity = _LogSeverity
-class _FakeContext:
-    @property
-    def devices(self):
-        return []
-_rs.context = _FakeContext
-sys.modules["pyrealsense2"] = _rs
-
-# --- Mock rspy.devices (before the real conftest imports it) ---
-class FakeDevice:
-    def __init__(self, sn, name):
-        self.sn = sn
-        self.name = name
-
-_inventory = {{
-    "D455": ("111", "D400"),
-    "D435": ("222", "D400"),
-    "D515": ("555", "D500"),
-    "D401": ("777", "D400"),
-}}
-_sn_map = {{"111": "D455", "222": "D435", "555": "D515", "777": "D401"}}
-
-import rspy.devices as _dev
-def _mock_by_spec(pattern, ignored):
-    if pattern.endswith("*"):
-        pl = pattern[:-1]
-        for name, (sn, p) in _inventory.items():
-            if p == pl:
-                yield sn
-    elif pattern in _inventory:
-        yield _inventory[pattern][0]
-    elif pattern in _sn_map:
-        yield pattern
-
-def _mock_get(sn):
-    name = _sn_map.get(sn)
-    return FakeDevice(sn, name) if name else None
-
-_dev.by_spec = _mock_by_spec
-_dev.get = _mock_get
-_dev._device_by_sn = {{sn: FakeDevice(sn, n) for sn, n in _sn_map.items()}}
-_dev.hub = None
-_dev._context = None
-_dev.query = lambda **kw: None
-_dev.map_unknown_ports = lambda: None
-_dev.enable_only = lambda serials, recycle=True: None
-_dev.wait_until_all_ports_disabled = lambda: None
-
-# --- exec() the REAL conftest.py (all hooks and fixtures come from there) ---
-_conftest_path = r"{conftest_path}"
-with open(_conftest_path) as _f:
-    _src = _f.read()
-
-_real_unit_tests_dir = os.path.dirname(_conftest_path)
-current_dir = _real_unit_tests_dir
-py_dir = os.path.join(_real_unit_tests_dir, "py")
-if py_dir not in sys.path:
-    sys.path.insert(0, py_dir)
-
-exec(compile(_src, _conftest_path, "exec"), globals())
-'''
-
-# Disable installed plugins that interfere with pytester subprocess
-_NO_PLUGINS = ["-p", "no:retry", "-p", "no:timeout", "-p", "no:repeat",
-               "-p", "no:asyncio", "-p", "no:anyio", "-p", "no:typeguard"]
+# Resolved once, used by all E2E tests
+_PY_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'py'))
+_REAL_CONFTEST = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'conftest.py'))
 
 
-def _check_subprocess_pytest():
-    """Verify that `sys.executable -m pytest` works. Skip E2E tests if not."""
-    import subprocess
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "--version"],
-        capture_output=True, timeout=10,
-    )
-    if result.returncode != 0:
-        pytest.skip(f"pytest not runnable as subprocess: {result.stderr.decode().strip()}")
+def _run_e2e(test_file_content, *extra_pytest_args):
+    """Run a pytest subprocess in a temp dir with mocked hardware and the real conftest.
+
+    Returns (returncode, stdout) from the subprocess.
+    Fails the test with full output if the subprocess crashes.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Write the mock conftest (mocks hardware, exec()s real conftest)
+        conftest_src = textwrap.dedent(f'''\
+            import sys, os, types
+
+            _py_dir = r"{_PY_DIR}"
+            if _py_dir not in sys.path:
+                sys.path.insert(0, _py_dir)
+
+            # Fake pyrealsense2
+            _rs = types.ModuleType("pyrealsense2")
+            _rs.__file__ = "fake_pyrealsense2"
+            _rs.log_to_console = lambda level: None
+            class _CameraInfo:
+                name = "name"
+                product_line = "product_line"
+                physical_port = "physical_port"
+                connection_type = "connection_type"
+            _rs.camera_info = _CameraInfo
+            class _LogSeverity:
+                debug = 0
+            _rs.log_severity = _LogSeverity
+            class _FakeContext:
+                @property
+                def devices(self):
+                    return []
+            _rs.context = _FakeContext
+            sys.modules["pyrealsense2"] = _rs
+
+            # Mock rspy.devices
+            class FakeDevice:
+                def __init__(self, sn, name):
+                    self.sn = sn
+                    self.name = name
+
+            _inventory = {{
+                "D455": ("111", "D400"),
+                "D435": ("222", "D400"),
+                "D515": ("555", "D500"),
+                "D401": ("777", "D400"),
+            }}
+            _sn_map = {{"111": "D455", "222": "D435", "555": "D515", "777": "D401"}}
+
+            import rspy.devices as _dev
+            def _mock_by_spec(pattern, ignored):
+                if pattern.endswith("*"):
+                    pl = pattern[:-1]
+                    for name, (sn, p) in _inventory.items():
+                        if p == pl:
+                            yield sn
+                elif pattern in _inventory:
+                    yield _inventory[pattern][0]
+                elif pattern in _sn_map:
+                    yield pattern
+
+            def _mock_get(sn):
+                name = _sn_map.get(sn)
+                return FakeDevice(sn, name) if name else None
+
+            _dev.by_spec = _mock_by_spec
+            _dev.get = _mock_get
+            _dev._device_by_sn = {{sn: FakeDevice(sn, n) for sn, n in _sn_map.items()}}
+            _dev.hub = None
+            _dev._context = None
+            _dev.query = lambda **kw: None
+            _dev.map_unknown_ports = lambda: None
+            _dev.enable_only = lambda serials, recycle=True: None
+            _dev.wait_until_all_ports_disabled = lambda: None
+
+            # exec() the REAL conftest.py
+            _conftest_path = r"{_REAL_CONFTEST}"
+            with open(_conftest_path) as _f:
+                _src = _f.read()
+            _real_dir = os.path.dirname(_conftest_path)
+            current_dir = _real_dir
+            py_dir = os.path.join(_real_dir, "py")
+            if py_dir not in sys.path:
+                sys.path.insert(0, py_dir)
+            exec(compile(_src, _conftest_path, "exec"), globals())
+        ''')
+
+        with open(os.path.join(tmpdir, 'conftest.py'), 'w') as f:
+            f.write(conftest_src)
+
+        # Write the inline test file
+        with open(os.path.join(tmpdir, 'pytest-e2e.py'), 'w') as f:
+            f.write(textwrap.dedent(test_file_content))
+
+        # Run pytest subprocess using the same Python that's running us
+        p = subprocess.run(
+            [sys.executable, "-m", "pytest", "pytest-e2e.py", "-v", *extra_pytest_args],
+            cwd=tmpdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            timeout=30,
+        )
+
+        if p.returncode != 0 and 'no tests ran' not in p.stdout and 'passed' not in p.stdout \
+                and 'skipped' not in p.stdout and 'error' not in p.stdout:
+            pytest.fail(f"Subprocess crashed (rc={p.returncode}):\n{p.stdout}")
+
+        return p.returncode, p.stdout
 
 
-@pytest.fixture
-def pytester_with_infra(pytester):
-    """Pytest subprocess that mocks only hardware, then exec()s the real conftest.py."""
-    _check_subprocess_pytest()
+def _parse_outcomes(stdout):
+    """Parse pytest summary line into a dict like {'passed': 3, 'skipped': 1}."""
+    # Find the LAST ====...==== line (the final pytest summary, not the session header)
+    matches = re.findall(r'=+ (.+?) =+\s*$', stdout, re.MULTILINE)
+    if not matches:
+        return {}
+    summary = matches[-1]
+    outcomes = {}
+    for match in re.finditer(r'(\d+) (\w+)', summary):
+        outcomes[match.group(2)] = int(match.group(1))
+    return outcomes
 
-    py_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'py'))
-    conftest_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'conftest.py'))
-    pytester.makeconftest(_MOCK_CONFTEST.format(
-        py_dir=py_dir.replace('\\', '\\\\'),
-        conftest_path=conftest_path.replace('\\', '\\\\'),
-    ))
 
-    # Always run as subprocess with plugin isolation
-    _original = pytester.runpytest_subprocess
-
-    def _run(*args, **kw):
-        result = _original(*_NO_PLUGINS, *args, **kw)
-        # If subprocess crashed before producing output, dump stderr for debugging
-        if not result.outlines and result.errlines:
-            pytest.fail(f"pytester subprocess crashed:\n" + "\n".join(result.errlines))
-        return result
-
-    pytester.runpytest = _run
-    return pytester
+def _assert_outcomes(stdout, **expected):
+    """Assert pytest outcomes from subprocess stdout."""
+    actual = _parse_outcomes(stdout)
+    for key, val in expected.items():
+        assert actual.get(key, 0) == val, \
+            f"Expected {key}={val}, got {actual.get(key, 0)}. Full output:\n{stdout}"
 
 
 # --- Marker registration ---
@@ -583,8 +598,8 @@ def pytester_with_infra(pytester):
 class TestMarkerRegistration:
     """All custom markers should be registered (no PytestUnknownMarkWarning)."""
 
-    def test_all_markers(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-markers": """
+    def test_all_markers(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D455"),
@@ -594,20 +609,17 @@ class TestMarkerRegistration:
             ]
             def test_example(_test_device_serial):
                 pass
-        """})
-        result = pytester_with_infra.runpytest(
-            "--context", "nightly", "-W", "error::pytest.PytestUnknownMarkWarning", "-v")
-        result.assert_outcomes(passed=1)
+        """, "--context", "nightly", "-W", "error::pytest.PytestUnknownMarkWarning")
+        _assert_outcomes(out, passed=1)
 
-    def test_device_marker(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-devmark": """
+    def test_device_marker(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D455")]
             def test_with_device():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-W", "error::pytest.PytestUnknownMarkWarning")
-        result.assert_outcomes(passed=1)
+        """, "-W", "error::pytest.PytestUnknownMarkWarning")
+        _assert_outcomes(out, passed=1)
 
 
 # --- Context gating E2E ---
@@ -615,37 +627,34 @@ class TestMarkerRegistration:
 class TestContextGatingE2E:
     """End-to-end: @context('nightly') tests should skip/run based on --context."""
 
-    def test_nightly_skipped_by_default(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-ctx": """
+    def test_nightly_skipped_by_default(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.context("nightly")]
             def test_nightly_only():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(skipped=1)
+        """)
+        _assert_outcomes(out, skipped=1)
 
-    def test_nightly_runs_with_context(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-ctx": """
+    def test_nightly_runs_with_context(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.context("nightly")]
             def test_nightly_only():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("--context", "nightly", "-v")
-        result.assert_outcomes(passed=1)
+        """, "--context", "nightly")
+        _assert_outcomes(out, passed=1)
 
-    def test_mixed_context_and_normal(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-mixed": """
+    def test_mixed_context_and_normal(self):
+        rc, out = _run_e2e("""
             import pytest
             def test_always():
                 pass
             @pytest.mark.context("nightly")
             def test_nightly_only():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=1, skipped=1)
+        """)
+        _assert_outcomes(out, passed=1, skipped=1)
 
 
 # --- --live filtering E2E ---
@@ -653,35 +662,32 @@ class TestContextGatingE2E:
 class TestLiveFilteringE2E:
     """End-to-end: --live should skip non-device tests."""
 
-    def test_skips_non_device(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-nolive": """
+    def test_skips_non_device(self):
+        rc, out = _run_e2e("""
             def test_no_device():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("--live", "-v")
-        result.assert_outcomes(skipped=1)
+        """, "--live")
+        _assert_outcomes(out, skipped=1)
 
-    def test_keeps_device_each(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-withlive": """
+    def test_keeps_device_each(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_with_device(_test_device_serial):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("--live", "-v")
-        result.assert_outcomes(passed=1)
+        """, "--live")
+        _assert_outcomes(out, passed=1)
 
-    def test_mixed(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-livemix": """
+    def test_mixed(self):
+        rc, out = _run_e2e("""
             import pytest
             def test_no_device():
                 pass
             @pytest.mark.device_each("D455")
             def test_with_device(_test_device_serial):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("--live", "-v")
-        result.assert_outcomes(passed=1, skipped=1)
+        """, "--live")
+        _assert_outcomes(out, passed=1, skipped=1)
 
 
 # --- device_each parametrization E2E ---
@@ -689,18 +695,17 @@ class TestLiveFilteringE2E:
 class TestDeviceEachParametrization:
     """End-to-end: @device_each should create one test instance per matching device."""
 
-    def test_creates_per_device_instances(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-each": """
+    def test_creates_per_device_instances(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
                 assert _test_device_serial in ('111', '222', '777')
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=3)  # D455, D435, D401
+        """)
+        _assert_outcomes(out, passed=3)  # D455, D435, D401
 
-    def test_with_exclude_marker(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-exclude": """
+    def test_with_exclude_marker(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D400*"),
@@ -708,42 +713,38 @@ class TestDeviceEachParametrization:
             ]
             def test_per_device(_test_device_serial):
                 assert _test_device_serial != '777'
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=2)  # D455, D435
+        """)
+        _assert_outcomes(out, passed=2)  # D455, D435
 
-    def test_cli_device_filter(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-clifilt": """
+    def test_cli_device_filter(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
                 assert _test_device_serial == '111'
-        """})
-        result = pytester_with_infra.runpytest("--device", "D455", "-v")
-        result.assert_outcomes(passed=1)
+        """, "--device", "D455")
+        _assert_outcomes(out, passed=1)
 
-    def test_cli_exclude_device(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-cliexcl": """
+    def test_cli_exclude_device(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
                 assert _test_device_serial != '111'
-        """})
-        result = pytester_with_infra.runpytest("--exclude-device", "D455", "-v")
-        result.assert_outcomes(passed=2)  # D435, D401
+        """, "--exclude-device", "D455")
+        _assert_outcomes(out, passed=2)  # D435, D401
 
-    def test_no_match_runs_unparametrized(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-nomatch": """
+    def test_no_match_runs_unparametrized(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D999")]
             def test_per_device():
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=1)
+        """)
+        _assert_outcomes(out, passed=1)
 
-    def test_multiple_markers_union(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-union": """
+    def test_multiple_markers_union(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D455"),
@@ -751,19 +752,17 @@ class TestDeviceEachParametrization:
             ]
             def test_per_device(_test_device_serial):
                 assert _test_device_serial in ('111', '555')
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=2)
+        """)
+        _assert_outcomes(out, passed=2)
 
-    def test_ids_contain_device_name(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-ids": """
+    def test_ids_contain_device_name(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_check(_test_device_serial):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.stdout.fnmatch_lines(["*D455-111*"])
+        """)
+        assert "D455-111" in out
 
 
 # --- device/device_each skip vs fail behavior ---
@@ -772,30 +771,28 @@ class TestDeviceSkipFailBehavior:
     """@device with no match should FAIL. @device_each with no match should SKIP.
     When candidates exist but are all excluded, both should SKIP."""
 
-    def test_device_fails_when_no_match(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-devfail": """
+    def test_device_fails_when_no_match(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D999")]
             def test_needs_device(module_device_setup):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(errors=1)
-        result.stdout.fnmatch_lines(["*No devices found*"])
+        """)
+        _assert_outcomes(out, error=1)
+        assert "No devices found" in out
 
-    def test_device_each_skips_when_no_match(self, pytester_with_infra):
+    def test_device_each_skips_when_no_match(self):
         """device_each skips gracefully — e.g. D585S test on a machine with no D585S."""
-        pytester_with_infra.makepyfile(**{"pytest-devskip": """
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D999")]
             def test_needs_device(module_device_setup):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(skipped=1)
+        """)
+        _assert_outcomes(out, skipped=1)
 
-    def test_device_skips_when_all_excluded(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-devexcl": """
+    def test_device_skips_when_all_excluded(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device("D455"),
@@ -803,37 +800,33 @@ class TestDeviceSkipFailBehavior:
             ]
             def test_needs_device(module_device_setup):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(skipped=1)
+        """)
+        _assert_outcomes(out, skipped=1)
 
-    def test_device_each_skips_when_all_excluded(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-eachexcl": """
+    def test_device_each_skips_when_all_excluded(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_needs_device(module_device_setup):
                 pass
-        """})
-        result = pytester_with_infra.runpytest("--exclude-device", "D455", "-v")
-        result.assert_outcomes(skipped=1)
+        """, "--exclude-device", "D455")
+        _assert_outcomes(out, skipped=1)
 
-    def test_device_passes_when_match_exists(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-devpass": """
+    def test_device_passes_when_match_exists(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D455")]
             def test_needs_device(module_device_setup):
                 assert module_device_setup == '111'
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=1)
+        """)
+        _assert_outcomes(out, passed=1)
 
-    def test_no_markers_yields_none(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-nodev": """
+    def test_no_markers_yields_none(self):
+        rc, out = _run_e2e("""
             def test_no_device(module_device_setup):
                 assert module_device_setup is None
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=1)
+        """)
+        _assert_outcomes(out, passed=1)
 
 
 # --- Priority ordering E2E ---
@@ -841,8 +834,8 @@ class TestDeviceSkipFailBehavior:
 class TestPriorityOrderingE2E:
     """End-to-end: tests should execute in priority order."""
 
-    def test_priority_order(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-prio": """
+    def test_priority_order(self):
+        rc, out = _run_e2e("""
             import pytest
             execution_order = []
 
@@ -860,9 +853,8 @@ class TestPriorityOrderingE2E:
 
             def test_verify_order():
                 assert execution_order == ['first', 'middle']
-        """})
-        result = pytester_with_infra.runpytest("-v")
-        result.assert_outcomes(passed=4)
+        """)
+        _assert_outcomes(out, passed=4)
 
 
 # --- CLI options registration E2E ---
@@ -870,64 +862,61 @@ class TestPriorityOrderingE2E:
 class TestCliOptionsRegistered:
     """All custom CLI options should be accepted without error."""
 
-    def _run_with_flag(self, pytester_with_infra, *flags):
-        pytester_with_infra.makepyfile(**{"pytest-opt": "def test_pass(): pass"})
-        return pytester_with_infra.runpytest(*flags)
+    def test_device(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--device", "D455")
+        assert rc == 0
 
-    def test_device(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--device", "D455").ret == 0
+    def test_exclude_device(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--exclude-device", "D455")
+        assert rc == 0
 
-    def test_exclude_device(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--exclude-device", "D455").ret == 0
+    def test_context(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--context", "nightly")
+        assert rc == 0
 
-    def test_context(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--context", "nightly").ret == 0
+    def test_live(self):
+        rc, out = _run_e2e("def test_pass(): pass", "--live")
+        _assert_outcomes(out, skipped=1)  # test_pass has no device marker
 
-    def test_live(self, pytester_with_infra):
-        result = self._run_with_flag(pytester_with_infra, "--live")
-        result.assert_outcomes(skipped=1)  # test_pass has no device marker
+    def test_no_reset(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--no-reset")
+        assert rc == 0
 
-    def test_no_reset(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--no-reset").ret == 0
+    def test_hub_reset(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--hub-reset")
+        assert rc == 0
 
-    def test_hub_reset(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--hub-reset").ret == 0
+    def test_rslog(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--rslog")
+        assert rc == 0
 
-    def test_rslog(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--rslog").ret == 0
+    def test_rs_help(self):
+        rc, _ = _run_e2e("def test_pass(): pass", "--rs-help")
+        assert rc == 0
 
-    def test_rs_help(self, pytester_with_infra):
-        assert self._run_with_flag(pytester_with_infra, "--rs-help").ret == 0
-
-    def test_multiple_device_flags(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-opt": """
+    def test_multiple_device_flags(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_multi(_test_device_serial):
                 assert _test_device_serial in ('111', '222')
-        """})
-        result = pytester_with_infra.runpytest("--device", "D455", "--device", "D435", "-v")
-        result.assert_outcomes(passed=2)
+        """, "--device", "D455", "--device", "D435")
+        _assert_outcomes(out, passed=2)
 
-    def test_multiple_exclude_device_flags(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-opt": """
+    def test_multiple_exclude_device_flags(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_multi(_test_device_serial):
                 assert _test_device_serial == '777'
-        """})
-        result = pytester_with_infra.runpytest(
-            "--exclude-device", "D455", "--exclude-device", "D435", "-v")
-        result.assert_outcomes(passed=1)  # only D401 remains
+        """, "--exclude-device", "D455", "--exclude-device", "D435")
+        _assert_outcomes(out, passed=1)  # only D401 remains
 
-    def test_device_and_exclude_combined(self, pytester_with_infra):
-        pytester_with_infra.makepyfile(**{"pytest-opt": """
+    def test_device_and_exclude_combined(self):
+        rc, out = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_filtered(_test_device_serial):
                 assert _test_device_serial == '111'
-        """})
-        result = pytester_with_infra.runpytest(
-            "--device", "D455", "--device", "D435",
-            "--exclude-device", "D435", "-v")
-        result.assert_outcomes(passed=1)
+        """, "--device", "D455", "--device", "D435", "--exclude-device", "D435")
+        _assert_outcomes(out, passed=1)
