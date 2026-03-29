@@ -5,8 +5,11 @@
 #test:donotrun:!nightly
 #test:donotrun:!gui
 
-import os, platform, shutil, subprocess, sys
+import os, platform, re, shutil, subprocess, sys, time
 from rspy import log, repo, test
+
+ansi_escape = re.compile( rb'\x1b\[[0-9;]*m' )
+frame_prefix = re.compile( rb'\[\d{4}\] ' )
 
 #############################################################################################
 #
@@ -49,9 +52,19 @@ if viewer_tests:
     cmd += [viewer_tests, '--auto']
     log.d( 'running:', *cmd )
     p = subprocess.Popen( cmd,
-                          stdout=None,
+                          stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
                           env=env )
+    # Strip ANSI color codes and replace frame counts with elapsed time
+    test_start = time.monotonic()
+    for line in p.stdout:
+        line = ansi_escape.sub( b'', line )
+        m = frame_prefix.search( line )
+        if m:
+            elapsed = time.monotonic() - test_start
+            line = line[:m.start()] + f'[{elapsed:5.1f}s] '.encode() + line[m.end():]
+        sys.stdout.buffer.write( line )
+        sys.stdout.buffer.flush()
     # When using Mesa, we get warnings about glCopyTexImage2D when using the IMU, filtering them as they're irrelevant
     # to the test results and expected with Mesa's OpenGL implementation
     for line in p.stderr:
