@@ -541,9 +541,22 @@ _NO_PLUGINS = ["-p", "no:retry", "-p", "no:timeout", "-p", "no:repeat",
                "-p", "no:asyncio", "-p", "no:anyio", "-p", "no:typeguard"]
 
 
+def _check_subprocess_pytest():
+    """Verify that `sys.executable -m pytest` works. Skip E2E tests if not."""
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "--version"],
+        capture_output=True, timeout=10,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"pytest not runnable as subprocess: {result.stderr.decode().strip()}")
+
+
 @pytest.fixture
 def pytester_with_infra(pytester):
     """Pytest subprocess that mocks only hardware, then exec()s the real conftest.py."""
+    _check_subprocess_pytest()
+
     py_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'py'))
     conftest_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'conftest.py'))
     pytester.makeconftest(_MOCK_CONFTEST.format(
