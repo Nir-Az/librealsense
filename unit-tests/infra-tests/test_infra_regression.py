@@ -533,8 +533,17 @@ def _run_e2e(test_file_content, *extra_pytest_args):
             _dev._context = None
             _dev.query = lambda **kw: None
             _dev.map_unknown_ports = lambda: None
-            _dev.enable_only = lambda serials, recycle=True: None
             _dev.wait_until_all_ports_disabled = lambda: None
+
+            # Track enable_only calls so tests can verify hub port behavior
+            import json as _json
+            _enable_only_log = os.path.join(os.path.dirname(__file__), '_enable_only_calls.json')
+            _enable_only_calls = []
+            def _mock_enable_only(serials, recycle=True):
+                _enable_only_calls.append({{"serials": list(serials), "recycle": recycle}})
+                with open(_enable_only_log, 'w') as _f:
+                    _json.dump(_enable_only_calls, _f)
+            _dev.enable_only = _mock_enable_only
 
             # exec() the REAL conftest.py
             _conftest_path = r"{_REAL_CONFTEST}"
@@ -569,7 +578,12 @@ def _run_e2e(test_file_content, *extra_pytest_args):
                 and 'skipped' not in p.stdout and 'error' not in p.stdout:
             pytest.fail(f"Subprocess crashed (rc={p.returncode}):\n{p.stdout}")
 
-        return p.returncode, p.stdout
+        # Read enable_only call log if it exists
+        import json
+        calls_file = os.path.join(tmpdir, '_enable_only_calls.json')
+        enable_only_calls = json.loads(open(calls_file).read()) if os.path.exists(calls_file) else []
+
+        return p.returncode, p.stdout, enable_only_calls
 
 
 def _parse_outcomes(stdout):
@@ -599,7 +613,7 @@ class TestMarkerRegistration:
     """All custom markers should be registered (no PytestUnknownMarkWarning)."""
 
     def test_all_markers(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D455"),
@@ -613,7 +627,7 @@ class TestMarkerRegistration:
         _assert_outcomes(out, passed=1)
 
     def test_device_marker(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D455")]
             def test_with_device():
@@ -628,7 +642,7 @@ class TestContextGatingE2E:
     """End-to-end: @context('nightly') tests should skip/run based on --context."""
 
     def test_nightly_skipped_by_default(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.context("nightly")]
             def test_nightly_only():
@@ -637,7 +651,7 @@ class TestContextGatingE2E:
         _assert_outcomes(out, skipped=1)
 
     def test_nightly_runs_with_context(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.context("nightly")]
             def test_nightly_only():
@@ -646,7 +660,7 @@ class TestContextGatingE2E:
         _assert_outcomes(out, passed=1)
 
     def test_mixed_context_and_normal(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             def test_always():
                 pass
@@ -663,14 +677,14 @@ class TestLiveFilteringE2E:
     """End-to-end: --live should skip non-device tests."""
 
     def test_skips_non_device(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             def test_no_device():
                 pass
         """, "--live")
         _assert_outcomes(out, skipped=1)
 
     def test_keeps_device_each(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_with_device(_test_device_serial):
@@ -679,7 +693,7 @@ class TestLiveFilteringE2E:
         _assert_outcomes(out, passed=1)
 
     def test_mixed(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             def test_no_device():
                 pass
@@ -696,7 +710,7 @@ class TestDeviceEachParametrization:
     """End-to-end: @device_each should create one test instance per matching device."""
 
     def test_creates_per_device_instances(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
@@ -705,7 +719,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=3)  # D455, D435, D401
 
     def test_with_exclude_marker(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D400*"),
@@ -717,7 +731,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=2)  # D455, D435
 
     def test_cli_device_filter(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
@@ -726,7 +740,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=1)
 
     def test_cli_exclude_device(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_per_device(_test_device_serial):
@@ -735,7 +749,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=2)  # D435, D401
 
     def test_no_match_runs_unparametrized(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D999")]
             def test_per_device():
@@ -744,7 +758,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=1)
 
     def test_multiple_markers_union(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device_each("D455"),
@@ -756,7 +770,7 @@ class TestDeviceEachParametrization:
         _assert_outcomes(out, passed=2)
 
     def test_ids_contain_device_name(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_check(_test_device_serial):
@@ -772,7 +786,7 @@ class TestDeviceSkipFailBehavior:
     When candidates exist but are all excluded, both should SKIP."""
 
     def test_device_fails_when_no_match(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D999")]
             def test_needs_device(module_device_setup):
@@ -783,7 +797,7 @@ class TestDeviceSkipFailBehavior:
 
     def test_device_each_skips_when_no_match(self):
         """device_each skips gracefully — e.g. D585S test on a machine with no D585S."""
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D999")]
             def test_needs_device(module_device_setup):
@@ -792,7 +806,7 @@ class TestDeviceSkipFailBehavior:
         _assert_outcomes(out, skipped=1)
 
     def test_device_skips_when_all_excluded(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [
                 pytest.mark.device("D455"),
@@ -804,7 +818,7 @@ class TestDeviceSkipFailBehavior:
         _assert_outcomes(out, skipped=1)
 
     def test_device_each_skips_when_all_excluded(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D455")]
             def test_needs_device(module_device_setup):
@@ -813,7 +827,7 @@ class TestDeviceSkipFailBehavior:
         _assert_outcomes(out, skipped=1)
 
     def test_device_passes_when_match_exists(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device("D455")]
             def test_needs_device(module_device_setup):
@@ -822,7 +836,7 @@ class TestDeviceSkipFailBehavior:
         _assert_outcomes(out, passed=1)
 
     def test_no_markers_yields_none(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             def test_no_device(module_device_setup):
                 assert module_device_setup is None
         """)
@@ -835,7 +849,7 @@ class TestPriorityOrderingE2E:
     """End-to-end: tests should execute in priority order."""
 
     def test_priority_order(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             execution_order = []
 
@@ -863,39 +877,39 @@ class TestCliOptionsRegistered:
     """All custom CLI options should be accepted without error."""
 
     def test_device(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--device", "D455")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--device", "D455")
         assert rc == 0
 
     def test_exclude_device(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--exclude-device", "D455")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--exclude-device", "D455")
         assert rc == 0
 
     def test_context(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--context", "nightly")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--context", "nightly")
         assert rc == 0
 
     def test_live(self):
-        rc, out = _run_e2e("def test_pass(): pass", "--live")
+        rc, out, *_ = _run_e2e("def test_pass(): pass", "--live")
         _assert_outcomes(out, skipped=1)  # test_pass has no device marker
 
     def test_no_reset(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--no-reset")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--no-reset")
         assert rc == 0
 
     def test_hub_reset(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--hub-reset")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--hub-reset")
         assert rc == 0
 
     def test_rslog(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--rslog")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--rslog")
         assert rc == 0
 
     def test_rs_help(self):
-        rc, _ = _run_e2e("def test_pass(): pass", "--rs-help")
+        rc, *_ = _run_e2e("def test_pass(): pass", "--rs-help")
         assert rc == 0
 
     def test_multiple_device_flags(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_multi(_test_device_serial):
@@ -904,7 +918,7 @@ class TestCliOptionsRegistered:
         _assert_outcomes(out, passed=2)
 
     def test_multiple_exclude_device_flags(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_multi(_test_device_serial):
@@ -913,10 +927,90 @@ class TestCliOptionsRegistered:
         _assert_outcomes(out, passed=1)  # only D401 remains
 
     def test_device_and_exclude_combined(self):
-        rc, out = _run_e2e("""
+        rc, out, *_ = _run_e2e("""
             import pytest
             pytestmark = [pytest.mark.device_each("D400*")]
             def test_filtered(_test_device_serial):
                 assert _test_device_serial == '111'
         """, "--device", "D455", "--device", "D435", "--exclude-device", "D435")
         _assert_outcomes(out, passed=1)
+
+
+# --- Device hub port management ---
+
+class TestDevicePortManagement:
+    """Verify that module_device_setup calls enable_only with the correct serial and recycle flag."""
+
+    def test_device_marker_enables_correct_port(self):
+        """@device('D455') should call enable_only(['111'], recycle=True)."""
+        rc, out, calls = _run_e2e("""
+            import pytest
+            pytestmark = [pytest.mark.device("D455")]
+            def test_check(module_device_setup):
+                assert module_device_setup == '111'
+        """)
+        _assert_outcomes(out, passed=1)
+        assert len(calls) == 1
+        assert calls[0]['serials'] == ['111']
+        assert calls[0]['recycle'] is True
+
+    def test_device_each_enables_one_port_per_test(self):
+        """@device_each('D400*') should call enable_only once per device, each with recycle=True."""
+        rc, out, calls = _run_e2e("""
+            import pytest
+            pytestmark = [pytest.mark.device_each("D400*")]
+            def test_check(_test_device_serial, module_device_setup):
+                assert module_device_setup == _test_device_serial
+        """)
+        _assert_outcomes(out, passed=3)  # D455, D435, D401
+        assert len(calls) == 3
+        serials_enabled = [c['serials'][0] for c in calls]
+        assert set(serials_enabled) == {'111', '222', '777'}
+        assert all(c['recycle'] is True for c in calls)
+        # Each call enables exactly one device
+        assert all(len(c['serials']) == 1 for c in calls)
+
+    def test_second_test_same_device_no_recycle(self):
+        """Two tests on the same device: first recycles, second should reuse (no enable_only call)."""
+        rc, out, calls = _run_e2e("""
+            import pytest
+            pytestmark = [pytest.mark.device("D455")]
+            def test_first(module_device_setup):
+                assert module_device_setup == '111'
+            def test_second(module_device_setup):
+                assert module_device_setup == '111'
+        """)
+        _assert_outcomes(out, passed=2)
+        # Only one enable_only call — second test reuses the device
+        assert len(calls) == 1
+
+    def test_no_device_marker_no_enable(self):
+        """Tests without device markers should not call enable_only."""
+        rc, out, calls = _run_e2e("""
+            def test_no_device(module_device_setup):
+                assert module_device_setup is None
+        """)
+        _assert_outcomes(out, passed=1)
+        assert len(calls) == 0
+
+    def test_device_no_match_fails_without_enabling(self):
+        """@device('D999') with no match should fail and never call enable_only."""
+        rc, out, calls = _run_e2e("""
+            import pytest
+            pytestmark = [pytest.mark.device("D999")]
+            def test_needs_device(module_device_setup):
+                pass
+        """)
+        _assert_outcomes(out, error=1)
+        assert len(calls) == 0
+
+    def test_device_each_no_match_skips_without_enabling(self):
+        """@device_each('D999') with no match should skip and never call enable_only."""
+        rc, out, calls = _run_e2e("""
+            import pytest
+            pytestmark = [pytest.mark.device_each("D999")]
+            def test_needs_device(module_device_setup):
+                pass
+        """)
+        _assert_outcomes(out, skipped=1)
+        assert len(calls) == 0
