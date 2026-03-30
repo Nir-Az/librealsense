@@ -167,6 +167,10 @@ def map_unknown_ports():
     global _device_by_sn
     devices_with_unknown_ports = [device for device in _device_by_sn.values() if device.port is None]
     if not devices_with_unknown_ports:
+        # All ports are known, but still enabled from query(). Disable all so unmapped ports
+        # (e.g. loose cables) can't produce rogue devices mid-test.
+        hub.disable_ports()
+        wait_until_all_ports_disabled()
         return
     #
     ports = hub.ports()
@@ -224,6 +228,9 @@ def map_unknown_ports():
             hub.disable_ports( [port] )
             wait_until_all_ports_disabled()
     finally:
+        # Disable all ports so tests start from a clean state
+        hub.disable_ports()
+        wait_until_all_ports_disabled()
         log.debug_unindent()
 
 
@@ -312,13 +319,6 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
         rs.log_to_console(rs.log_severity.none) # disable debug logging
 
     log.debug_unindent()
-    #
-    # Disable all ports after discovery so tests start from a clean state.
-    # Without this, unmapped ports (e.g. loose cables) remain enabled and
-    # rogue devices can appear mid-test.
-    if hub:
-        hub.disable_ports()
-        wait_until_all_ports_disabled()
     #
     if monitor_changes:
         _context.set_devices_changed_callback( _device_change_callback )
