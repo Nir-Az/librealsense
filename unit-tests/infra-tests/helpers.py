@@ -3,14 +3,15 @@
 
 """Shared helpers for infra regression tests — fake devices, mock builders, E2E runner."""
 
-import sys
+import json
 import os
 import re
-import types
+import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
-import json
+import types
 from unittest.mock import MagicMock
 import pytest
 
@@ -127,113 +128,32 @@ def make_device_marker(name, pattern):
 # E2E subprocess runner
 # =============================================================================
 
-_PY_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'py'))
-_REAL_CONFTEST = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'conftest.py'))
+_INFRA_DIR = os.path.dirname(os.path.abspath(__file__))
+_UNIT_TESTS_DIR = os.path.dirname(_INFRA_DIR)
+_E2E_CONFTEST = os.path.join(_INFRA_DIR, 'e2e_conftest.py')
 
 
 def run_e2e(test_file_content, *extra_pytest_args):
     """Run a pytest subprocess in a temp dir with mocked hardware and the real conftest.
 
+    Copies e2e_conftest.py (which mocks hardware and exec()s the real conftest.py)
+    and writes the inline test content as pytest-e2e.py.
+
     Returns (returncode, stdout, enable_only_calls).
     """
     with tempfile.TemporaryDirectory() as tmpdir:
-        conftest_src = textwrap.dedent(f'''\
-            import sys, os, types
-
-            _py_dir = r"{_PY_DIR}"
-            if _py_dir not in sys.path:
-                sys.path.insert(0, _py_dir)
-
-            # Fake pyrealsense2
-            _rs = types.ModuleType("pyrealsense2")
-            _rs.__file__ = "fake_pyrealsense2"
-            _rs.log_to_console = lambda level: None
-            class _CameraInfo:
-                name = "name"
-                product_line = "product_line"
-                physical_port = "physical_port"
-                connection_type = "connection_type"
-            _rs.camera_info = _CameraInfo
-            class _LogSeverity:
-                debug = 0
-            _rs.log_severity = _LogSeverity
-            class _FakeContext:
-                @property
-                def devices(self):
-                    return []
-            _rs.context = _FakeContext
-            sys.modules["pyrealsense2"] = _rs
-
-            # Mock rspy.devices
-            class FakeDevice:
-                def __init__(self, sn, name):
-                    self.sn = sn
-                    self.name = name
-
-            _inventory = {{
-                "D455": ("111", "D400"),
-                "D435": ("222", "D400"),
-                "D515": ("555", "D500"),
-                "D401": ("777", "D400"),
-            }}
-            _sn_map = {{"111": "D455", "222": "D435", "555": "D515", "777": "D401"}}
-
-            import rspy.devices as _dev
-            def _mock_by_spec(pattern, ignored):
-                if pattern.endswith("*"):
-                    pl = pattern[:-1]
-                    for name, (sn, p) in _inventory.items():
-                        if p == pl:
-                            yield sn
-                elif pattern in _inventory:
-                    yield _inventory[pattern][0]
-                elif pattern in _sn_map:
-                    yield pattern
-
-            def _mock_get(sn):
-                name = _sn_map.get(sn)
-                return FakeDevice(sn, name) if name else None
-
-            _dev.by_spec = _mock_by_spec
-            _dev.get = _mock_get
-            _dev._device_by_sn = {{sn: FakeDevice(sn, n) for sn, n in _sn_map.items()}}
-            _dev.hub = None
-            _dev._context = None
-            _dev.query = lambda **kw: None
-            _dev.map_unknown_ports = lambda: None
-            _dev.wait_until_all_ports_disabled = lambda: None
-
-            # Track enable_only calls so tests can verify hub port behavior
-            import json as _json
-            _enable_only_log = os.path.join(os.path.dirname(__file__), '_enable_only_calls.json')
-            _enable_only_calls = []
-            def _mock_enable_only(serials, recycle=True):
-                _enable_only_calls.append({{"serials": list(serials), "recycle": recycle}})
-                with open(_enable_only_log, 'w') as _f:
-                    _json.dump(_enable_only_calls, _f)
-            _dev.enable_only = _mock_enable_only
-
-            # exec() the REAL conftest.py
-            _conftest_path = r"{_REAL_CONFTEST}"
-            with open(_conftest_path) as _f:
-                _src = _f.read()
-            _real_dir = os.path.dirname(_conftest_path)
-            current_dir = _real_dir
-            py_dir = os.path.join(_real_dir, "py")
-            if py_dir not in sys.path:
-                sys.path.insert(0, py_dir)
-            exec(compile(_src, _conftest_path, "exec"), globals())
-        ''')
-
-        with open(os.path.join(tmpdir, 'conftest.py'), 'w') as f:
-            f.write(conftest_src)
+        shutil.copy(_E2E_CONFTEST, os.path.join(tmpdir, 'conftest.py'))
 
         with open(os.path.join(tmpdir, 'pytest-e2e.py'), 'w') as f:
             f.write(textwrap.dedent(test_file_content))
 
+        env = os.environ.copy()
+        env['INFRA_UNIT_TESTS_DIR'] = _UNIT_TESTS_DIR
+
         p = subprocess.run(
             [sys.executable, "-m", "pytest", "pytest-e2e.py", "-v", *extra_pytest_args],
             cwd=tmpdir,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
