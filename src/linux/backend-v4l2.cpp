@@ -173,14 +173,10 @@ namespace librealsense
         {
             try
             {
-                // Close file descriptor if it was opened
-                if (_fildes >= 0)
-                {
-                    // OFD lock will automatically release if locked only when file description closes (not file descriptor)
-                    // If process was forked or cloned and unlock() was not properly called after a lock() then file will
-                    // remain locked for the child process
-                    close( _fildes );
-                }
+                // OFD lock will automatically release if locked only when file description closes (not file descriptor)
+                // If process was forked or cloned and unlock() was not properly called after a lock() then file will
+                // remain locked for the child process
+                close_fd();
             }
             catch(...)
             {
@@ -197,6 +193,16 @@ namespace librealsense
                 {
                     throw linux_backend_exception( rsutils::string::from() << "named_mutex: Cannot open '" << _device_path << "'" );
                 }
+            }
+        }
+
+        void named_mutex::close_fd()
+        {
+            // Close file descriptor if it was opened
+            if (_fildes >= 0)
+            {
+                close( _fildes );
+                _fildes = -1;
             }
         }
 
@@ -225,13 +231,19 @@ namespace librealsense
                     auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
                     if( 0 != ret )
                     {
-                        _lock_counter.fetch_add( -1 );
+                        // Close file descriptor since we failed to acquire lock
+                        close_fd();
+                        
                         throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
                     }
                 }
                 catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
+                    
+                    // Close file descriptor if it was opened
+                    close_fd();
+                    
                     throw;
                 }
             }
@@ -252,11 +264,7 @@ namespace librealsense
                     throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": unlocking failed" );
 
                 // Close file descriptor when last lock is released
-                if (_fildes >= 0)
-                {
-                    close( _fildes );
-                    _fildes = -1;
-                }
+                close_fd();
             }
         }
 
@@ -276,8 +284,13 @@ namespace librealsense
                     fl.l_len = 0; // Lock the entire file
                     fl.l_type = F_WRLCK;
                     auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
-                    if( 0 != ret && errno == EAGAIN)
+                    if( 0 != ret )
                     {
+                        // fcntl failed - need to clean up
+                        // Close file descriptor since we failed to acquire lock
+                        close_fd();
+                        
+                        // Return false instead of throwing, but still need to decrement counter
                         _lock_counter.fetch_add( -1 );
                         return false;
                     }
@@ -285,6 +298,10 @@ namespace librealsense
                 catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
+                    
+                    // Close file descriptor if it was opened
+                    close_fd();
+                    
                     return false;
                 }
             }

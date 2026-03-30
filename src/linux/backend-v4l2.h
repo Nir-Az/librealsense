@@ -106,6 +106,7 @@ namespace librealsense
 
         private:
             void ensure_fd_open();
+            void close_fd();
 
             std::string _device_path;
             uint32_t _timeout;
