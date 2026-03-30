@@ -18,7 +18,6 @@ and fixtures that pytest requires in conftest.py for auto-discovery.
 import pytest
 import sys
 import os
-
 import logging
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
