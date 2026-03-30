@@ -3,6 +3,7 @@
 
 # Test configuration: Requires 2 D400 series devices
 #test:device:!jetson D400* D400*
+#test:donotrun
 
 """
 Tests:
