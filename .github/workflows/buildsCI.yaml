@@ -22,6 +22,20 @@ jobs:
 
 
   #--------------------------------------------------------------------------------
+  Infra_Tests:  # Pytest infrastructure regression tests (no build, no devices)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+
+    - name: Install
+      run: pip3 install pytest
+
+    - name: Run infra tests
+      run: cd unit-tests && python3 -m pytest infra-tests/ -v
+
+
+  #--------------------------------------------------------------------------------
   Win_SH_EX_CfU:  # Windows, shared, with Examples & Tools, and Check for Updates
     runs-on: windows-2025
     timeout-minutes: 60
