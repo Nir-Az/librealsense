@@ -1,7 +1,17 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Tests for rspy/pytest/device_helpers.py — device pattern resolution and filtering."""
+"""
+Tests for rspy/pytest/device_helpers.py (find_matching_devices).
+
+Verifies how device markers resolve to serial numbers:
+- Exact name match: device_each("D455") finds serial 111
+- Wildcard by product line: device_each("D400*") finds all D400-family devices
+- Exclusion: device_exclude("D401") removes a device from results
+- CLI filters: --device and --exclude-device narrow results
+- Union: multiple device_each markers combine their matches
+- Deduplication: overlapping patterns don't produce duplicate serials
+"""
 
 import pytest
 from rspy.pytest.device_helpers import find_matching_devices

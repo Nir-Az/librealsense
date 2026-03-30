@@ -1,7 +1,15 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Tests for rspy/pytest/logging_setup.py — per-test log file naming."""
+"""
+Tests for rspy/pytest/logging_setup.py (test_log_name, _log_key).
+
+Verifies how per-test log filenames are derived:
+- With device param: pytest-depth.py::test[D455-111] → pytest-depth_D455-111.log
+- Without device param: pytest-depth.py::test_basic → pytest-depth.log
+- Special characters (<, >, etc.) are sanitized to underscores
+- _log_key extracts (fspath, device_id) for grouping tests into shared log files
+"""
 
 from unittest.mock import MagicMock
 from rspy.pytest.logging_setup import test_log_name as derive_log_name, _log_key

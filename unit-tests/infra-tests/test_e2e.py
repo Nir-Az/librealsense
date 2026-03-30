@@ -2,11 +2,21 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-End-to-end integration tests using subprocess.run.
+End-to-end integration tests using subprocess.run (same Python, works on CI).
 
 Each test spawns a real pytest subprocess with mocked hardware and the real
-conftest.py (via exec). If someone changes conftest.py or rspy/pytest/*,
-these tests break.
+conftest.py (via exec). Only rspy.devices and pyrealsense2 are faked — all
+hooks, fixtures, and logic come from production code.
+
+Tests cover:
+- Marker registration: custom markers don't produce warnings
+- Context gating E2E: @context("nightly") skips/runs in a real subprocess
+- --live filtering E2E: --live skips non-device tests in a real subprocess
+- device_each parametrization: creates one test per matching device
+- Skip vs fail behavior: @device fails, @device_each skips when no match
+- Priority ordering: lower priority runs first
+- CLI options: all custom flags (--device, --context, --live, etc.) are accepted
+- Port management: enable_only called with correct serials and recycle flag
 """
 
 from helpers import run_e2e, assert_outcomes
@@ -297,6 +307,10 @@ class TestCliOptionsRegistered:
 
     def test_rs_help(self):
         rc, *_ = run_e2e("def test_pass(): pass", "--rs-help")
+        assert rc == 0
+
+    def test_debug(self):
+        rc, *_ = run_e2e("def test_pass(): pass", "--debug")
         assert rc == 0
 
     def test_multiple_device_flags(self):

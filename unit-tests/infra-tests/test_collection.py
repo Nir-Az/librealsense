@@ -1,7 +1,15 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Tests for rspy/pytest/collection.py — context gating, --live filtering, priority, device grouping."""
+"""
+Tests for rspy/pytest/collection.py (filter_and_sort_items).
+
+Verifies the collection-phase logic that runs after pytest discovers tests:
+- Context gating: @pytest.mark.context("nightly") skips unless --context matches
+- --live filtering: skips tests without device/device_each markers
+- Priority sorting: @pytest.mark.priority(N) controls execution order
+- Device grouping: tests on the same device run together to minimize hub recycling
+"""
 
 import pytest
 from unittest.mock import MagicMock

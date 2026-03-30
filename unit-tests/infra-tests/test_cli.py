@@ -1,7 +1,14 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Tests for rspy/pytest/cli.py — legacy CLI flag translation."""
+"""
+Tests for rspy/pytest/cli.py (consume_legacy_flags, apply_pending_flags).
+
+Verifies translation of legacy run-unit-tests.py flags to pytest equivalents:
+- -r/--regex pattern → -k pattern (keyword filter)
+- apply_pending_flags applies the translated -k to pytest config
+- Existing -k values are not overridden
+"""
 
 import sys
 from unittest.mock import MagicMock
