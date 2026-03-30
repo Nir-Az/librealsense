@@ -313,6 +313,13 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
 
     log.debug_unindent()
     #
+    # Disable all ports after discovery so tests start from a clean state.
+    # Without this, unmapped ports (e.g. loose cables) remain enabled and
+    # rogue devices can appear mid-test.
+    if hub:
+        hub.disable_ports()
+        wait_until_all_ports_disabled()
+    #
     if monitor_changes:
         _context.set_devices_changed_callback( _device_change_callback )
 
