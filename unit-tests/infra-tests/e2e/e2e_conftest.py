@@ -1,13 +1,12 @@
 """
-E2E subprocess conftest: mock ONLY the hardware layer, then exec() the REAL conftest.py.
+E2E conftest: mock ONLY the hardware layer, then exec() the REAL conftest.py.
 If someone changes conftest.py, these tests exercise the real change.
 
-This file is copied into each E2E temp directory as conftest.py.
+This file is copied to a temp dir for subprocess isolation. The real
+unit-tests/ path is passed via INFRA_UNIT_TESTS_DIR env var.
 """
 import sys, os, types
 
-# Resolve the real unit-tests/ directory (passed via env var since this file
-# is copied to a temp dir for subprocess isolation)
 _unit_tests_dir = os.environ['INFRA_UNIT_TESTS_DIR']
 _py_dir = os.path.join(_unit_tests_dir, 'py')
 if _py_dir not in sys.path:
@@ -74,7 +73,7 @@ _dev.wait_until_all_ports_disabled = lambda: None
 
 # Track enable_only calls so tests can verify hub port behavior
 import json as _json
-_enable_only_log = os.path.join(os.path.dirname(__file__), '_enable_only_calls.json')
+_enable_only_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_enable_only_calls.json')
 _enable_only_calls = []
 def _mock_enable_only(serials, recycle=True):
     _enable_only_calls.append({"serials": list(serials), "recycle": recycle})

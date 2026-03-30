@@ -14,70 +14,29 @@ from helpers import run_e2e, assert_outcomes
 class TestDeviceEachParametrization:
 
     def test_creates_per_device_instances(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D400*")]
-            def test_per_device(_test_device_serial):
-                assert _test_device_serial in ('111', '222', '777')
-        """)
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400 and not exclude")
         assert_outcomes(out, passed=3)  # D455, D435, D401
 
     def test_with_exclude_marker(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [
-                pytest.mark.device_each("D400*"),
-                pytest.mark.device_exclude("D401"),
-            ]
-            def test_per_device(_test_device_serial):
-                assert _test_device_serial != '777'
-        """)
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400_exclude")
         assert_outcomes(out, passed=2)  # D455, D435
 
     def test_cli_device_filter(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D400*")]
-            def test_per_device(_test_device_serial):
-                assert _test_device_serial == '111'
-        """, "--device", "D455")
+        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_include", "--device", "D455")
         assert_outcomes(out, passed=1)
 
     def test_cli_exclude_device(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D400*")]
-            def test_per_device(_test_device_serial):
-                assert _test_device_serial != '111'
-        """, "--exclude-device", "D455")
+        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_exclude and not multi", "--exclude-device", "D455")
         assert_outcomes(out, passed=2)  # D435, D401
 
     def test_no_match_runs_unparametrized(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D999")]
-            def test_per_device():
-                pass
-        """)
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d999_no_match")
         assert_outcomes(out, passed=1)
 
     def test_multiple_markers_union(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [
-                pytest.mark.device_each("D455"),
-                pytest.mark.device_each("D515"),
-            ]
-            def test_per_device(_test_device_serial):
-                assert _test_device_serial in ('111', '555')
-        """)
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_multi")
         assert_outcomes(out, passed=2)
 
     def test_ids_contain_device_name(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D455")]
-            def test_check(_test_device_serial):
-                pass
-        """)
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_ids")
         assert "D455-111" in out

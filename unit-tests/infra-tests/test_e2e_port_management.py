@@ -16,12 +16,7 @@ class TestDevicePortManagement:
 
     def test_device_marker_enables_correct_port(self):
         """@device('D455') should call enable_only(['111'], recycle=True)."""
-        rc, out, calls = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device("D455")]
-            def test_check(module_device_setup):
-                assert module_device_setup == '111'
-        """)
+        rc, out, calls = run_e2e("pytest-device-setup.py", "-k", "test_d455 and not excluded")
         assert_outcomes(out, passed=1)
         assert len(calls) == 1
         assert calls[0]['serials'] == ['111']
@@ -29,12 +24,7 @@ class TestDevicePortManagement:
 
     def test_device_each_enables_one_port_per_test(self):
         """@device_each('D400*') should call enable_only once per device, each with recycle=True."""
-        rc, out, calls = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D400*")]
-            def test_check(_test_device_serial, module_device_setup):
-                assert module_device_setup == _test_device_serial
-        """)
+        rc, out, calls = run_e2e("pytest-each-setup.py", "-k", "test_d400 and not d999")
         assert_outcomes(out, passed=3)
         assert len(calls) == 3
         serials_enabled = [c['serials'][0] for c in calls]
@@ -44,44 +34,24 @@ class TestDevicePortManagement:
 
     def test_second_test_same_device_no_recycle(self):
         """Two tests on the same device: first recycles, second reuses (no enable_only call)."""
-        rc, out, calls = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device("D455")]
-            def test_first(module_device_setup):
-                assert module_device_setup == '111'
-            def test_second(module_device_setup):
-                assert module_device_setup == '111'
-        """)
+        rc, out, calls = run_e2e("pytest-port-reuse.py")
         assert_outcomes(out, passed=2)
         assert len(calls) == 1
 
     def test_no_device_marker_no_enable(self):
         """Tests without device markers should not call enable_only."""
-        rc, out, calls = run_e2e("""
-            def test_no_device(module_device_setup):
-                assert module_device_setup is None
-        """)
+        rc, out, calls = run_e2e("pytest-device-setup.py", "-k", "test_no_markers")
         assert_outcomes(out, passed=1)
         assert len(calls) == 0
 
     def test_device_no_match_fails_without_enabling(self):
         """@device('D999') with no match should fail and never call enable_only."""
-        rc, out, calls = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device("D999")]
-            def test_needs_device(module_device_setup):
-                pass
-        """)
+        rc, out, calls = run_e2e("pytest-device-setup.py", "-k", "test_d999_no_match")
         assert_outcomes(out, error=1)
         assert len(calls) == 0
 
     def test_device_each_no_match_skips_without_enabling(self):
         """@device_each('D999') with no match should skip and never call enable_only."""
-        rc, out, calls = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device_each("D999")]
-            def test_needs_device(module_device_setup):
-                pass
-        """)
+        rc, out, calls = run_e2e("pytest-each-setup.py", "-k", "test_d999_no_match")
         assert_outcomes(out, skipped=1)
         assert len(calls) == 0

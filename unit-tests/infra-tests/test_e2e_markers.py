@@ -14,24 +14,11 @@ from helpers import run_e2e, assert_outcomes
 class TestMarkerRegistration:
 
     def test_all_markers(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [
-                pytest.mark.device_each("D455"),
-                pytest.mark.device_exclude("D401"),
-                pytest.mark.context("nightly"),
-                pytest.mark.priority(100),
-            ]
-            def test_example(_test_device_serial):
-                pass
-        """, "--context", "nightly", "-W", "error::pytest.PytestUnknownMarkWarning")
+        rc, out, *_ = run_e2e("pytest-markers-all.py",
+                              "--context", "nightly", "-W", "error::pytest.PytestUnknownMarkWarning")
         assert_outcomes(out, passed=1)
 
     def test_device_marker(self):
-        rc, out, *_ = run_e2e("""
-            import pytest
-            pytestmark = [pytest.mark.device("D455")]
-            def test_with_device():
-                pass
-        """, "-W", "error::pytest.PytestUnknownMarkWarning")
+        rc, out, *_ = run_e2e("pytest-markers-device.py",
+                              "-W", "error::pytest.PytestUnknownMarkWarning")
         assert_outcomes(out, passed=1)

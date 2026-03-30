@@ -6,11 +6,8 @@
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
-import textwrap
 import types
 from unittest.mock import MagicMock
 import pytest
@@ -128,30 +125,30 @@ def make_device_marker(name, pattern):
 # E2E subprocess runner
 # =============================================================================
 
-_INFRA_DIR = os.path.dirname(os.path.abspath(__file__))
-_UNIT_TESTS_DIR = os.path.dirname(_INFRA_DIR)
-_E2E_CONFTEST = os.path.join(_INFRA_DIR, 'e2e_conftest.py')
+_E2E_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'e2e')
+_E2E_CONFTEST = os.path.join(_E2E_DIR, 'e2e_conftest.py')
 
 
-def run_e2e(test_file_content, *extra_pytest_args):
-    """Run a pytest subprocess in a temp dir with mocked hardware and the real conftest.
+def run_e2e(test_filename, *extra_pytest_args):
+    """Run a pytest subprocess on a static test file from e2e/.
 
-    Copies e2e_conftest.py (which mocks hardware and exec()s the real conftest.py)
-    and writes the inline test content as pytest-e2e.py.
+    Copies e2e_conftest.py and the test file to a temp dir for isolation
+    from the parent unit-tests/conftest.py. No content is generated — both
+    files are static and checked into the repo.
 
     Returns (returncode, stdout, enable_only_calls).
     """
+    import shutil, tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         shutil.copy(_E2E_CONFTEST, os.path.join(tmpdir, 'conftest.py'))
-
-        with open(os.path.join(tmpdir, 'pytest-e2e.py'), 'w') as f:
-            f.write(textwrap.dedent(test_file_content))
+        shutil.copy(os.path.join(_E2E_DIR, test_filename), os.path.join(tmpdir, test_filename))
 
         env = os.environ.copy()
-        env['INFRA_UNIT_TESTS_DIR'] = _UNIT_TESTS_DIR
+        env['INFRA_UNIT_TESTS_DIR'] = os.path.normpath(os.path.join(_E2E_DIR, '..', '..'))  # unit-tests/
 
         p = subprocess.run(
-            [sys.executable, "-m", "pytest", "pytest-e2e.py", "-v", *extra_pytest_args],
+            [sys.executable, "-m", "pytest", test_filename, "-v", *extra_pytest_args],
             cwd=tmpdir,
             env=env,
             stdout=subprocess.PIPE,
