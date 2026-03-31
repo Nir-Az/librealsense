@@ -2,6 +2,7 @@
 // Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
 
 #include "fw-update-helper.h"
+#include "fw-update-common.h"
 #include "model-views.h"
 #include "viewer.h"
 #include <realsense_imgui.h>
@@ -127,9 +128,9 @@ namespace rs2
         return false;
     }
 
-    void firmware_update_manager::process_mipi_signed_fw()
+    void firmware_update_manager::process_mipi_signed_fw(std::function<void()> cleanup)
     {
-        bool is_mipi_recovery = !(strcmp(_dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID), "BBCD"));
+        bool is_mipi_recovery = fw_update::is_mipi_recovery_device( _dev );
         if (!_is_signed)
         {
             fail("Signed FW update for MIPI device - This FW file is not signed ");
@@ -137,8 +138,7 @@ namespace rs2
         }
         if (!is_mipi_recovery)
         {
-            auto dev_updatable = _dev.as<updatable>();
-            if(!(dev_updatable && dev_updatable.check_firmware_compatibility(_fw)))
+            if( ! fw_update::check_fw_compatibility( _dev, _fw ) )
             {
                 std::stringstream ss;
                 ss << "The firmware version is not compatible with ";
@@ -147,6 +147,8 @@ namespace rs2
                 return;
             }
         }
+
+        std::string serial = fw_update::get_update_serial( _dev );
 
         _progress = 1;
 
@@ -168,6 +170,7 @@ namespace rs2
 
         size_t next = 0;
 
+        // update_signed_firmware() already calls hardware_reset() internally
         update_dev.update(_fw, [&](float progress01)
         {
             _progress = progress01 * 100.f;
@@ -181,26 +184,60 @@ namespace rs2
 
         if (is_mipi_recovery)
         {
-            log("For GMSL MIPI device please reboot, or reload d4xx driver\n"\
-                "sudo rmmod d4xx && sudo modprobe d4xx\n"\
-                "and restart the realsense-viewer");
-            LOG_INFO("For GMSL MIPI device please reboot, or reload d4xx driver\n"\
-                     "sudo rmmod d4xx && sudo modprobe d4xx\n"\
-                     "and restart the realsense-viewer");
+            log( std::string( fw_update::mipi_recovery_message )
+                 + "\nand restart the realsense-viewer" );
+            LOG_INFO( fw_update::mipi_recovery_message
+                      << "\nand restart the realsense-viewer" );
+
+            // Recovery requires manual driver reload, can't verify reconnection
+            // simulate_device_reconnect takes 5 seconds to fake the reconnect cycle
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            _progress = 100.f;
+            _done = true;
+            return;
         }
 
-        // Restart the device to reconstruct with the new version information
-        _dev.hardware_reset();
+        // Wait for device to reconnect to verify the update actually completed
+        if (!wait_for_device_reconnect(serial, cleanup))
+        {
+            fail("Original device did not reconnect in time!");
+            return;
+        }
 
-        // Give MIPI device time to complete hardware reset before marking done
-        // This prevents automation from powering off before device restart completes
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        log( "Device reconnected successfully!\n"
+             "FW update process completed successfully" );
 
-        // Ensure progress is fully complete before marking as done
-        _progress = 100.f;
+        _progress = 100;
 
-        // Mark as done after sending hardware reset command
         _done = true;
+    }
+
+    bool firmware_update_manager::wait_for_device_reconnect(const std::string& serial, std::function<void()> cleanup)
+    {
+        return check_for([this, serial]() {
+            auto devs = _ctx.query_devices();
+
+            for (uint32_t j = 0; j < devs.size(); j++)
+            {
+                try
+                {
+                    auto d = devs[j];
+
+                    if (d.query_sensors().size() && d.query_sensors().front().supports(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID))
+                    {
+                        auto s = d.query_sensors().front().get_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID);
+                        if (s == serial)
+                        {
+                            log("Discovered connection of the original device");
+                            return true;
+                        }
+                    }
+                }
+                catch (...) {}
+            }
+
+            return false;
+        }, cleanup, std::chrono::seconds(60));
     }
 
     void firmware_update_manager::backup_firmware(updatable& upd, int& next_progress, const std::string& serial)
@@ -309,18 +346,14 @@ namespace rs2
         invoker invoke)
     {
         // if device is MIPI device, and fw is signed - using mipi specific procedure
-        bool is_mipi_device = !strcmp(_dev.get_info(RS2_CAMERA_INFO_CONNECTION_TYPE), "GMSL");
-        if (_is_signed && is_mipi_device)
+        bool is_mipi = fw_update::is_mipi_device( _dev );
+        if (_is_signed && is_mipi)
         {
-            process_mipi_signed_fw();
+            process_mipi_signed_fw(cleanup);
             return;
         }
 
-        std::string serial = "";
-        if (_dev.supports(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID))
-            serial = _dev.get_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID);
-        else
-            serial = _dev.query_sensors().front().get_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID);
+        std::string serial = fw_update::get_update_serial( _dev );
 
         // Clear FW update related notification to avoid dismissing the notification on ~device_model()
         // We want the notification alive during the whole process.
@@ -349,7 +382,7 @@ namespace rs2
             // checking firmware version compatibility with device
             if (_is_signed)
             {
-                if (!upd.check_firmware_compatibility(_fw))
+                if( ! fw_update::check_fw_compatibility( _dev, _fw ) )
                 {
                     std::stringstream ss;
                     ss << "The firmware version is not compatible with ";
@@ -359,7 +392,7 @@ namespace rs2
                 }
             }
 
-            if (!is_mipi_device)
+            if (!is_mipi)
             {
                 backup_firmware(upd, next_progress, serial);
             }
@@ -403,36 +436,17 @@ namespace rs2
             });
             log("Firmware Update completed, waiting for device to reconnect");
 
-            if (is_mipi_device)
+            if (is_mipi)
             {
+                // hardware_reset() triggers simulate_device_reconnect which fakes a
+                // disconnect immediately and reconnects after 5 seconds; wait long
+                // enough for the fake disconnect to take effect before polling
                 _dev.hardware_reset();
+                std::this_thread::sleep_for( std::chrono::seconds( 2 ) );
             }
         }
 
-        if (!check_for([this, serial]() {
-            auto devs = _ctx.query_devices();
-
-            for (uint32_t j = 0; j < devs.size(); j++)
-            {
-                try
-                {
-                    auto d = devs[j];
-
-                    if (d.query_sensors().size() && d.query_sensors().front().supports(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID))
-                    {
-                        auto s = d.query_sensors().front().get_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID);
-                        if (s == serial)
-                        {
-                            log("Discovered connection of the original device");
-                            return true;
-                        }
-                    }
-                }
-                catch (...) {}
-            }
-
-            return false;
-        }, cleanup, std::chrono::seconds(60)))
+        if (!wait_for_device_reconnect(serial, cleanup))
         {
             fail("Original device did not reconnect in time!");
             return;

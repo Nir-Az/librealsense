@@ -72,11 +72,13 @@ namespace librealsense
         std::ofstream fw_path_in_device(dfu_path, std::ios::binary);
         if (fw_path_in_device)
         {
-            bool burn_done = false;
+            // Progress thread runs for the full ~95 seconds to give the device
+            // time to process the firmware. The write may return instantly (OS
+            // buffering) but the device still needs time to burn.
             std::thread show_progress_thread(
                 [&]()
                 {
-                    for( int i = 0; i < 95 && !burn_done; ++i ) // Show percentage [0-100]
+                    for( int i = 0; i < 95; ++i ) // Show percentage [0-95]
                     {
                         if (callback)
                             callback->on_update_progress(static_cast<float>(i) / 100.f);
@@ -86,16 +88,23 @@ namespace librealsense
                 } );
 
             fw_path_in_device.write(reinterpret_cast<const char*>(image.data()), image.size());
-            burn_done = true;
+            fw_path_in_device.flush();
             show_progress_thread.join();
+
+            if( ! fw_path_in_device.good() )
+                throw librealsense::io_exception( "Firmware write to DFU path failed: " + dfu_path );
         }
         else
         {
             throw librealsense::io_exception("Firmware Update failed - DFU path: " + dfu_path
                 + " - wrong path or permissions missing");
         }
-        LOG_INFO("FW update process completed successfully.");
+
         fw_path_in_device.close();
+        if( ! fw_path_in_device )
+            throw librealsense::io_exception( "Firmware flush/close failed on DFU path: " + dfu_path );
+
+        LOG_INFO("FW update process completed successfully.");
 
         if (callback)
             callback->on_update_progress(0.95f);
@@ -106,8 +115,9 @@ namespace librealsense
                      "and restart the realsense-viewer");
         }
         // Restart the device to reconstruct with the new version information
+        // simulate_device_reconnect takes 5 seconds to fake the reconnect cycle
         hardware_reset();
-        std::this_thread::sleep_for( std::chrono::seconds( 2 ) );
+        std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
         if (callback)
             callback->on_update_progress(1.f);
     }
