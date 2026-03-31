@@ -86,16 +86,24 @@ namespace librealsense
                 } );
 
             fw_path_in_device.write(reinterpret_cast<const char*>(image.data()), image.size());
+            fw_path_in_device.flush();
             burn_done = true;
             show_progress_thread.join();
+
+            if( ! fw_path_in_device.good() )
+                throw librealsense::io_exception( "Firmware write to DFU path failed: " + dfu_path );
         }
         else
         {
             throw librealsense::io_exception("Firmware Update failed - DFU path: " + dfu_path
                 + " - wrong path or permissions missing");
         }
-        LOG_INFO("FW update process completed successfully.");
+
         fw_path_in_device.close();
+        if( ! fw_path_in_device )
+            throw librealsense::io_exception( "Firmware flush/close failed on DFU path: " + dfu_path );
+
+        LOG_INFO("FW update process completed successfully.");
 
         if (callback)
             callback->on_update_progress(0.95f);
