@@ -162,11 +162,11 @@ namespace librealsense
         named_mutex::named_mutex(const std::string& device_path, unsigned timeout)
             : _device_path(device_path),
               _timeout(timeout), // TODO: try to lock with timeout
-              _fildes( open( _device_path.c_str(), O_RDWR, 0 ) ),
+              _fildes(-1),
               _lock_counter(0)
         {
-            if( _fildes < 0)
-                throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << _device_path << "'" );
+            // File descriptor will be opened lazily when lock() is called
+            // This prevents holding open file descriptors across hardware resets
         }
 
         named_mutex::~named_mutex()
@@ -176,7 +176,7 @@ namespace librealsense
                 // OFD lock will automatically release if locked only when file description closes (not file descriptor)
                 // If process was forked or cloned and unlock() was not properly called after a lock() then file will
                 // remain locked for the child process
-                close( _fildes );
+                close_fd();
             }
             catch(...)
             {
@@ -184,28 +184,67 @@ namespace librealsense
             }
         }
 
+        void named_mutex::ensure_fd_open()
+        {
+            if (_fildes < 0)
+            {
+                _fildes = open(_device_path.c_str(), O_RDWR, 0);
+                if (_fildes < 0)
+                {
+                    throw linux_backend_exception( rsutils::string::from() << "named_mutex: Cannot open '" << _device_path << "'" );
+                }
+            }
+        }
+
+        void named_mutex::close_fd()
+        {
+            // Close file descriptor if it was opened
+            if (_fildes >= 0)
+            {
+                close( _fildes );
+                _fildes = -1;
+            }
+        }
+
         void named_mutex::lock()
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
-                // Using OFD locks to synchronize both interprocess and interthread.
-                // flock() is not good if we have multiple instances of the same device. i.e.
-                //     auto devs = context.query_devices();
-                //     auto dev1 = devs[0];
-                //     auto dev2 = devs[0];
-                // Closing file descriptor for one instance will unlock file for other instances.
-                // Note - OFD locks are linux standart not POSIX.
-                struct flock fl;
-                memset( &fl, 0, sizeof( fl ) );
-                fl.l_whence = SEEK_SET;
-                fl.l_start = 0;
-                fl.l_len = 0; // Lock the entire file
-                fl.l_type = F_WRLCK;
-                auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
-                if( 0 != ret )
+                try
+                {
+                    // Open file descriptor only when first lock is acquired
+                    ensure_fd_open();
+
+                    // Using OFD locks to synchronize both interprocess and interthread.
+                    // flock() is not good if we have multiple instances of the same device. i.e.
+                    //     auto devs = context.query_devices();
+                    //     auto dev1 = devs[0];
+                    //     auto dev2 = devs[0];
+                    // Closing file descriptor for one instance will unlock file for other instances.
+                    // Note - OFD locks are linux standart not POSIX.
+                    struct flock fl;
+                    memset( &fl, 0, sizeof( fl ) );
+                    fl.l_whence = SEEK_SET;
+                    fl.l_start = 0;
+                    fl.l_len = 0; // Lock the entire file
+                    fl.l_type = F_WRLCK;
+                    auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
+                    if( 0 != ret )
+                    {
+                        // Close file descriptor since we failed to acquire lock
+                        close_fd();
+                        
+                        throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
+                    }
+                }
+                catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
-                    throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
+                    
+                    // Close file descriptor if it was opened
+                    close_fd();
+                    
+                    throw;
                 }
             }
         }
@@ -223,6 +262,9 @@ namespace librealsense
                 auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
                 if( 0 != ret )
                     throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": unlocking failed" );
+
+                // Close file descriptor when last lock is released
+                close_fd();
             }
         }
 
@@ -230,16 +272,36 @@ namespace librealsense
         {
             if( _lock_counter.fetch_add( 1 ) == 0 )
             {
-                struct flock fl;
-                memset( &fl, 0, sizeof( fl ) );
-                fl.l_whence = SEEK_SET;
-                fl.l_start = 0;
-                fl.l_len = 0; // Lock the entire file
-                fl.l_type = F_WRLCK;
-                auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
-                if( 0 != ret && errno == EAGAIN)
+                try
+                {
+                    // Open file descriptor only when first lock is acquired
+                    ensure_fd_open();
+
+                    struct flock fl;
+                    memset( &fl, 0, sizeof( fl ) );
+                    fl.l_whence = SEEK_SET;
+                    fl.l_start = 0;
+                    fl.l_len = 0; // Lock the entire file
+                    fl.l_type = F_WRLCK;
+                    auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
+                    if( 0 != ret )
+                    {
+                        // fcntl failed - need to clean up
+                        // Close file descriptor since we failed to acquire lock
+                        close_fd();
+                        
+                        // Return false instead of throwing, but still need to decrement counter
+                        _lock_counter.fetch_add( -1 );
+                        return false;
+                    }
+                }
+                catch(...)
                 {
                     _lock_counter.fetch_add( -1 );
+                    
+                    // Close file descriptor if it was opened
+                    close_fd();
+                    
                     return false;
                 }
             }
