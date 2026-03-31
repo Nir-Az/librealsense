@@ -72,11 +72,13 @@ namespace librealsense
         std::ofstream fw_path_in_device(dfu_path, std::ios::binary);
         if (fw_path_in_device)
         {
-            bool burn_done = false;
+            // Progress thread runs for the full ~95 seconds to give the device
+            // time to process the firmware. The write may return instantly (OS
+            // buffering) but the device still needs time to burn.
             std::thread show_progress_thread(
                 [&]()
                 {
-                    for( int i = 0; i < 95 && !burn_done; ++i ) // Show percentage [0-100]
+                    for( int i = 0; i < 95; ++i ) // Show percentage [0-95]
                     {
                         if (callback)
                             callback->on_update_progress(static_cast<float>(i) / 100.f);
@@ -87,7 +89,6 @@ namespace librealsense
 
             fw_path_in_device.write(reinterpret_cast<const char*>(image.data()), image.size());
             fw_path_in_device.flush();
-            burn_done = true;
             show_progress_thread.join();
 
             if( ! fw_path_in_device.good() )
