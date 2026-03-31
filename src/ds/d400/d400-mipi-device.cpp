@@ -114,8 +114,9 @@ namespace librealsense
                      "and restart the realsense-viewer");
         }
         // Restart the device to reconstruct with the new version information
+        // simulate_device_reconnect takes 5 seconds to fake the reconnect cycle
         hardware_reset();
-        std::this_thread::sleep_for( std::chrono::seconds( 2 ) );
+        std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
         if (callback)
             callback->on_update_progress(1.f);
     }
