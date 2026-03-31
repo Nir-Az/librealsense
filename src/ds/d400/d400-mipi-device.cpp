@@ -86,6 +86,7 @@ namespace librealsense
                 } );
 
             fw_path_in_device.write(reinterpret_cast<const char*>(image.data()), image.size());
+            fw_path_in_device.flush();
             burn_done = true;
             show_progress_thread.join();
         }
