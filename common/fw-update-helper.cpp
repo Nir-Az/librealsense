@@ -190,7 +190,8 @@ namespace rs2
         }
 
         // update_signed_firmware() already calls hardware_reset() internally
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        // simulate_device_reconnect takes 5 seconds to fake the reconnect cycle
+        std::this_thread::sleep_for(std::chrono::seconds(5));
 
         _progress = 100.f;
         _done = true;
