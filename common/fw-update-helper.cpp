@@ -198,7 +198,23 @@ namespace rs2
         }
 
         // Wait for device to reconnect to verify the update actually completed
-        if (!check_for([this, serial]() {
+        if (!wait_for_device_reconnect(serial, cleanup))
+        {
+            fail("Original device did not reconnect in time!");
+            return;
+        }
+
+        log( "Device reconnected successfully!\n"
+             "FW update process completed successfully" );
+
+        _progress = 100;
+
+        _done = true;
+    }
+
+    bool firmware_update_manager::wait_for_device_reconnect(const std::string& serial, std::function<void()> cleanup)
+    {
+        return check_for([this, serial]() {
             auto devs = _ctx.query_devices();
 
             for (uint32_t j = 0; j < devs.size(); j++)
@@ -221,18 +237,7 @@ namespace rs2
             }
 
             return false;
-        }, cleanup, std::chrono::seconds(60)))
-        {
-            fail("Original device did not reconnect in time!");
-            return;
-        }
-
-        log( "Device reconnected successfully!\n"
-             "FW update process completed successfully" );
-
-        _progress = 100;
-
-        _done = true;
+        }, cleanup, std::chrono::seconds(60));
     }
 
     void firmware_update_manager::backup_firmware(updatable& upd, int& next_progress, const std::string& serial)
@@ -441,30 +446,7 @@ namespace rs2
             }
         }
 
-        if (!check_for([this, serial]() {
-            auto devs = _ctx.query_devices();
-
-            for (uint32_t j = 0; j < devs.size(); j++)
-            {
-                try
-                {
-                    auto d = devs[j];
-
-                    if (d.query_sensors().size() && d.query_sensors().front().supports(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID))
-                    {
-                        auto s = d.query_sensors().front().get_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID);
-                        if (s == serial)
-                        {
-                            log("Discovered connection of the original device");
-                            return true;
-                        }
-                    }
-                }
-                catch (...) {}
-            }
-
-            return false;
-        }, cleanup, std::chrono::seconds(60)))
+        if (!wait_for_device_reconnect(serial, cleanup))
         {
             fail("Original device did not reconnect in time!");
             return;

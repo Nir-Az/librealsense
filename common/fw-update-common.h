@@ -8,8 +8,8 @@
 #pragma once
 
 #include <librealsense2/rs.hpp>
+#include <stdexcept>
 #include <string>
-#include <sstream>
 #include <vector>
 
 namespace rs2
@@ -44,7 +44,10 @@ namespace fw_update
     {
         if( dev.supports( RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID ) )
             return dev.get_info( RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID );
-        return dev.query_sensors().front().get_info( RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID );
+        auto sensors = dev.query_sensors();
+        if( sensors.size() && sensors.front().supports( RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID ) )
+            return sensors.front().get_info( RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID );
+        throw std::runtime_error( "Device does not provide a firmware update serial number" );
     }
 
     static const char * mipi_recovery_message =

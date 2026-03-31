@@ -35,6 +35,7 @@ namespace rs2
             std::function<bool()> action, std::function<void()> cleanup,
             std::chrono::system_clock::duration delta);
 
+        bool wait_for_device_reconnect(const std::string& serial, std::function<void()> cleanup);
         void backup_firmware(updatable& upd, int& next_progress, const std::string& serial);
         void switch_device_to_recovery_mode(updatable& upd, const std::string& serial, update_device& dfu, std::function<void()> cleanup);
 
