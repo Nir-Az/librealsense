@@ -190,6 +190,10 @@ if(WIN32)
     string(REPLACE ";" " " LD_FLAGS_STR "${DELAYED}")
 endif()
 
+if(BUILD_ROSBAG2)
+    target_compile_definitions(realsense-viewer PRIVATE BUILD_ROSBAG2)
+endif()
+
 set(RS_VIEWER_LIBS ${GTK3_LIBRARIES} Threads::Threads realsense2-gl)
 
 include(../tools_common.cmake)

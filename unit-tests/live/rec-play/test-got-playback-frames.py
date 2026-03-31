@@ -6,8 +6,6 @@
 # test:device each(D400*) !D401
 # test:device each(D500*) !D555
 
-# test:donotrun:!nightly
-
 import pyrealsense2 as rs, os, time, tempfile, platform, sys
 from rspy import devices, log, test
 
@@ -125,7 +123,7 @@ def stop_sensor( sensor ):
 # (requires that no files are being held open inside this directory. Important to not keep any handle open to a file
 # in this directory, any handle as such must be set to None)
 temp_dir = tempfile.TemporaryDirectory( prefix='recordings_' )
-file_name = temp_dir.name + os.sep + 'rec.bag'
+file_name = temp_dir.name + os.sep + 'rec.db3'
 
 ################################################################################################
 test.start("Trying to record and playback using pipeline interface")
