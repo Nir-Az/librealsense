@@ -22,13 +22,15 @@ const std::map< fourcc::value_type, rs2_format > platform_fourcc_to_rs2_format =
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_FORMAT_YUYV },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_FORMAT_YUYV },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_FORMAT_MJPEG },
-    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_FORMAT_Y8 },
+    { fourcc( 'N', 'V', '1', '2' ), RS2_FORMAT_NV12 },
+	{ fourcc( 'G', 'R', 'E', 'Y' ), RS2_FORMAT_Y8 },
 };
-const std::map< fourcc::value_type, rs2_stream > platform_fourcc_to_rs2_stream = {
+const std::map< fourcc::value_type, rs2_stream > platform_color_fourcc_to_rs2_stream = {
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_STREAM_COLOR },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_STREAM_COLOR },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_STREAM_COLOR },
-    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_STREAM_INFRARED },
+    { fourcc( 'N', 'V', '1', '2' ), RS2_STREAM_COLOR },
+	{ fourcc( 'G', 'R', 'E', 'Y' ), RS2_STREAM_INFRARED },
 };
 
 
@@ -141,6 +143,10 @@ platform_camera::platform_camera( std::shared_ptr< const device_info > const & d
         processing_block_factory::create_pbf_vector< yuy2_converter >( RS2_FORMAT_YUYV,
                                                                        map_supported_color_formats( RS2_FORMAT_YUYV ),
                                                                        RS2_STREAM_COLOR ) );
+    color_ep->register_processing_block(
+        processing_block_factory::create_pbf_vector< nv12_converter >( RS2_FORMAT_NV12,
+                                                                       map_supported_color_formats( RS2_FORMAT_NV12 ),
+                                                                       RS2_STREAM_COLOR ) );
     color_ep->register_processing_block( { { RS2_FORMAT_MJPEG } },
                                          { { RS2_FORMAT_RGB8, RS2_STREAM_COLOR } },
                                          []() { return std::make_shared< mjpeg_converter >( RS2_FORMAT_RGB8 ); } );
@@ -173,8 +179,8 @@ std::vector< tagged_profile > platform_camera::get_profiles_tags() const
     std::vector< tagged_profile > markers;
     markers.push_back( { RS2_STREAM_COLOR,
                          -1,
-                         640,
-                         480,
+                         1280,
+                         720,
                          RS2_FORMAT_RGB8,
                          30,
                          profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
