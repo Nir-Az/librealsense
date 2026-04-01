@@ -1342,8 +1342,11 @@ namespace rs2
 
     bool subdevice_model::is_multiple_resolutions_supported() const
     {
-        std::string product_line = dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
-        std::string sensor_name = s->get_info(RS2_CAMERA_INFO_NAME);
+        if( !dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE ) || !s->supports( RS2_CAMERA_INFO_NAME ) )
+            return false;
+
+        std::string product_line = dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE );
+        std::string sensor_name = s->get_info( RS2_CAMERA_INFO_NAME );
 
         return product_line == "D500" && sensor_name == "Stereo Module";
     }

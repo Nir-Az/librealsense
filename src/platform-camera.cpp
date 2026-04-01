@@ -22,11 +22,13 @@ const std::map< fourcc::value_type, rs2_format > platform_color_fourcc_to_rs2_fo
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_FORMAT_YUYV },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_FORMAT_YUYV },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_FORMAT_MJPEG },
+    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_FORMAT_Y8 },
 };
 const std::map< fourcc::value_type, rs2_stream > platform_color_fourcc_to_rs2_stream = {
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_STREAM_COLOR },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_STREAM_COLOR },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_STREAM_COLOR },
+    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_STREAM_INFRARED },
 };
 
 
@@ -66,7 +68,7 @@ private:
 
 void platform_camera::initialize()
 {
-    auto const n_sensors = get_sensors_count();
+        auto const n_sensors = get_sensors_count();
     for (auto i = 0; i < n_sensors; ++i)
     {
         if (auto sensor = dynamic_cast<platform_camera_sensor*>(&(get_sensor(i))))
@@ -142,6 +144,8 @@ platform_camera::platform_camera( std::shared_ptr< const device_info > const & d
                                          []() { return std::make_shared< mjpeg_converter >( RS2_FORMAT_RGB8 ); } );
     color_ep->register_processing_block(
         processing_block_factory::create_id_pbf( RS2_FORMAT_MJPEG, RS2_STREAM_COLOR ) );
+    color_ep->register_processing_block(
+        processing_block_factory::create_id_pbf( RS2_FORMAT_Y8, RS2_STREAM_INFRARED ) );
 
     // Timestamps are given in units set by device which may vary among the OEM vendors.
     // For consistent (msec) measurements use "time of arrival" metadata attribute
