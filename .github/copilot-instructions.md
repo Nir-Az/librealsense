@@ -2,16 +2,24 @@
 
 ## Skills
 
-Detailed how-to guides for common tasks are maintained as skill files under `.github/skills/`. **Always consult the relevant skill before performing the corresponding task.** Currently available skills:
+Detailed how-to guides for common tasks are maintained as skill files under `.github/skills/`. **Before performing any of the tasks below, you MUST open and read the corresponding skill file.** Do not rely on prior knowledge or assumptions — the skill file is the source of truth.
 
-| Skill file | When to use |
+| Skill file | Read before |
 |---|---|
 | `.github/skills/build.md` | Building the project (CMake configure, compile, flags) |
 | `.github/skills/testing.md` | Running, filtering, and debugging unit tests |
 | `.github/skills/pytest-infra.md` | Migrating tests to pytest, modifying pytest/hub infrastructure, verifying Jenkins CI results |
-| `.github/skills/git-workflow.md` | Branch/PR conventions, commit message style, push remotes |
 
 If a skill file exists for the task at hand, follow its instructions precisely. New skills may be added to this folder over time — check its contents before assuming none applies.
+
+## Git Workflow (quick reference)
+
+These rules apply to all git operations. See `.github/skills/git-workflow.md` for full details.
+
+- **Branch naming**: short descriptive name, **no username prefix** (e.g. `fix-platform-camera`, not `nir/fix-platform-camera`)
+- **PR target**: `development` branch
+- **Push to**: `fork` remote (if no `fork` remote, ask the user)
+- **Commits**: short one-sentence message, no Co-Authored-By, plain `git commit -m "message"`
 
 ## Project Overview
 
