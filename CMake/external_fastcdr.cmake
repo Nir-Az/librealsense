@@ -28,7 +28,7 @@ function(get_fastcdr_only)
 
     # FastCDR v1.0.25 has cmake_minimum_required(VERSION 2.x) which CMake 4.0+ rejects.
     # Override the minimum policy version so the old cmake_minimum_required is accepted.
-    set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
     add_subdirectory(${FASTCDR_SOURCE_DIR} ${CMAKE_BINARY_DIR}/third-party/fastcdr-build EXCLUDE_FROM_ALL)
 
