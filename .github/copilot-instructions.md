@@ -14,8 +14,9 @@ If a skill file exists for the task at hand, follow its instructions precisely. 
 
 ## Git Workflow (quick reference)
 
-These rules apply to all git operations. See `.github/skills/git-workflow.md` for full details.
+These rules apply to all git operations.
 
+- **Base branch**: `development`
 - **Branch naming**: short descriptive name, **no username prefix** (e.g. `fix-platform-camera`, not `nir/fix-platform-camera`)
 - **PR target**: `development` branch
 - **Push to**: `fork` remote (if no `fork` remote, ask the user)
