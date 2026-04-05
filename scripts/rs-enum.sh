@@ -136,7 +136,7 @@ get_video_devices_for_rs() {
 # - If Bytes per line == 64 -> imu
 # - Otherwise:
 # -- If pixel format == Z16 -> depth
-# -- If pixel format == GREY -> ir
+# -- If pixel format == GREY/Y8I/Y12I/Y16I -> ir
 # -- Else -> color (This allows for RGB main format to change in the future with no impact)
 identify_dev_type() {
   local DEVICE="$1"
@@ -161,7 +161,7 @@ identify_dev_type() {
   # Check Pixel Format
   if [[ "$PIXEL_FORMAT" == *"Z16"* ]]; then
     echo "depth"
-  elif [[ "$PIXEL_FORMAT" == *"GREY"* ]]; then
+  elif [[ "$PIXEL_FORMAT" == *"GREY"* || "$PIXEL_FORMAT" == *"Y8I "* || "$PIXEL_FORMAT" == *"Y12I"* || "$PIXEL_FORMAT" == *"Y16I"* ]]; then
     echo "ir"
   else
     echo "color"
