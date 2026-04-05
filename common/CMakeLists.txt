@@ -31,6 +31,7 @@ set(COMMON_SRC
     "${CMAKE_CURRENT_LIST_DIR}/os.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/bag-conversion-helper.h"
     "${CMAKE_CURRENT_LIST_DIR}/bag-conversion-helper.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/fw-update-common.h"
     "${CMAKE_CURRENT_LIST_DIR}/fw-update-helper.h"
     "${CMAKE_CURRENT_LIST_DIR}/fw-update-helper.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/metadata-helper.h"
