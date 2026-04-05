@@ -18,15 +18,17 @@ namespace librealsense {
 namespace {
 
 
-const std::map< fourcc::value_type, rs2_format > platform_color_fourcc_to_rs2_format = {
+const std::map< fourcc::value_type, rs2_format > platform_fourcc_to_rs2_format = {
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_FORMAT_YUYV },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_FORMAT_YUYV },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_FORMAT_MJPEG },
+    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_FORMAT_Y8 },
 };
-const std::map< fourcc::value_type, rs2_stream > platform_color_fourcc_to_rs2_stream = {
+const std::map< fourcc::value_type, rs2_stream > platform_fourcc_to_rs2_stream = {
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_STREAM_COLOR },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_STREAM_COLOR },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_STREAM_COLOR },
+    { fourcc( 'G', 'R', 'E', 'Y' ), RS2_STREAM_INFRARED },
 };
 
 
@@ -35,8 +37,9 @@ class platform_camera_sensor : public synthetic_sensor
 public:
     platform_camera_sensor( device * owner, std::shared_ptr< uvc_sensor > uvc_sensor )
         : synthetic_sensor(
-            "RGB Camera", uvc_sensor, owner, platform_color_fourcc_to_rs2_format, platform_color_fourcc_to_rs2_stream )
-        , _default_stream( new stream( RS2_STREAM_COLOR ) )
+            "RGB Camera", uvc_sensor, owner, platform_fourcc_to_rs2_format, platform_fourcc_to_rs2_stream )
+        , _color_stream( new stream( RS2_STREAM_COLOR ) )
+        , _ir_stream( new stream( RS2_STREAM_INFRARED ) )
     {
     }
 
@@ -48,9 +51,9 @@ public:
 
         for( auto && p : results )
         {
-            // Register stream types
-            assign_stream( _default_stream, p );
-            environment::get_instance().get_extrinsics_graph().register_same_extrinsics( *_default_stream, *p );
+            auto & s = ( p->get_stream_type() == RS2_STREAM_INFRARED ) ? _ir_stream : _color_stream;
+            assign_stream( s, p );
+            environment::get_instance().get_extrinsics_graph().register_same_extrinsics( *s, *p );
         }
 
         return results;
@@ -58,7 +61,8 @@ public:
 
 
 private:
-    std::shared_ptr< stream_interface > _default_stream;
+    std::shared_ptr< stream_interface > _color_stream;
+    std::shared_ptr< stream_interface > _ir_stream;
 };
 
 
@@ -142,6 +146,8 @@ platform_camera::platform_camera( std::shared_ptr< const device_info > const & d
                                          []() { return std::make_shared< mjpeg_converter >( RS2_FORMAT_RGB8 ); } );
     color_ep->register_processing_block(
         processing_block_factory::create_id_pbf( RS2_FORMAT_MJPEG, RS2_STREAM_COLOR ) );
+    color_ep->register_processing_block(
+        processing_block_factory::create_id_pbf( RS2_FORMAT_Y8, RS2_STREAM_INFRARED ) );
 
     // Timestamps are given in units set by device which may vary among the OEM vendors.
     // For consistent (msec) measurements use "time of arrival" metadata attribute
