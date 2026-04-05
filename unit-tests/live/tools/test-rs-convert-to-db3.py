@@ -28,36 +28,38 @@ if rs_convert:
     bag_file = os.path.join( repo.build, 'unit-tests', 'recordings', 'recording_deadlock.bag' )
     temp_dir = tempfile.mkdtemp( prefix='bag_to_db3_' )
     db3_file = os.path.join( temp_dir, 'converted.db3' )
-    p = subprocess.run( [rs_convert, '-i', bag_file, '-D', db3_file],
-                        capture_output=True, text=True, timeout=60 )
-    test.check( p.returncode == 0 )
-    log.d( 'converted to', db3_file )
+    try:
+        p = subprocess.run( [rs_convert, '-i', bag_file, '-D', db3_file],
+                            capture_output=True, text=True, timeout=60 )
+        test.check( p.returncode == 0 )
+        log.d( 'converted to', db3_file )
 
-    bag_pipe = start_pipeline( bag_file )
-    db3_pipe = start_pipeline( db3_file )
+        bag_pipe = start_pipeline( bag_file )
+        db3_pipe = start_pipeline( db3_file )
 
-    frame_count = 0
-    while True:
-        bag_ok, bag_fset = bag_pipe.try_wait_for_frames( 1000 )
-        db3_ok, db3_fset = db3_pipe.try_wait_for_frames( 1000 )
-        if not bag_ok and not db3_ok:
-            log.d( f'no more frames in either pipeline: bag_ok={bag_ok} db3_ok={db3_ok}' )
-            break
-        if not test.check( bag_ok == db3_ok ):
-            break
-        test.check_equal( bag_fset.size(), db3_fset.size() )
-        for bag_f, db3_f in zip( bag_fset, db3_fset ):
-            frame_count += 1
-            test.check( np.array_equal( np.asarray( bag_f.get_data() ), np.asarray( db3_f.get_data() ) ) )
+        frame_count = 0
+        while True:
+            bag_ok, bag_fset = bag_pipe.try_wait_for_frames( 1000 )
+            db3_ok, db3_fset = db3_pipe.try_wait_for_frames( 1000 )
+            if not bag_ok and not db3_ok:
+                log.d( f'no more frames in either pipeline: bag_ok={bag_ok} db3_ok={db3_ok}' )
+                break
+            if not test.check( bag_ok == db3_ok ):
+                break
+            test.check_equal( bag_fset.size(), db3_fset.size() )
+            for bag_f, db3_f in zip( bag_fset, db3_fset ):
+                frame_count += 1
+                test.check( np.array_equal( np.asarray( bag_f.get_data() ), np.asarray( db3_f.get_data() ) ) )
 
-    bag_pipe.stop()
-    db3_pipe.stop()
+        bag_pipe.stop()
+        db3_pipe.stop()
 
-    log.d( frame_count, 'frames compared' )
-    test.check( frame_count > 0 )
-
-    os.remove( db3_file )
-    os.rmdir( temp_dir )
+        log.d( frame_count, 'frames compared' )
+        test.check( frame_count > 0 )
+    finally:
+        if os.path.isfile( db3_file ):
+            os.remove( db3_file )
+        os.rmdir( temp_dir )
 else:
     log.e( 'rs-convert not found!' )
     import sys
