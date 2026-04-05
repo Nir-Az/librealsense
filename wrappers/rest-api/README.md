@@ -1,7 +1,7 @@
 # LibRS Rest API server
 ## Overview
 
-This Python library provides a convenient wrapper to interact with the [RealSense REST API], a FastAPI-based service that exposes the functionality of the Intel RealSense SDK (librealsense) over a network.
+This Python library provides a convenient wrapper to interact with the [RealSense REST API], a FastAPI-based service that exposes the functionality of the RealSense SDK (librealsense) over a network.
 
 It simplifies remote control and data streaming from RealSense devices by handling communication protocols for:
 

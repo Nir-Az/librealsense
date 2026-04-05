@@ -1,4 +1,4 @@
-# Sample Code for Intel® RealSense™ Python Wrapper
+# Sample Code for RealSense Python Wrapper
 
 These Examples demonstrate how to use the python wrapper of the SDK.
 
