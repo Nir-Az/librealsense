@@ -56,7 +56,7 @@ if(BUILD_GRAPHICAL_EXAMPLES)
 
         source_group("Resources" FILES
                 ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
-                ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc)
+                ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-app.rc)
 
         source_group("3rd Party" FILES
             ../../third-party/tinyfiledialogs/tinyfiledialogs.c

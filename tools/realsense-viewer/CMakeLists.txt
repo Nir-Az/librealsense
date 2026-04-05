@@ -181,7 +181,7 @@ if(WIN32)
 
     source_group("Resources" FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc)
+        ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-app.rc)
 
     source_group("OpenVINO" FILES ${OPENVINO_FILES})
 

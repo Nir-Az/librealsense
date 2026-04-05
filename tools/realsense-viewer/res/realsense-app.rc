@@ -35,6 +35,10 @@ LANGUAGE LANG_NEUTRAL, 0x8
 // remains consistent on all systems.
 IDI_ICON1               ICON                    "icon.ico"
 
+// GLFW looks for a resource named "GLFW_ICON" when registering the window
+// class.  Without it the Windows 11 taskbar falls back to the generic icon.
+GLFW_ICON             ICON                    "icon.ico"
+
 #endif    // Neutral (Default) (unknown sub-lang: 0x8) resources
 /////////////////////////////////////////////////////////////////////////////
 
