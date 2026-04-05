@@ -168,6 +168,45 @@ identify_dev_type() {
   fi
 }
 
+# Helper function: discover stream types from media-ctl graph for a given I2C address
+# Parses the cached media-ctl --print-dot output to find D4XX entity names
+# and their port connections to the DS5 mux, returning types in port order.
+# This is more reliable than pixel format heuristics since entity names are
+# set by the driver and unambiguously identify the stream type.
+# Input: I2C address (e.g. "30-001a"), uses global tegra_dot
+# Output: space-separated stream types in port order (e.g. "depth color ir imu")
+discover_stream_types() {
+  local i2c_addr="$1"
+  local -A port_to_type
+
+  # Find all D4XX entity lines for this I2C address
+  while IFS= read -r line; do
+    # Extract entity node ID (e.g. "n000000c7")
+    local entity_node=$(echo "${line}" | awk '{print $1}')
+    # Extract stream type from "D4XX <type> <i2c>"
+    local type=$(echo "${line}" | grep -oP 'D4XX \K\w+')
+
+    [[ -z "${entity_node}" || -z "${type}" ]] && continue
+
+    # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
+    local port=$(echo "${tegra_dot}" | grep "${entity_node}:port0 ->" | grep -oP '-> \S+:port\K[0-9]+')
+
+    if [[ -n "${port}" ]]; then
+      # Map entity type to link name (rgb -> color) using camera_names
+      if [[ -n "${camera_names[${type}]+_}" ]]; then
+        port_to_type[${port}]="${camera_names[${type}]}"
+      else
+        port_to_type[${port}]="${type}"
+      fi
+    fi
+  done < <(echo "${tegra_dot}" | grep "D4XX .* ${i2c_addr}")
+
+  # Return types sorted by port number
+  for port in $(echo "${!port_to_type[@]}" | tr ' ' '\n' | sort -n); do
+    echo -n "${port_to_type[${port}]} "
+  done
+}
+
 # Helper function: get the number of devices of specific type identified
 get_dev_num() {
   local DEVICE="$1"
@@ -221,15 +260,33 @@ create_video_link() {
 # Helper function: process video devices for a RS camera
 # Processes all video devices for one RealSense camera, determining device types
 # Maps devices to sensors based on driver names (tegra-video=streaming, tegra-embedded=metadata)
+# When media-ctl data is available (tegra_dot), uses entity names for reliable type identification.
+# Falls back to pixel format heuristics (identify_dev_type) when media-ctl is unavailable.
 # Expected device order: depth, depth-md, color, color-md, ir, ir-md, imu
-# Input example: "/dev/video0 /dev/video1 /dev/video2"
+# Input: "$vid_devices" "$i2c_addr"
 process_rs_video_devices() {
   local vid_devices="$1"
-  
+  local i2c_addr="$2"
+
   # Convert video devices to array
   local vid_dev_arr=(${vid_devices})
   echo "DEBUG: Video device array: ${vid_dev_arr[*]}"
-  
+
+  # Try media-ctl discovery for stream type ordering
+  local stream_types=()
+  local stream_type_idx=0
+  local use_media_ctl=0
+  if [[ -n "${tegra_dot}" && -n "${i2c_addr}" ]]; then
+    local types_str=$(discover_stream_types "${i2c_addr}")
+    if [[ -n "${types_str}" ]]; then
+      stream_types=(${types_str})
+      use_media_ctl=1
+      echo "DEBUG: Discovered stream types from media-ctl: ${stream_types[*]}"
+    else
+      echo "DEBUG: media-ctl discovery returned no types for ${i2c_addr}, falling back to pixel format"
+    fi
+  fi
+
   # Process each video device in the expected order
   local bus="mipi"
   local sensor_name=""
@@ -237,13 +294,21 @@ process_rs_video_devices() {
 
   for vid in "${vid_dev_arr[@]}"; do
     [[ ! -c "${vid}" ]] && echo "DEBUG: Video device ${vid} not found, skipping" && continue
-    
+
     # Check if this is a valid tegra video device
     local dev_name=$(${v4l2_util} -d ${vid} -D 2>/dev/null | grep 'Driver name' | head -n1 | awk -F' : ' '{print $2}')
     echo "DEBUG: Video device ${vid} driver name: ${dev_name}"
     # Handle streaming devices
     if [ "${dev_name}" = "tegra-video" ]; then
-      sensor_name=$(identify_dev_type $vid)
+      # Use media-ctl discovered types when available, fall back to pixel format heuristics
+      if [[ ${use_media_ctl} -eq 1 && ${stream_type_idx} -lt ${#stream_types[@]} ]]; then
+        sensor_name="${stream_types[${stream_type_idx}]}"
+        stream_type_idx=$((stream_type_idx+1))
+        echo "DEBUG: Stream type from media-ctl: ${sensor_name}"
+      else
+        sensor_name=$(identify_dev_type $vid)
+        echo "DEBUG: Stream type from pixel format: ${sensor_name}"
+      fi
       if [[ -z "$sensor_name" ]]; then
         echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
         continue
@@ -252,7 +317,7 @@ process_rs_video_devices() {
       local dev_ln="/dev/video-rs-${sensor_name}-${sensor_idx}"
       create_video_link "$vid" "$dev_ln" "$bus" "$sensor_idx" "$sensor_name" "Streaming"
       increment_dev_num $sensor_name
-    # Handle metadata devices  
+    # Handle metadata devices
     elif [ "${dev_name}" = "tegra-embedded" ]; then
       if [[ -z "$sensor_name" ]]; then
         echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
@@ -328,7 +393,7 @@ process_single_rs_device() {
   fi
   
   # Process video devices
-  process_rs_video_devices "$vid_devices"
+  process_rs_video_devices "$vid_devices" "$i2c_addr"
 }
 
 # Check for Tegra devices by looking for RS mux in v4l2-ctl output
@@ -337,6 +402,17 @@ rs_devices=$(detect_rs_devices)
 # For Jetson we have `simple` method
 if [ -n "${rs_devices}" ]; then
   echo "DEBUG: Tegra RS devices detected"
+
+  # Cache media-ctl output for stream type discovery (if available)
+  tegra_dot=""
+  if [ -n "${media_util}" ]; then
+    tegra_mdev=$(${v4l2_util} --list-devices | grep -A1 -i tegra | grep '/dev/media' | head -1 | tr -d '[:space:]')
+    if [ -n "${tegra_mdev}" ]; then
+      tegra_dot=$(${media_util} -d ${tegra_mdev} --print-dot 2>/dev/null | grep -v dashed)
+      echo "DEBUG: Cached media-ctl output from ${tegra_mdev}"
+    fi
+  fi
+
   [[ $quiet -eq 0 ]] && printf "Bus\tCamera\tSensor\tNode Type\tVideo Node\tRS Link\n"
   
   # Parse each RS mux device
