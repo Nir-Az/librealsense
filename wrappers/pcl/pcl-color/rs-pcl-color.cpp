@@ -3,7 +3,7 @@
  *          Liam Gogley
  * 
  * Purpose: The following .cpp file will utilize the
- *          RealSense camera to stream and capture frame
+ *          RealSense camera to stream and capture frames
  *          data of the environment. Color is then applied
  *          and a point cloud is generated and saved to
  *          a point cloud data format (.pcd).
