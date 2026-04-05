@@ -63,8 +63,8 @@ public:
     // Same as write_to() but allows stopping the send process.
     // This requires the writer to be configured with ASYNCHRONOUS_PUBLISH_MODE so that write() returns immediately
     // and the actual sending is done in the background. We then wait for acknowledgments in a loop, checking 'should_stop'.
-    // If 'should_stop' returns true, the history is cleared (aborting the send) and 0 is returned.
-    dds_sequence_number write_to( dds_topic_writer &, std::function< bool() > should_stop ) const;
+    // If 'should_stop' returns true, or timeout expires, the history is cleared (aborting the send) and 0 is returned.
+    dds_sequence_number write_to( dds_topic_writer &, double timeout, std::function< bool() > should_stop ) const;
 
     // Cast the raw data to the desired type
     template< typename T >

@@ -754,9 +754,9 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
                 std::unique_lock< std::mutex > lock( mutex );
                 dfu_ready = notification;
                 std::string tmp_error_str;
-                realdds::dds_device::check_reply( dfu_ready, &tmp_error_str );
+                realdds::dds_device::check_reply( dfu_ready, &tmp_error_str ); // Error is logged by notification reader thread
                 if( ! tmp_error_str.empty() )
-                    should_stop = true;  // Break early on error. writer->wait_for_acks should return immediately. 
+                    should_stop = true;  // Break early on error. blob.write_to should return immediately. 
                 cv.notify_all();
             } );
 
@@ -774,7 +774,6 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
             throw std::runtime_error( "timeout waiting for DFU subscriber" );
         LOG_DEBUG( "transmitting image: " << image.size() << " bytes; crc= " << crc );
         auto blob = realdds::topics::blob_msg( std::vector< uint8_t >( image ) );
-        blob.write_to( *writer, [&should_stop]() { return should_stop.load(); } );
 
         double timeout = 5.;  // seconds
         if( auto controller
@@ -785,8 +784,8 @@ bool dds_device_proxy::check_fw_compatibility( const std::vector< uint8_t > & im
             timeout += seconds_to_send * 2;  // *2 in case of resend etc.
             LOG_DEBUG( "expecting ~" << rsutils::string::from( seconds_to_send, 2 ) << " seconds for image to get sent; timeout= " << rsutils::string::from( timeout, 2 ) );
         }
-        if( ! writer->wait_for_acks( timeout ) )
-            throw std::runtime_error( "timeout waiting for DFU image ack" );
+        ;
+        blob.write_to( *writer, timeout, [&should_stop]() { return should_stop.load(); } );
 
         // Wait for a reply
         {
