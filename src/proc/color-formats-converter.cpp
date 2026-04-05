@@ -825,27 +825,24 @@ namespace librealsense
     // The per-line UV layout (UVUVUV...) is identical to M420, only the plane arrangement differs.
     template<rs2_format FORMAT> void unpack_nv12( uint8_t * const d[], const uint8_t * s, int width, int height, int actual_size)
     {
-        auto n = width * height;
-        assert(n % 16 == 0);
+        assert(width % 16 == 0);
+        assert(height % 2 == 0);
 
 #if defined __SSSE3__ && ! defined ANDROID
-        static bool do_avx = has_avx();
-
-        auto src = reinterpret_cast<const __m128i*>(s);
         auto dst = reinterpret_cast<__m128i*>(d[0]);
 
         // Y plane starts at offset 0, UV plane starts at offset width*height
         auto y_plane = reinterpret_cast<const __m128i*>(s);
         auto uv_plane = reinterpret_cast<const __m128i*>(s + width * height);
 
-        __m128i* source_chunks_y = new __m128i[2 * width / 16];
-        __m128i* source_chunks_uv = new __m128i[width / 16];
-
 #pragma omp parallel for
         for (int j = 0; j < height / 2; ++j)
         {
+            // Per-iteration buffers to avoid data races across threads
+            auto source_chunks_y = new __m128i[2 * width / 16];
+            auto source_chunks_uv = new __m128i[width / 16];
+
             // Load 2 lines of Y from the Y plane
-#pragma omp parallel for
             for (int i = 0; i < 2 * width / 16; ++i)
             {
                 auto y_offset = (2 * j * width) / 16;
@@ -876,7 +873,7 @@ namespace librealsense
                 if ( i < width / 16)
                 {
                     auto uv_offset = (j * width) / 16;
-                    source_chunks_uv[i] = _mm_load_si128(&uv_plane[uv_offset + i]);
+                    source_chunks_uv[i] = _mm_loadu_si128(&uv_plane[uv_offset + i]);
                 }
             }
 
@@ -896,10 +893,10 @@ namespace librealsense
                 m420_sse_parse_one_line<FORMAT>(first_line_y, source_chunks_uv, &dst[offset_to_current_first_line_for_dst], line_length);
                 m420_sse_parse_one_line<FORMAT>(second_line_y, source_chunks_uv, &dst[offset_to_current_second_line_for_dst], line_length);
             }
-        }
 
-        delete[] source_chunks_y;
-        delete[] source_chunks_uv;
+            delete[] source_chunks_y;
+            delete[] source_chunks_uv;
+        }
 
 #else
         auto src = reinterpret_cast<const uint8_t*>(s);

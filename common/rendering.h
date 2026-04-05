@@ -584,7 +584,10 @@ namespace rs2
                     }
                     else
                     {
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, data);
+                        // Fallback: upload only the Y (luma) plane as a single-channel texture.
+                        // NV12 layout is Y (width*height bytes) followed by interleaved UV;
+                        // using GL_LUMINANCE ensures OpenGL reads exactly width*height bytes.
+                        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
                     }
                     break;
                 case RS2_FORMAT_Y411:
