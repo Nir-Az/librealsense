@@ -25,7 +25,7 @@ const std::map< fourcc::value_type, rs2_format > platform_fourcc_to_rs2_format =
     { fourcc( 'N', 'V', '1', '2' ), RS2_FORMAT_NV12 },
 	{ fourcc( 'G', 'R', 'E', 'Y' ), RS2_FORMAT_Y8 },
 };
-const std::map< fourcc::value_type, rs2_stream > platform_color_fourcc_to_rs2_stream = {
+const std::map< fourcc::value_type, rs2_stream > platform_fourcc_to_rs2_stream = {
     { fourcc( 'Y', 'U', 'Y', '2' ), RS2_STREAM_COLOR },
     { fourcc( 'Y', 'U', 'Y', 'V' ), RS2_STREAM_COLOR },
     { fourcc( 'M', 'J', 'P', 'G' ), RS2_STREAM_COLOR },
