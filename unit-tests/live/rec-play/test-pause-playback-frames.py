@@ -25,7 +25,7 @@ from playback_helper import PlaybackStatusVerifier
 # (requires that no files are being held open inside this directory. Important to not keep any handle open to a file
 # in this directory, any handle as such must be set to None)
 temp_dir = tempfile.TemporaryDirectory( prefix='recordings_' )
-file_name = temp_dir.name + os.sep + 'rec.bag'
+file_name = temp_dir.name + os.sep + 'rec.db3'
 
 stop_detected = False
 STREAMING_DURATION = 3

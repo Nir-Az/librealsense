@@ -13,7 +13,7 @@ sw.init()
 
 import tempfile, os
 temp_dir = tempfile.TemporaryDirectory( prefix = 'recordings_' )
-filename = os.path.join( temp_dir.name, 'rec.bag' )
+filename = os.path.join( temp_dir.name, 'rec.db3' )
 recorder = rs.recorder( filename, sw.device )
 
 sw.start()

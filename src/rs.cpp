@@ -13,8 +13,8 @@
 #include "core/extension.h"
 #include "media/playback/playback-device-info.h"
 #include "media/record/record_device.h"
-#include <media/ros/ros_writer.h>
-#include <media/ros/ros_reader.h>
+#include <media/bag_to_db3_converter.h>
+#include <media/ros_factory.h>
 #include "core/advanced_mode.h"
 #include "core/pose-frame.h"
 #include "core/motion-frame.h"
@@ -2088,6 +2088,13 @@ rs2_device* rs2_context_add_device(rs2_context* ctx, const char* file, rs2_error
     VALIDATE_NOT_NULL(ctx);
     VALIDATE_NOT_NULL(file);
 
+    if (!librealsense::is_db3_file(file))
+#ifdef BUILD_ROSBAG2
+        LOG_WARNING("ROS1 .bag format is deprecated. Use rs-convert -D to convert to .db3 format.");
+#else
+        LOG_WARNING("ROS1 .bag format is deprecated. Build with BUILD_ROSBAG2 to enable .db3 support.");
+#endif
+
     auto dev_info = std::make_shared< playback_device_info >( ctx->ctx, file );
     ctx->ctx->add_device( dev_info );
     return new rs2_device{ dev_info->create_device() };
@@ -2232,6 +2239,21 @@ void rs2_playback_device_stop(const rs2_device* device, rs2_error** error) BEGIN
 }
 HANDLE_EXCEPTIONS_AND_RETURN(, device)
 
+void rs2_convert_bag_to_db3(const char* input_bag_path, const char* output_db3_path, const rs2_context* ctx,
+                            rs2_update_progress_callback_ptr callback, void* client_data, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(input_bag_path);
+    VALIDATE_NOT_NULL(output_db3_path);
+    VALIDATE_NOT_NULL(ctx);
+    if (!librealsense::is_db3_file(output_db3_path))
+        throw librealsense::invalid_value_exception("Output path must end with .db3 extension");
+    std::function<void(float)> progress_callback;
+    if (callback)
+        progress_callback = [callback, client_data](float progress) { callback(progress, client_data); };
+    librealsense::convert_bag_to_db3(input_bag_path, output_db3_path, ctx->ctx, progress_callback);
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, input_bag_path, output_db3_path, ctx)
+
 rs2_device* rs2_create_record_device(const rs2_device* device, const char* file, rs2_error** error) BEGIN_API_CALL
 {
     VALIDATE_NOT_NULL(device);
@@ -2247,9 +2269,8 @@ rs2_device* rs2_create_record_device_ex(const rs2_device* device, const char* fi
     VALIDATE_NOT_NULL(device);
     VALIDATE_NOT_NULL(file);
 
-    return new rs2_device({
-        std::make_shared<record_device>(device->device, std::make_shared<ros_writer>(file, compression_enabled != 0))
-        });
+    auto writer = create_writer_for_file(file, compression_enabled != 0);
+    return new rs2_device({ std::make_shared<record_device>(device->device, writer) });
 }
 HANDLE_EXCEPTIONS_AND_RETURN(nullptr, device, file)
 

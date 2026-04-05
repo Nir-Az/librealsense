@@ -47,6 +47,10 @@ void add_playback_device( context & ctx,
                           viewer_model & viewer_model,
                           const std::string & file )
 {
+    // Legacy .bag files trigger a conversion dialog offering to convert to .db3
+    if (viewer_model.bag_converter->show_dialog_if_needed(file))
+        return;
+
     bool was_loaded = false;
     bool failed = false;
     try
@@ -516,7 +520,7 @@ int run_viewer( int argc, const char ** argv,
 
             if (ImGui::Selectable("Load Recorded Sequence", false, ImGuiSelectableFlags_SpanAllColumns))
             {
-                if (auto ret = file_dialog_open(open_file, "ROS-bag\0*.bag\0", NULL, NULL))
+                if (auto ret = file_dialog_open(open_file, "RealSense recordings\0*.db3;*.bag\0", NULL, NULL))
                 {
                     add_playback_device(ctx, device_models, error_message, viewer_model, ret);
                 }
@@ -636,6 +640,24 @@ int run_viewer( int argc, const char ** argv,
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();
+
+        // Poll conversion completion (separate from drawing)
+        auto converted_file = viewer_model.bag_converter->poll_completion(error_message, viewer_model);
+        if (!converted_file.empty())
+            add_playback_device(ctx, device_models, error_message, viewer_model, converted_file);
+
+        // .bag-to-.db3 conversion UI
+        if (viewer_model.bag_converter->should_show_dialog())
+        {
+            if (viewer_model.bag_converter->is_converting())
+                viewer_model.bag_converter->draw_progress(window);
+            else
+            {
+                auto dialog_file = viewer_model.bag_converter->draw_prompt(ctx, window);
+                if (!dialog_file.empty())
+                    add_playback_device(ctx, device_models, error_message, viewer_model, dialog_file);
+            }
+        }
 
         // Fetch and process frames from queue
         viewer_model.handle_ready_frames(viewer_rect, window, static_cast<int>(device_models->size()), error_message);
