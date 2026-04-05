@@ -311,11 +311,17 @@ jobs:
             name: U22
           - os: ubuntu-24.04
             name: U24
-    name: ${{ matrix.name }}_ST_Py_EX_CfU 
+    name: ${{ matrix.name }}_ST_Py_EX_CfU
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-    
+
+    - name: Install CMake 4
+      if: matrix.os == 'ubuntu-24.04'
+      uses: jwlawson/actions-setup-cmake@0d6a7d60b009d01c9e7523be22153ff8f19460d3 # v2.2.0
+      with:
+        cmake-version: '4.x'
+
     - name: Prebuild
       shell: bash
       run: |
@@ -491,7 +497,13 @@ jobs:
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-          
+
+    - name: Install CMake 4
+      if: matrix.os == 'ubuntu-24.04'
+      uses: jwlawson/actions-setup-cmake@0d6a7d60b009d01c9e7523be22153ff8f19460d3 # v2.2.0
+      with:
+        cmake-version: '4.x'
+
     - name: Prebuild
       shell: bash
       run: |
