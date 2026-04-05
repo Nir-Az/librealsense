@@ -189,7 +189,8 @@ discover_stream_types() {
     [[ -z "${entity_node}" || -z "${type}" ]] && continue
 
     # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
-    local port=$(echo "${tegra_dot}" | grep "${entity_node}:port0 ->" | grep -oP '-> \S+:port\K[0-9]+')
+    # Use head -1 to ensure a single match in case of duplicate edges
+    local port=$(echo "${tegra_dot}" | grep "${entity_node}:port0 ->" | head -1 | grep -oP '-> \S+:port\K[0-9]+')
 
     if [[ -n "${port}" ]]; then
       # Map entity type to link name (rgb -> color) using camera_names
@@ -300,7 +301,11 @@ process_rs_video_devices() {
     echo "DEBUG: Video device ${vid} driver name: ${dev_name}"
     # Handle streaming devices
     if [ "${dev_name}" = "tegra-video" ]; then
-      # Use media-ctl discovered types when available, fall back to pixel format heuristics
+      # Use media-ctl discovered types when available, fall back to pixel format heuristics.
+      # On Tegra, the media graph doesn't expose per-stream video node mappings — individual
+      # /dev/videoN nodes aren't linked to specific D4XX entities in the graph. The driver
+      # creates video nodes in deterministic DS5 mux port order, so positional assignment
+      # (indexed only on streaming nodes, skipping metadata) is the correct approach.
       if [[ ${use_media_ctl} -eq 1 && ${stream_type_idx} -lt ${#stream_types[@]} ]]; then
         sensor_name="${stream_types[${stream_type_idx}]}"
         stream_type_idx=$((stream_type_idx+1))
