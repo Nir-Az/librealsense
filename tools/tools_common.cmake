@@ -12,7 +12,7 @@ macro(tools_target_config _target)
     if(WIN32)
         target_sources(${_target} PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
-            ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc)
+            ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-app.rc)
         set_target_properties(${_target} PROPERTIES LINK_FLAGS "/ignore:4199 ${LD_FLAGS_STR}")
     else()
         target_link_libraries(${_target} dl)
