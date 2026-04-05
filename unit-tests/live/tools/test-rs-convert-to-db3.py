@@ -55,6 +55,9 @@ if rs_convert:
 
     log.d( frame_count, 'frames compared' )
     test.check( frame_count > 0 )
+
+    os.remove( db3_file )
+    os.rmdir( temp_dir )
 else:
     log.e( 'rs-convert not found!' )
     import sys
