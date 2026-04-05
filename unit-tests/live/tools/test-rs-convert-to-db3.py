@@ -59,7 +59,8 @@ if rs_convert:
     finally:
         if os.path.isfile( db3_file ):
             os.remove( db3_file )
-        os.rmdir( temp_dir )
+        if os.path.isdir( temp_dir ):
+            os.rmdir( temp_dir )
 else:
     log.e( 'rs-convert not found!' )
     import sys
