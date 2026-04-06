@@ -22,7 +22,8 @@ import logging
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# infra-tests/e2e/ contains static test cases run in isolated subprocesses — not by the parent pytest
+# pytest built-in: exclude infra-tests/e2e/ from collection (those are static test cases
+# run in isolated subprocesses by the infra regression tests, not by the parent pytest)
 collect_ignore = [os.path.join(current_dir, 'infra-tests', 'e2e')]
 py_dir = os.path.join(current_dir, 'py')
 if py_dir not in sys.path:
