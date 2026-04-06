@@ -167,7 +167,7 @@ get_stream_types() {
     [[ -z "${entity_node}" || -z "${type}" ]] && continue
 
     # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
-    local port=$(echo "${dot}" | grep "${entity_node}:port0 ->" | head -1 | grep -oP '-> \S+:port\K[0-9]+')
+    local port=$(echo "${dot}" | grep -F "${entity_node}:port0 ->" | head -1 | grep -oP -- '-> \S+:port\K[0-9]+')
 
     if [[ -n "${port}" ]]; then
       # Map entity type to link name (rgb -> color) using camera_names
