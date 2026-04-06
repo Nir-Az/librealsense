@@ -90,6 +90,7 @@ depth_dev_counter=0
 color_dev_counter=0
 ir_dev_counter=0
 imu_dev_counter=0
+camera_i2c_addrs=()  # Track camera I2C addresses in discovery order for DFU matching
 
 # Helper function: detect RS devices
 # Searches v4l2-ctl output for RealSense DS5 mux devices on Tegra platforms
@@ -170,6 +171,9 @@ get_stream_types() {
     echo "Error: No D4XX entities found on I2C bus ${i2c_bus}" >&2
     return 1
   fi
+
+  # Record I2C addresses in order for DFU device matching
+  camera_i2c_addrs+=(${all_addrs})
 
   # For each camera (I2C address), extract stream types in port order
   for addr in ${all_addrs}; do
@@ -317,36 +321,32 @@ process_rs_video_devices() {
 }
 
 # Helper function: create DFU device link
-# Creates symbolic link for firmware update (DFU) device based on camera index
-# Maps d4xx class devices to standardized names for firmware operations
-# Input example: create_dfu_link "0"
-# Creates: /dev/d4xx-dfu-0 -> /dev/d4xx-dfu-a (if d4xx-dfu-a exists)
+# Creates symbolic link for firmware update (DFU) device based on camera I2C address
+# Matches the DFU device by I2C address to ensure correct camera-to-DFU mapping
+# Input: cam_id (e.g. "0"), i2c_addr (e.g. "9-001a")
+# Creates: /dev/d4xx-dfu-0 -> /dev/d4xx-dfu-9-001a
 create_dfu_link() {
   local cam_id="$1"
-  
-  echo "DEBUG: Looking for DFU device for camera ${cam_id}"
-  
-  # Look for d4xx class devices that might match
-  local dfu_candidates=$(ls -1 /sys/class/d4xx-class/ 2>/dev/null || true)
-  echo "DEBUG: DFU candidates: ${dfu_candidates}"
-  
-  if [[ -n "${dfu_candidates}" ]]; then
-    # For now, map cameras by order found
-    local dfu_array=(${dfu_candidates})
-    if [[ ${cam_id} -lt ${#dfu_array[@]} ]]; then
-      local i2cdev="${dfu_array[${cam_id}]}"
-      local dev_dfu_name="/dev/${i2cdev}"
-      local dev_dfu_ln="/dev/d4xx-dfu-${cam_id}"
-      
-      echo "DEBUG: Creating DFU link: ${dev_dfu_name} -> ${dev_dfu_ln}"
-      
-      if [[ $info -eq 0 ]]; then
-        [[ -e $dev_dfu_ln ]] && unlink $dev_dfu_ln
-        ln -s $dev_dfu_name $dev_dfu_ln
-      fi
-      [[ $quiet -eq 0 ]] && printf '%s\t%d\t%s\tFirmware \t%s\t%s\n' " i2c " ${cam_id} "d4xx   " $dev_dfu_name $dev_dfu_ln
-    fi
+  local i2c_addr="$2"
+
+  local dfu_dev="d4xx-dfu-${i2c_addr}"
+  local dev_dfu_name="/dev/${dfu_dev}"
+  local dev_dfu_ln="/dev/d4xx-dfu-${cam_id}"
+
+  echo "DEBUG: Looking for DFU device for camera ${cam_id} (${i2c_addr})"
+
+  if [[ ! -e "/sys/class/d4xx-class/${dfu_dev}" ]]; then
+    echo "DEBUG: DFU device ${dfu_dev} not found for camera ${cam_id}"
+    return
   fi
+
+  echo "DEBUG: Creating DFU link: ${dev_dfu_name} -> ${dev_dfu_ln}"
+
+  if [[ $info -eq 0 ]]; then
+    [[ -e $dev_dfu_ln ]] && unlink $dev_dfu_ln
+    ln -s $dev_dfu_name $dev_dfu_ln
+  fi
+  [[ $quiet -eq 0 ]] && printf '%s\t%d\t%s\tFirmware \t%s\t%s\n' " i2c " ${cam_id} "d4xx   " $dev_dfu_name $dev_dfu_ln
 }
 
 # Helper function: process a single RS device
@@ -398,9 +398,11 @@ if [ -n "${rs_devices}" ]; then
     process_single_rs_device "$rs_line"
   done <<< "${rs_devices}"
 
-  # Create DFU device links for all detected cameras
+  # Create DFU device links for all detected cameras, matched by I2C address
   for ((i=0; i<${depth_dev_counter}; i++)); do
-    create_dfu_link "$i"
+    if [[ ${i} -lt ${#camera_i2c_addrs[@]} ]]; then
+      create_dfu_link "$i" "${camera_i2c_addrs[$i]}"
+    fi
   done
 
   echo "DEBUG: Processed ${depth_dev_counter} Tegra cameras"
