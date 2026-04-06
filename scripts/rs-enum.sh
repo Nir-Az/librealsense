@@ -131,16 +131,19 @@ get_video_devices_for_rs() {
   '
 }
 
-# Helper function: get ordered stream types for a camera from the media controller graph.
+# Helper function: get ordered stream types for cameras from the media controller graph.
 # Queries media-ctl --print-dot to find D4XX entity names (e.g. "D4XX depth", "D4XX rgb")
 # and their port connections to the DS5 mux, returning types in port order.
 # Entity names are set by the driver and unambiguously identify the stream type,
 # unlike pixel format heuristics which can be ambiguous (e.g. GREY is used by both IR and safety).
-# Input: I2C address (e.g. "30-001a")
-# Output: space-separated stream types in port order (e.g. "depth color ir imu")
+# Handles multi-cam on single deserializer: cameras share the same I2C bus but have
+# different device addresses (e.g. 9-001a and 9-002a). Returns types for ALL cameras
+# on the bus, sorted by I2C address.
+# Input: I2C address (e.g. "9-001a")
+# Output: space-separated stream types in port order (e.g. "depth color ir imu depth color ir imu")
 get_stream_types() {
   local i2c_addr="$1"
-  local -A port_to_type
+  local i2c_bus="${i2c_addr%%-*}"  # Extract bus number (e.g. "9" from "9-001a")
 
   if [ -z "${media_util}" ]; then
     echo "Error: media-ctl not found, install with: sudo apt install v4l-utils" >&2
@@ -160,28 +163,41 @@ get_stream_types() {
     return 1
   fi
 
-  # Find all D4XX entity lines for this I2C address and extract port connections
-  while IFS= read -r line; do
-    local entity_node=$(echo "${line}" | awk '{print $1}')
-    local type=$(echo "${line}" | grep -oP 'D4XX \K\w+')
-    [[ -z "${entity_node}" || -z "${type}" ]] && continue
+  # Find all unique I2C addresses with D4XX entities on this bus.
+  # Multi-cam on single deserializer: multiple addresses share the same bus (e.g. 9-001a, 9-002a)
+  local all_addrs=$(echo "${dot}" | grep -oP "D4XX \w+ \K${i2c_bus}-[0-9a-fA-F]+" | sort -u)
+  if [ -z "${all_addrs}" ]; then
+    echo "Error: No D4XX entities found on I2C bus ${i2c_bus}" >&2
+    return 1
+  fi
 
-    # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
-    local port=$(echo "${dot}" | grep -F "${entity_node}:port0 ->" | head -1 | grep -oP -- '-> \S+:port\K[0-9]+')
+  # For each camera (I2C address), extract stream types in port order
+  for addr in ${all_addrs}; do
+    unset port_to_type
+    declare -A port_to_type
 
-    if [[ -n "${port}" ]]; then
-      # Map entity type to link name (rgb -> color) using camera_names
-      if [[ -n "${camera_names[${type}]+_}" ]]; then
-        port_to_type[${port}]="${camera_names[${type}]}"
-      else
-        port_to_type[${port}]="${type}"
+    while IFS= read -r line; do
+      local entity_node=$(echo "${line}" | awk '{print $1}')
+      local type=$(echo "${line}" | grep -oP 'D4XX \K\w+')
+      [[ -z "${entity_node}" || -z "${type}" ]] && continue
+
+      # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
+      local port=$(echo "${dot}" | grep -F "${entity_node}:port0 ->" | head -1 | grep -oP -- '-> \S+:port\K[0-9]+')
+
+      if [[ -n "${port}" ]]; then
+        # Map entity type to link name (rgb -> color) using camera_names
+        if [[ -n "${camera_names[${type}]+_}" ]]; then
+          port_to_type[${port}]="${camera_names[${type}]}"
+        else
+          port_to_type[${port}]="${type}"
+        fi
       fi
-    fi
-  done < <(echo "${dot}" | grep "D4XX .* ${i2c_addr}")
+    done < <(echo "${dot}" | grep "D4XX .* ${addr}")
 
-  # Return types sorted by port number
-  for port in $(echo "${!port_to_type[@]}" | tr ' ' '\n' | sort -n); do
-    echo -n "${port_to_type[${port}]} "
+    # Append types sorted by port number
+    for port in $(echo "${!port_to_type[@]}" | tr ' ' '\n' | sort -n); do
+      echo -n "${port_to_type[${port}]} "
+    done
   done
 }
 
