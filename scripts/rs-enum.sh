@@ -141,10 +141,11 @@ get_video_devices_for_rs() {
 # different device addresses (e.g. 9-001a and 9-002a). Returns types for ALL cameras
 # on the bus, sorted by I2C address.
 # Input: I2C address (e.g. "9-001a")
-# Output: space-separated stream types in port order (e.g. "depth color ir imu depth color ir imu")
+# Sets global: stream_types_result (space-separated types), camera_i2c_addrs (appended)
 get_stream_types() {
   local i2c_addr="$1"
   local i2c_bus="${i2c_addr%%-*}"  # Extract bus number (e.g. "9" from "9-001a")
+  stream_types_result=""
 
   if [ -z "${media_util}" ]; then
     echo "Error: media-ctl not found, install with: sudo apt install v4l-utils" >&2
@@ -200,7 +201,7 @@ get_stream_types() {
 
     # Append types sorted by port number
     for port in $(echo "${!port_to_type[@]}" | tr ' ' '\n' | sort -n); do
-      echo -n "${port_to_type[${port}]} "
+      stream_types_result+="${port_to_type[${port}]} "
     done
   done
 }
@@ -273,12 +274,13 @@ process_rs_video_devices() {
   echo "DEBUG: Video device array: ${vid_dev_arr[*]}"
 
   # Get ordered stream types from media-ctl for this camera
-  local types_str=$(get_stream_types "${i2c_addr}")
-  if [[ -z "${types_str}" ]]; then
+  # Called directly (not in subshell) so global camera_i2c_addrs is populated for DFU matching
+  get_stream_types "${i2c_addr}"
+  if [[ -z "${stream_types_result}" ]]; then
     echo "Error: Could not discover stream types for ${i2c_addr}"
     return 1
   fi
-  local stream_types=(${types_str})
+  local stream_types=(${stream_types_result})
   local stream_type_idx=0
   echo "DEBUG: Stream types from media-ctl: ${stream_types[*]}"
 
