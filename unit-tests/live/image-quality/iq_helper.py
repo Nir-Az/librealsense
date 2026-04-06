@@ -159,6 +159,9 @@ def save_failure_snapshot( test_file, pipeline, annotated_image=None ):
         filename = f"{name}_{dev_name}.png"
     except:
         filename = f"{name}.png"
+    logdir = os.path.join( os.path.dirname( rs.__file__ ), 'unit-tests' )
+    if os.path.isdir( logdir ):
+        filename = os.path.join( logdir, filename )
     cv2.imwrite( filename, image )
     log.i( f"Saved failure snapshot: {filename}" )
     _snapshot_saved = True
