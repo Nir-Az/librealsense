@@ -9,7 +9,7 @@ import os, platform, re, shutil, subprocess, sys
 from rspy import log, repo, test
 
 ansi_escape = re.compile( rb'\x1b\[[0-9;]*m' )
-frame_prefix = re.compile( rb'\[\d{4}\] ' )
+frame_prefix = re.compile( rb'^\[\d{4}\] ', re.MULTILINE )
 
 #############################################################################################
 #
@@ -64,7 +64,6 @@ if viewer_tests:
     for line in stderr.split( b'\n' ):
         if line and b'glCopyTexImage2D' not in line:
             sys.stderr.buffer.write( line + b'\n' )
-    p.wait()
     if p.returncode != 0:
         log.e( 'realsense-viewer-tests exited with code', p.returncode )
     test.check( p.returncode == 0 )
