@@ -136,7 +136,10 @@ def run_e2e(test_filename, *extra_pytest_args):
     from the parent unit-tests/conftest.py. No content is generated — both
     files are static and checked into the repo.
 
-    Returns (returncode, stdout, enable_only_calls).
+    Returns (returncode, stdout, tracking) where tracking is a dict with:
+        - enable_only_calls: list of {serials, recycle} dicts
+        - rslog_calls: list of {level} dicts
+        - query_kwargs: list of kwargs dicts passed to devices.query()
     """
     import shutil, tempfile
 
@@ -161,10 +164,12 @@ def run_e2e(test_filename, *extra_pytest_args):
                 and 'skipped' not in p.stdout and 'error' not in p.stdout:
             pytest.fail(f"Subprocess crashed (rc={p.returncode}):\n{p.stdout}")
 
-        calls_file = os.path.join(tmpdir, '_enable_only_calls.json')
-        enable_only_calls = json.loads(open(calls_file).read()) if os.path.exists(calls_file) else []
+        tracking_file = os.path.join(tmpdir, '_tracking.json')
+        tracking = json.loads(open(tracking_file).read()) if os.path.exists(tracking_file) else {
+            "enable_only_calls": [], "rslog_calls": [], "query_kwargs": []
+        }
 
-        return p.returncode, p.stdout, enable_only_calls
+        return p.returncode, p.stdout, tracking
 
 
 def parse_outcomes(stdout):

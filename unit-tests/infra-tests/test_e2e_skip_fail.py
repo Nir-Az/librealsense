@@ -5,8 +5,9 @@
 E2E: Skip vs fail behavior in module_device_setup.
 
 - @device with no matching device -> FAIL (error in setup)
-- @device_each with no matching device -> SKIP (graceful)
+- @device_each with no matching device -> SKIP (graceful, e.g. D585S on Jetson with no D585S)
 - When candidates exist but are all excluded -> SKIP for both
+- No device markers at all -> module_device_setup yields None (no skip, no fail)
 """
 
 from helpers import run_e2e, assert_outcomes

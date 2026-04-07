@@ -12,10 +12,20 @@ _py_dir = os.path.join(_unit_tests_dir, 'py')
 if _py_dir not in sys.path:
     sys.path.insert(0, _py_dir)
 
-# Fake pyrealsense2
+# Fake pyrealsense2 — track log_to_console calls so tests can verify --rslog
+import json as _json
+_tracking_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_tracking.json')
+_tracking = {"rslog_calls": [], "query_kwargs": [], "enable_only_calls": []}
+def _save_tracking():
+    with open(_tracking_log, 'w') as _f:
+        _json.dump(_tracking, _f)
+
 _rs = types.ModuleType("pyrealsense2")
 _rs.__file__ = "fake_pyrealsense2"
-_rs.log_to_console = lambda level: None
+def _mock_log_to_console(level):
+    _tracking["rslog_calls"].append({"level": level})
+    _save_tracking()
+_rs.log_to_console = _mock_log_to_console
 class _CameraInfo:
     name = "name"
     product_line = "product_line"
@@ -67,18 +77,17 @@ _dev.get = _mock_get
 _dev._device_by_sn = {sn: FakeDevice(sn, n) for sn, n in _sn_map.items()}
 _dev.hub = None
 _dev._context = None
-_dev.query = lambda **kw: None
+def _mock_query(**kw):
+    _tracking["query_kwargs"].append(kw)
+    _save_tracking()
+_dev.query = _mock_query
 _dev.map_unknown_ports = lambda: None
 _dev.wait_until_all_ports_disabled = lambda: None
 
 # Track enable_only calls so tests can verify hub port behavior
-import json as _json
-_enable_only_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_enable_only_calls.json')
-_enable_only_calls = []
 def _mock_enable_only(serials, recycle=True):
-    _enable_only_calls.append({"serials": list(serials), "recycle": recycle})
-    with open(_enable_only_log, 'w') as _f:
-        _json.dump(_enable_only_calls, _f)
+    _tracking["enable_only_calls"].append({"serials": list(serials), "recycle": recycle})
+    _save_tracking()
 _dev.enable_only = _mock_enable_only
 
 # exec() the REAL conftest.py

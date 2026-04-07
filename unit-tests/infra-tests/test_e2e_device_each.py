@@ -21,14 +21,6 @@ class TestDeviceEachParametrization:
         rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400_exclude")
         assert_outcomes(out, passed=2)  # D455, D435
 
-    def test_cli_device_filter(self):
-        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_include", "--device", "D455")
-        assert_outcomes(out, passed=1)
-
-    def test_cli_exclude_device(self):
-        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_exclude and not multi", "--exclude-device", "D455")
-        assert_outcomes(out, passed=2)  # D435, D401
-
     def test_no_match_runs_unparametrized(self):
         rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d999_no_match")
         assert_outcomes(out, passed=1)

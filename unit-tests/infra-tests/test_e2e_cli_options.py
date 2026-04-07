@@ -2,11 +2,10 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-E2E: All custom CLI options should be accepted without error.
+E2E: Custom CLI options — verify each flag is accepted and has the expected effect.
 
-Verifies that pytest_addoption in conftest.py correctly registers
---device, --exclude-device, --context, --live, --no-reset, --hub-reset,
---rslog, --rs-help, and --debug.
+Each test checks both that the flag parses without error AND that it produces
+the correct behavior (device filtering, context gating, recycle control, etc.).
 """
 
 from helpers import run_e2e, assert_outcomes
@@ -15,52 +14,90 @@ from helpers import run_e2e, assert_outcomes
 class TestCliOptionsRegistered:
 
     def test_device(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--device", "D455")
-        assert rc == 0
+        """--device D455 should restrict device_each('D400*') to only D455."""
+        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_include", "--device", "D455")
+        assert_outcomes(out, passed=1)
 
     def test_exclude_device(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--exclude-device", "D455")
-        assert rc == 0
+        """--exclude-device D455 should remove D455 from device_each('D400*')."""
+        rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_exclude and not multi",
+                               "--exclude-device", "D455")
+        assert_outcomes(out, passed=2)  # D435, D401 remain
 
     def test_context(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--context", "nightly")
-        assert rc == 0
+        """--context nightly should run @context('nightly') tests instead of skipping."""
+        rc, out, *_ = run_e2e("pytest-context.py", "-k", "test_nightly_only", "--context", "nightly")
+        assert_outcomes(out, passed=1)
 
     def test_live(self):
-        rc, out, *_ = run_e2e("pytest-passthrough.py", "--live")
+        """--live should skip tests without device markers."""
+        rc, out, *_ = run_e2e("pytest-live.py", "-k", "test_no_device", "--live")
         assert_outcomes(out, skipped=1)
 
     def test_no_reset(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--no-reset")
-        assert rc == 0
+        """--no-reset should call enable_only with recycle=False."""
+        rc, out, tracking = run_e2e("pytest-device-setup.py", "-k", "test_d455 and not excluded",
+                                     "--no-reset")
+        assert_outcomes(out, passed=1)
+        calls = tracking["enable_only_calls"]
+        assert len(calls) == 1
+        assert calls[0]['recycle'] is False
 
     def test_hub_reset(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--hub-reset")
+        """--hub-reset should pass hub_reset=True to devices.query()."""
+        rc, out, tracking = run_e2e("pytest-passthrough.py", "--hub-reset")
         assert rc == 0
+        assert any(kw.get("hub_reset") is True for kw in tracking["query_kwargs"])
+
+    def test_hub_reset_default_is_false(self):
+        """Without --hub-reset, devices.query() should get hub_reset=False."""
+        rc, out, tracking = run_e2e("pytest-passthrough.py")
+        assert rc == 0
+        assert any(kw.get("hub_reset") is False for kw in tracking["query_kwargs"])
 
     def test_rslog(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--rslog")
+        """--rslog should call rs.log_to_console."""
+        rc, out, tracking = run_e2e("pytest-passthrough.py", "--rslog")
         assert rc == 0
+        assert len(tracking["rslog_calls"]) > 0
+
+    def test_rslog_default_is_off(self):
+        """Without --rslog, rs.log_to_console should NOT be called."""
+        rc, out, tracking = run_e2e("pytest-passthrough.py")
+        assert rc == 0
+        assert len(tracking["rslog_calls"]) == 0
+
+    def test_debug(self):
+        """--debug should enable pytest debug output."""
+        rc, out, *_ = run_e2e("pytest-passthrough.py", "--debug")
+        assert rc == 0
+        # --debug causes pytest to write debug info and show registered plugins
+        assert "pytest debug information" in out or "registered" in out
 
     def test_rs_help(self):
+        """--rs-help is accepted (documentation flag, no observable behavior)."""
         rc, *_ = run_e2e("pytest-passthrough.py", "--rs-help")
         assert rc == 0
 
-    def test_debug(self):
-        rc, *_ = run_e2e("pytest-passthrough.py", "--debug")
-        assert rc == 0
+    def test_device_nonexistent(self):
+        """--device D999 with no matching device should produce 0 parametrized instances."""
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400 and not exclude", "--device", "D999")
+        assert_outcomes(out, passed=0)
 
     def test_multiple_device_flags(self):
+        """--device can be used multiple times to include several devices."""
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_multi_include",
                                "--device", "D455", "--device", "D435")
         assert_outcomes(out, passed=2)
 
     def test_multiple_exclude_device_flags(self):
+        """--exclude-device can be used multiple times to exclude several devices."""
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_multi_exclude",
                                "--exclude-device", "D455", "--exclude-device", "D435")
-        assert_outcomes(out, passed=1)
+        assert_outcomes(out, passed=1)  # only D401 remains
 
     def test_device_and_exclude_combined(self):
+        """--device and --exclude-device can be combined."""
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_combined",
                                "--device", "D455", "--device", "D435", "--exclude-device", "D435")
-        assert_outcomes(out, passed=1)
+        assert_outcomes(out, passed=1)  # only D455 remains
