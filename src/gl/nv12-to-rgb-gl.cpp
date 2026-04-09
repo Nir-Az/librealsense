@@ -142,7 +142,7 @@ rs2::frame nv12_to_rgb::process_frame(const rs2::frame_source& src, const rs2::f
 
         auto gf = dynamic_cast<gpu_addon_interface*>((frame_interface*)res.get());
         if (!gf)
-            throw invalid_value_exception("null pointer recieved from dynamic pointer casting.");
+            throw invalid_value_exception("dynamic_cast to gpu_addon_interface returned null.");
 
         // NV12 is 12bpp: upload as single-channel R8 texture, width x (height * 3/2)
         int tex_h = _height * 3 / 2;
