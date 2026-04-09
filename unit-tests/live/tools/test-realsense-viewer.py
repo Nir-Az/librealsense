@@ -5,8 +5,11 @@
 #test:donotrun:!nightly
 #test:donotrun:!gui
 
-import os, platform, shutil, subprocess, sys
+import os, platform, re, shutil, subprocess, sys
 from rspy import log, repo, test
+
+ansi_escape = re.compile( rb'\x1b\[[0-9;]*m' )
+frame_prefix = re.compile( rb'^\[\d{4}\] ', re.MULTILINE )
 
 #############################################################################################
 #
@@ -49,15 +52,18 @@ if viewer_tests:
     cmd += [viewer_tests, '--auto']
     log.d( 'running:', *cmd )
     p = subprocess.Popen( cmd,
-                          stdout=None,
+                          stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
                           env=env )
-    # When using Mesa, we get warnings about glCopyTexImage2D when using the IMU, filtering them as they're irrelevant
-    # to the test results and expected with Mesa's OpenGL implementation
-    for line in p.stderr:
-        if b'glCopyTexImage2D' not in line:
-            sys.stderr.buffer.write( line )
-    p.wait()
+    stdout, stderr = p.communicate()
+    # Strip ANSI color codes and imgui test engine frame-count prefix
+    stdout = ansi_escape.sub( b'', stdout )
+    stdout = frame_prefix.sub( b'', stdout )
+    sys.stdout.buffer.write( stdout )
+    # Filter Mesa glCopyTexImage2D warnings that are irrelevant with software rendering
+    for line in stderr.split( b'\n' ):
+        if line and b'glCopyTexImage2D' not in line:
+            sys.stderr.buffer.write( line + b'\n' )
     if p.returncode != 0:
         log.e( 'realsense-viewer-tests exited with code', p.returncode )
     test.check( p.returncode == 0 )
