@@ -26,7 +26,7 @@ class TestDeviceEachParametrization:
         assert_outcomes(out, passed=1)
 
     def test_multiple_markers_union(self):
-        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_multi")
+        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_union")
         assert_outcomes(out, passed=2)
 
     def test_ids_contain_device_name(self):

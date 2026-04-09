@@ -25,10 +25,12 @@ class TestDeviceSkipFailBehavior:
         assert_outcomes(out, skipped=1)
 
     def test_device_skips_when_all_excluded(self):
+        """Excluded via @device_exclude marker in the test file itself."""
         rc, out, *_ = run_e2e("pytest-device-setup.py", "-k", "test_d455_excluded")
         assert_outcomes(out, skipped=1)
 
     def test_device_each_skips_when_all_excluded(self):
+        """Excluded via --exclude-device CLI parameter (not a marker in the test file)."""
         rc, out, *_ = run_e2e("pytest-each-setup.py", "-k", "test_d455_excluded", "--exclude-device", "D455")
         assert_outcomes(out, skipped=1)
 

@@ -15,7 +15,7 @@ def test_d999_no_match():
 
 @pytest.mark.device_each("D455")
 @pytest.mark.device_each("D515")
-def test_multi(_test_device_serial):
+def test_union(_test_device_serial):
     assert _test_device_serial in ('111', '555')
 
 @pytest.mark.device_each("D455")
