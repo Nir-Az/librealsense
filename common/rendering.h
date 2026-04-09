@@ -390,6 +390,7 @@ namespace rs2
         std::shared_ptr<colorizer> colorize;
         std::shared_ptr<yuy_decoder> yuy2rgb;
         std::shared_ptr<m420_decoder> m420_to_rgb;
+        std::shared_ptr<nv12_decoder> nv12_to_rgb;
         std::shared_ptr<y411_decoder> y411;
         bool zoom_preview = false;
         rect curr_preview_rect{};

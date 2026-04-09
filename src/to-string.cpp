@@ -669,6 +669,7 @@ const char * get_string( rs2_format value )
     CASE( Y411 )
     CASE( Y16I )
     CASE( M420 )
+    CASE( NV12 )
     default:
         assert( ! is_valid( value ) );
         return UNKNOWN_VALUE;

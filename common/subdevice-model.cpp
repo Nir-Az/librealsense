@@ -73,6 +73,7 @@ namespace rs2
         depth_colorizer(std::make_shared<rs2::gl::colorizer>()),
         yuy2rgb(std::make_shared<rs2::gl::yuy_decoder>()),
         m420_to_rgb(std::make_shared<rs2::gl::m420_decoder>()),
+        nv12_to_rgb(std::make_shared<rs2::nv12_decoder>()),
         y411(std::make_shared<rs2::gl::y411_decoder>()),
         viewer(viewer),
         detected_objects(device_detected_objects),
@@ -82,6 +83,7 @@ namespace rs2
         restore_processing_block("colorizer", depth_colorizer);
         restore_processing_block("yuy2rgb", yuy2rgb);
         restore_processing_block("m420_to_rgb", m420_to_rgb);
+        restore_processing_block("nv12_to_rgb", nv12_to_rgb);
         restore_processing_block("y411", y411);
 
         post_processing_enabled = is_post_processing_enabled_in_config_file();
@@ -1698,6 +1700,7 @@ namespace rs2
             save_processing_block_to_config_file("colorizer", depth_colorizer);
             save_processing_block_to_config_file("yuy2rgb", yuy2rgb);
             save_processing_block_to_config_file("m420_to_rgb", m420_to_rgb);
+            save_processing_block_to_config_file("nv12_to_rgb", nv12_to_rgb);
             save_processing_block_to_config_file("y411", y411);
 
             for (auto&& pbm : post_processing) pbm->save_to_config_file();
