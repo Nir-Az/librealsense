@@ -563,33 +563,6 @@ namespace rs2
                         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, data);
                     }
                     break;
-                case RS2_FORMAT_NV12:
-                    if (nv12_to_rgb)
-                    {
-                        if (auto colorized_frame = nv12_to_rgb->process(frame).as<video_frame>())
-                        {
-                            if (!colorized_frame.is<gl::gpu_frame>())
-                            {
-                                glBindTexture(GL_TEXTURE_2D, texture);
-                                data = colorized_frame.get_data();
-
-                                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-                                    colorized_frame.get_width(),
-                                    colorized_frame.get_height(),
-                                    0, GL_RGB, GL_UNSIGNED_BYTE,
-                                    colorized_frame.get_data());
-                            }
-                            rendered_frame = colorized_frame;
-                        }
-                    }
-                    else
-                    {
-                        // Fallback: upload only the Y (luma) plane as a single-channel texture.
-                        // NV12 layout is Y (width*height bytes) followed by interleaved UV;
-                        // using GL_LUMINANCE ensures OpenGL reads exactly width*height bytes.
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
-                    }
-                    break;
                 case RS2_FORMAT_Y411:
                     if (y411)
                     {
