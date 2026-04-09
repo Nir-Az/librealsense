@@ -115,6 +115,14 @@ def pytest_addoption(parser):
         default=False,
         help="Only run tests that require a live device (have at least one device/device_each marker)."
     )
+    group.addoption(
+        "--repeat",
+        action="store",
+        default=0,
+        type=int,
+        dest="repeat_count",
+        help="Repeat each test N times (alias for pytest-repeat's --count)."
+    )
     # --debug and -r/--regex conflict with pytest built-ins and are consumed before
     # pytest parses args. Document them here so they show up in --help:
     group.addoption(
@@ -137,6 +145,11 @@ def pytest_configure(config):
     global context_list
 
     apply_pending_flags(config)
+
+    # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)
+    repeat_val = config.getoption('repeat_count', default=0)
+    if repeat_val and config.getoption('count', default=1) <= 1:
+        config.option.count = repeat_val
 
     # Parse and store context
     context_str = config.getoption("--context", default="")

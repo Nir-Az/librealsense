@@ -79,6 +79,27 @@ class TestCliOptionsRegistered:
         rc, *_ = run_e2e("pytest-passthrough.py", "--rs-help")
         assert rc == 0
 
+    def test_retries(self):
+        """--retries 1 should retry a failed test and recycle the device on retry."""
+        rc, out, tracking = run_e2e("pytest-retry.py", "--retries", "1")
+        assert_outcomes(out, passed=1)
+        calls = tracking["enable_only_calls"]
+        # First run + retry = 2 enable_only calls, both with recycle=True
+        assert len(calls) == 2
+        assert all(c['recycle'] is True for c in calls)
+
+    def test_timeout_default(self):
+        """conftest should set default timeout to 200s with thread method."""
+        rc, out, *_ = run_e2e("pytest-passthrough.py")
+        assert rc == 0
+        assert "timeout: 200s" in out
+        assert "timeout method: thread" in out
+
+    def test_repeat(self):
+        """--repeat 3 should repeat each test 3 times (translates to --count 3)."""
+        rc, out, *_ = run_e2e("pytest-passthrough.py", "--repeat", "3")
+        assert_outcomes(out, passed=3)
+
     def test_device_nonexistent(self):
         """--device D999 with no matching device should produce 0 parametrized instances."""
         rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400 and not exclude", "--device", "D999")
