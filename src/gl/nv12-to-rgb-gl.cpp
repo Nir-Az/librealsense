@@ -1,12 +1,12 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
+// Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include <librealsense2/hpp/rs_sensor.hpp>
 #include <librealsense2/hpp/rs_processing.hpp>
 #include <librealsense2-gl/rs_processing_gl.hpp>
 
 #include "../proc/synthetic-stream.h"
-#include "m420-to-rgb-gl.h"
+#include "nv12-to-rgb-gl.h"
 #include "../option.h"
 
 #ifndef NOMINMAX
@@ -21,11 +21,9 @@
 
 #include "synthetic-stream-gl.h"
 
-// M420 layout (uploaded as GL_R8, width x tex_height where tex_height = height * 1.5):
-//   For every pair of output rows, 3 texture rows:
-//     row group*3+0 : Y for first row  (width bytes)
-//     row group*3+1 : Y for second row (width bytes)
-//     row group*3+2 : interleaved UV   (U0 V0 U1 V1 ... width bytes)
+// NV12 layout (uploaded as GL_R8, width x tex_height where tex_height = height * 1.5):
+//   rows 0..height-1            : Y plane (one Y per pixel, full resolution)
+//   rows height..height*1.5-1   : interleaved UV plane (U0 V0 U1 V1 ... half vertical resolution)
 //   Each UV pair covers a 2x2 block of Y pixels.
 static const char* fragment_shader_text =
 "#version 110\n"
@@ -37,10 +35,8 @@ static const char* fragment_shader_text =
 "    float tex_h = height * 1.5;\n"
 "    float px = floor(gl_FragCoord.x);\n"
 "    float py = floor(gl_FragCoord.y);\n"
-"    float group = floor(py / 2.0);\n"
-"    float row_in_group = py - group * 2.0;\n"
-"    float y_row = group * 3.0 + row_in_group;\n"
-"    float uv_row = group * 3.0 + 2.0;\n"
+"    float y_row = py;\n"
+"    float uv_row = height + floor(py / 2.0);\n"
 "    float y = texture2D(textureSampler, vec2((px + 0.5) / width, (y_row + 0.5) / tex_h)).r;\n"
 "    float u_col = floor(px / 2.0) * 2.0;\n"
 "    float v_col = u_col + 1.0;\n"
@@ -56,12 +52,12 @@ static const char* fragment_shader_text =
 using namespace rs2;
 using namespace librealsense::gl;
 
-class m420_to_rgb_shader : public texture_2d_shader
+class nv12_to_rgb_shader : public texture_2d_shader
 {
 public:
-    m420_to_rgb_shader()
+    nv12_to_rgb_shader()
         : texture_2d_shader(shader_program::load(
-            texture_2d_shader::default_vertex_shader(), 
+            texture_2d_shader::default_vertex_shader(),
             fragment_shader_text, "position", "textureCoords"))
     {
         _width_location = _shader->get_uniform_location("width");
@@ -79,33 +75,33 @@ private:
     uint32_t _height_location;
 };
 
-void m420_to_rgb::cleanup_gpu_resources()
+void nv12_to_rgb::cleanup_gpu_resources()
 {
     _viz.reset();
     _fbo.reset();
     _enabled = 0;
 }
 
-void m420_to_rgb::create_gpu_resources()
+void nv12_to_rgb::create_gpu_resources()
 {
-    _viz = std::make_shared<visualizer_2d>(std::make_shared<m420_to_rgb_shader>());
+    _viz = std::make_shared<visualizer_2d>(std::make_shared<nv12_to_rgb_shader>());
     _fbo = std::make_shared<fbo>(_width, _height);
     _enabled = glsl_enabled() ? 1 : 0;
 }
 
-m420_to_rgb::m420_to_rgb()
-    : stream_filter_processing_block("M420 Converter (GLSL)")
+nv12_to_rgb::nv12_to_rgb()
+    : stream_filter_processing_block("NV12 Converter (GLSL)")
 {
     _source.add_extension<gpu_video_frame>(RS2_EXTENSION_VIDEO_FRAME_GL);
 
     auto opt = std::make_shared<librealsense::ptr_option<int>>(
-        0, 1, 0, 1, &_enabled, "GLSL enabled"); 
+        0, 1, 0, 1, &_enabled, "GLSL enabled");
     register_option(RS2_OPTION_COUNT, opt);
 
     initialize();
 }
 
-m420_to_rgb::~m420_to_rgb()
+nv12_to_rgb::~nv12_to_rgb()
 {
     try {
         perform_gl_action([&]()
@@ -118,7 +114,7 @@ m420_to_rgb::~m420_to_rgb()
     }
 }
 
-rs2::frame m420_to_rgb::process_frame(const rs2::frame_source& src, const rs2::frame& f)
+rs2::frame nv12_to_rgb::process_frame(const rs2::frame_source& src, const rs2::frame& f)
 {
     if (f.get_profile().get() != _input_profile.get())
     {
@@ -148,7 +144,7 @@ rs2::frame m420_to_rgb::process_frame(const rs2::frame_source& src, const rs2::f
         if (!gf)
             throw invalid_value_exception("null pointer recieved from dynamic pointer casting.");
 
-        // M420 is 12bpp: upload as single-channel R8 texture, width x (height * 3/2)
+        // NV12 is 12bpp: upload as single-channel R8 texture, width x (height * 3/2)
         int tex_h = _height * 3 / 2;
         uint32_t input_texture;
 
@@ -184,11 +180,11 @@ rs2::frame m420_to_rgb::process_frame(const rs2::frame_source& src, const rs2::f
         glClearColor(1, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        auto& shader = (m420_to_rgb_shader&)_viz->get_shader();
+        auto& shader = (nv12_to_rgb_shader&)_viz->get_shader();
         shader.begin();
         shader.set_size(_width, _height);
         shader.end();
-        
+
         _viz->draw_texture(input_texture);
 
         _fbo->unbind();
@@ -199,10 +195,10 @@ rs2::frame m420_to_rgb::process_frame(const rs2::frame_source& src, const rs2::f
         {
             glDeleteTextures(1, &input_texture);
         }
-    }, 
+    },
     [this]{
         _enabled = false;
-    }); 
+    });
 
     return res;
 }
