@@ -90,6 +90,7 @@ depth_dev_counter=0
 color_dev_counter=0
 ir_dev_counter=0
 imu_dev_counter=0
+camera_i2c_addrs=()  # Track camera I2C addresses in discovery order for DFU matching
 
 # Helper function: detect RS devices
 # Searches v4l2-ctl output for RealSense DS5 mux devices on Tegra platforms
@@ -131,41 +132,78 @@ get_video_devices_for_rs() {
   '
 }
 
-# Helper function: identifies if a video device is depth/color/ir/imu using v4l-ctl
-# The decision tree is:
-# - If Bytes per line == 64 -> imu
-# - Otherwise:
-# -- If pixel format == Z16 -> depth
-# -- If pixel format == GREY/Y8I/Y12I/Y16I -> ir
-# -- Else -> color (This allows for RGB main format to change in the future with no impact)
-identify_dev_type() {
-  local DEVICE="$1"
-  OUTPUT=$(${v4l2_util} -d "$DEVICE" -V 2>/dev/null)
+# Helper function: get ordered stream types for cameras from the media controller graph.
+# Queries media-ctl --print-dot to find D4XX entity names (e.g. "D4XX depth", "D4XX rgb")
+# and their port connections to the DS5 mux, returning types in port order.
+# Entity names are set by the driver and unambiguously identify the stream type,
+# unlike pixel format heuristics which can be ambiguous (e.g. GREY is used by both IR and safety).
+# Handles multi-cam on single deserializer: cameras share the same I2C bus but have
+# different device addresses (e.g. 9-001a and 9-002a). Returns types for ALL cameras
+# on the bus, sorted by I2C address.
+# Input: I2C address (e.g. "9-001a")
+# Sets global: stream_types_result (space-separated types), camera_i2c_addrs (appended)
+get_stream_types() {
+  local i2c_addr="$1"
+  local i2c_bus="${i2c_addr%%-*}"  # Extract bus number (e.g. "9" from "9-001a")
+  stream_types_result=""
 
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to query device $DEVICE"
-    exit 1
+  if [ -z "${media_util}" ]; then
+    echo "Error: media-ctl not found, install with: sudo apt install v4l-utils" >&2
+    return 1
   fi
 
-  # Extract Bytes per Line
-  BYTES_PER_LINE=$(echo "$OUTPUT" | grep -oP 'Bytes per Line\s*:\s*\K[0-9]+')
-  # Check if IMU (Bytes per Line = 64)
-  if [ "$BYTES_PER_LINE" = "64" ]; then
-    echo "imu"
-    exit 0
+  # Find the Tegra media device
+  local mdev=$(${v4l2_util} --list-devices | grep -A1 -i tegra | grep '/dev/media' | head -1 | tr -d '[:space:]')
+  if [ -z "${mdev}" ]; then
+    echo "Error: No Tegra media device found" >&2
+    return 1
   fi
 
-  # Extract Pixel Format
-  PIXEL_FORMAT=$(echo "$OUTPUT" | grep -oP "Pixel Format\s*:\s*'\K[^']+")
-
-  # Check Pixel Format
-  if [[ "$PIXEL_FORMAT" == *"Z16"* ]]; then
-    echo "depth"
-  elif [[ "$PIXEL_FORMAT" == *"GREY"* || "$PIXEL_FORMAT" == *"Y8I "* || "$PIXEL_FORMAT" == *"Y12I"* || "$PIXEL_FORMAT" == *"Y16I"* ]]; then
-    echo "ir"
-  else
-    echo "color"
+  local dot=$(${media_util} -d ${mdev} --print-dot 2>/dev/null | grep -v dashed)
+  if [ -z "${dot}" ]; then
+    echo "Error: Failed to read media-ctl graph from ${mdev}" >&2
+    return 1
   fi
+
+  # Find all unique I2C addresses with D4XX entities on this bus.
+  # Multi-cam on single deserializer: multiple addresses share the same bus (e.g. 9-001a, 9-002a)
+  local all_addrs=$(echo "${dot}" | grep -oP "D4XX \w+ \K${i2c_bus}-[0-9a-fA-F]+" | sort -u)
+  if [ -z "${all_addrs}" ]; then
+    echo "Error: No D4XX entities found on I2C bus ${i2c_bus}" >&2
+    return 1
+  fi
+
+  # Record I2C addresses in order for DFU device matching
+  camera_i2c_addrs+=(${all_addrs})
+
+  # For each camera (I2C address), extract stream types in port order
+  for addr in ${all_addrs}; do
+    unset port_to_type
+    declare -A port_to_type
+
+    while IFS= read -r line; do
+      local entity_node=$(echo "${line}" | awk '{print $1}')
+      local type=$(echo "${line}" | grep -oP 'D4XX \K\w+')
+      [[ -z "${entity_node}" || -z "${type}" ]] && continue
+
+      # Find the connection: <entity>:port0 -> <mux>:portN, extract target port number
+      local port=$(echo "${dot}" | grep -F "${entity_node}:port0 ->" | head -1 | grep -oP -- '-> \S+:port\K[0-9]+')
+
+      if [[ -n "${port}" ]]; then
+        # Map entity type to link name (rgb -> color) using camera_names
+        if [[ -n "${camera_names[${type}]+_}" ]]; then
+          port_to_type[${port}]="${camera_names[${type}]}"
+        else
+          port_to_type[${port}]="${type}"
+        fi
+      fi
+    done < <(echo "${dot}" | grep "D4XX .* ${addr}")
+
+    # Append types sorted by port number
+    for port in $(echo "${!port_to_type[@]}" | tr ' ' '\n' | sort -n); do
+      stream_types_result+="${port_to_type[${port}]} "
+    done
+  done
 }
 
 # Helper function: get the number of devices of specific type identified
@@ -219,17 +257,33 @@ create_video_link() {
 }
 
 # Helper function: process video devices for a RS camera
-# Processes all video devices for one RealSense camera, determining device types
-# Maps devices to sensors based on driver names (tegra-video=streaming, tegra-embedded=metadata)
+# Processes all video devices for one RealSense camera, determining device types.
+# Uses media-ctl entity names to identify stream types (depth/color/ir/imu) reliably.
+# Maps devices to sensors based on driver names (tegra-video=streaming, tegra-embedded=metadata).
+# On Tegra, the media graph doesn't expose per-stream video node mappings — individual
+# /dev/videoN nodes aren't linked to specific D4XX entities. The driver creates video nodes
+# in deterministic DS5 mux port order, so positional assignment by streaming node index works.
 # Expected device order: depth, depth-md, color, color-md, ir, ir-md, imu
-# Input example: "/dev/video0 /dev/video1 /dev/video2"
+# Input: "$vid_devices" "$i2c_addr"
 process_rs_video_devices() {
   local vid_devices="$1"
-  
+  local i2c_addr="$2"
+
   # Convert video devices to array
   local vid_dev_arr=(${vid_devices})
   echo "DEBUG: Video device array: ${vid_dev_arr[*]}"
-  
+
+  # Get ordered stream types from media-ctl for this camera
+  # Called directly (not in subshell) so global camera_i2c_addrs is populated for DFU matching
+  get_stream_types "${i2c_addr}"
+  if [[ -z "${stream_types_result}" ]]; then
+    echo "Error: Could not discover stream types for ${i2c_addr}"
+    return 1
+  fi
+  local stream_types=(${stream_types_result})
+  local stream_type_idx=0
+  echo "DEBUG: Stream types from media-ctl: ${stream_types[*]}"
+
   # Process each video device in the expected order
   local bus="mipi"
   local sensor_name=""
@@ -237,22 +291,24 @@ process_rs_video_devices() {
 
   for vid in "${vid_dev_arr[@]}"; do
     [[ ! -c "${vid}" ]] && echo "DEBUG: Video device ${vid} not found, skipping" && continue
-    
+
     # Check if this is a valid tegra video device
     local dev_name=$(${v4l2_util} -d ${vid} -D 2>/dev/null | grep 'Driver name' | head -n1 | awk -F' : ' '{print $2}')
     echo "DEBUG: Video device ${vid} driver name: ${dev_name}"
     # Handle streaming devices
     if [ "${dev_name}" = "tegra-video" ]; then
-      sensor_name=$(identify_dev_type $vid)
-      if [[ -z "$sensor_name" ]]; then
-        echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
+      if [[ ${stream_type_idx} -ge ${#stream_types[@]} ]]; then
+        echo "DEBUG: More streaming nodes than expected stream types, skipping ${vid}"
         continue
       fi
+      sensor_name="${stream_types[${stream_type_idx}]}"
+      stream_type_idx=$((stream_type_idx+1))
+      echo "DEBUG: Stream type for ${vid}: ${sensor_name}"
       sensor_idx=$(get_dev_num $sensor_name)
       local dev_ln="/dev/video-rs-${sensor_name}-${sensor_idx}"
       create_video_link "$vid" "$dev_ln" "$bus" "$sensor_idx" "$sensor_name" "Streaming"
       increment_dev_num $sensor_name
-    # Handle metadata devices  
+    # Handle metadata devices
     elif [ "${dev_name}" = "tegra-embedded" ]; then
       if [[ -z "$sensor_name" ]]; then
         echo "DEBUG: Could not identify sensor type for ${vid}, skipping"
@@ -267,36 +323,32 @@ process_rs_video_devices() {
 }
 
 # Helper function: create DFU device link
-# Creates symbolic link for firmware update (DFU) device based on camera index
-# Maps d4xx class devices to standardized names for firmware operations
-# Input example: create_dfu_link "0"
-# Creates: /dev/d4xx-dfu-0 -> /dev/d4xx-dfu-a (if d4xx-dfu-a exists)
+# Creates symbolic link for firmware update (DFU) device based on camera I2C address
+# Matches the DFU device by I2C address to ensure correct camera-to-DFU mapping
+# Input: cam_id (e.g. "0"), i2c_addr (e.g. "9-001a")
+# Creates: /dev/d4xx-dfu-0 -> /dev/d4xx-dfu-9-001a
 create_dfu_link() {
   local cam_id="$1"
-  
-  echo "DEBUG: Looking for DFU device for camera ${cam_id}"
-  
-  # Look for d4xx class devices that might match
-  local dfu_candidates=$(ls -1 /sys/class/d4xx-class/ 2>/dev/null || true)
-  echo "DEBUG: DFU candidates: ${dfu_candidates}"
-  
-  if [[ -n "${dfu_candidates}" ]]; then
-    # For now, map cameras by order found
-    local dfu_array=(${dfu_candidates})
-    if [[ ${cam_id} -lt ${#dfu_array[@]} ]]; then
-      local i2cdev="${dfu_array[${cam_id}]}"
-      local dev_dfu_name="/dev/${i2cdev}"
-      local dev_dfu_ln="/dev/d4xx-dfu-${cam_id}"
-      
-      echo "DEBUG: Creating DFU link: ${dev_dfu_name} -> ${dev_dfu_ln}"
-      
-      if [[ $info -eq 0 ]]; then
-        [[ -e $dev_dfu_ln ]] && unlink $dev_dfu_ln
-        ln -s $dev_dfu_name $dev_dfu_ln
-      fi
-      [[ $quiet -eq 0 ]] && printf '%s\t%d\t%s\tFirmware \t%s\t%s\n' " i2c " ${cam_id} "d4xx   " $dev_dfu_name $dev_dfu_ln
-    fi
+  local i2c_addr="$2"
+
+  local dfu_dev="d4xx-dfu-${i2c_addr}"
+  local dev_dfu_name="/dev/${dfu_dev}"
+  local dev_dfu_ln="/dev/d4xx-dfu-${cam_id}"
+
+  echo "DEBUG: Looking for DFU device for camera ${cam_id} (${i2c_addr})"
+
+  if [[ ! -e "/sys/class/d4xx-class/${dfu_dev}" ]]; then
+    echo "DEBUG: DFU device ${dfu_dev} not found for camera ${cam_id}"
+    return
   fi
+
+  echo "DEBUG: Creating DFU link: ${dev_dfu_name} -> ${dev_dfu_ln}"
+
+  if [[ $info -eq 0 ]]; then
+    [[ -e $dev_dfu_ln ]] && unlink $dev_dfu_ln
+    ln -s $dev_dfu_name $dev_dfu_ln
+  fi
+  [[ $quiet -eq 0 ]] && printf '%s\t%d\t%s\tFirmware \t%s\t%s\n' " i2c " ${cam_id} "d4xx   " $dev_dfu_name $dev_dfu_ln
 }
 
 # Helper function: process a single RS device
@@ -328,7 +380,7 @@ process_single_rs_device() {
   fi
   
   # Process video devices
-  process_rs_video_devices "$vid_devices"
+  process_rs_video_devices "$vid_devices" "$i2c_addr"
 }
 
 # Check for Tegra devices by looking for RS mux in v4l2-ctl output
@@ -348,9 +400,11 @@ if [ -n "${rs_devices}" ]; then
     process_single_rs_device "$rs_line"
   done <<< "${rs_devices}"
 
-  # Create DFU device links for all detected cameras
+  # Create DFU device links for all detected cameras, matched by I2C address
   for ((i=0; i<${depth_dev_counter}; i++)); do
-    create_dfu_link "$i"
+    if [[ ${i} -lt ${#camera_i2c_addrs[@]} ]]; then
+      create_dfu_link "$i" "${camera_i2c_addrs[$i]}"
+    fi
   done
 
   echo "DEBUG: Processed ${depth_dev_counter} Tegra cameras"
