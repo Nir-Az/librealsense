@@ -1,18 +1,21 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2021 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-#test:device each(D400*)
-#test:device each(D500*)
-#Setting priority to run after test-fw-update
-#test:priority 2
-#test:flag windows
-
+import sys
+import pytest
 import pyrealsense2 as rs
-from rspy import test, log
+import logging
+log = logging.getLogger(__name__)
 
-test.start("checking metadata is enabled")
-dev, _ = test.find_first_device_or_exit()
-test.check( dev.is_metadata_enabled() )
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_each("D500*"),
+    pytest.mark.priority(2),  # Run after fw-update tests
+    pytest.mark.skipif(sys.platform != 'win32', reason="Windows only"),
+]
 
-test.finish()
-test.print_results_and_exit()
+
+def test_metadata_enabled(test_device):
+    """Check that metadata is enabled on the device"""
+    dev, ctx = test_device
+    assert dev.is_metadata_enabled(), "Metadata should be enabled on the device"
