@@ -863,7 +863,23 @@ PYBIND11_MODULE(NAME, m) {
             py::arg( "reader" ),
             py::arg( "sample" ) = nullptr,
             py::call_guard< py::gil_scoped_release >() )
-        .def( "write_to", &blob_msg::write_to, py::call_guard< py::gil_scoped_release >() );
+        .def( "write_to",
+              []( blob_msg const & self, realdds::dds_topic_writer & writer )
+              {
+                  return self.write_to( writer );
+              },
+              py::call_guard< py::gil_scoped_release >() )
+        .def( "write_to",
+              []( blob_msg const & self, realdds::dds_topic_writer & writer, double timeout, py::function should_stop )
+              {
+                  return self.write_to( writer, timeout,
+                                        [should_stop]() -> bool
+                                        {
+                                            py::gil_scoped_acquire gil;
+                                            return should_stop().cast< bool >();
+                                        } );
+              },
+              py::call_guard< py::gil_scoped_release >() );
 
 
     using imu_msg = realdds::topics::imu_msg;
