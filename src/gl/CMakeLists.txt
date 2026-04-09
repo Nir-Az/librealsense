@@ -12,6 +12,8 @@ set(REALSENSE_GL_CPP
     yuy2rgb-gl.cpp
     m420-to-rgb-gl.h
     m420-to-rgb-gl.cpp
+    nv12-to-rgb-gl.h
+    nv12-to-rgb-gl.cpp
     y4112rgb-gl.h
     y4112rgb-gl.cpp
     pointcloud-gl.h
