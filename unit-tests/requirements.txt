@@ -14,7 +14,7 @@ numpy==2.0.2 # max version currently working on Jetson
 # Pytest framework (cross-platform)
 pytest==8.3.5
 pytest-timeout==2.2.0
-pytest-retry==1.6.0
+pytest-retry==1.7.0
 pytest-repeat==0.9.3
 
 # REST API testing requirements (Only for Linux x86)
