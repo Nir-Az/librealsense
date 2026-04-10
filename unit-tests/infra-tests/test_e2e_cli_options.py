@@ -86,9 +86,22 @@ class TestCliOptionsRegistered:
         assert "timeout method: thread" in out
 
     def test_repeat(self):
-        """--repeat 3 should repeat each test 3 times (translates to --count 3)."""
-        rc, out, *_ = run_e2e("pytest-passthrough.py", "--repeat", "3")
+        """--repeat 3 should repeat the test 3 times, recycling the device each time."""
+        rc, out, tracking = run_e2e("pytest-device-setup.py", "-k", "test_d455 and not excluded",
+                                     "--repeat", "3")
         assert_outcomes(out, passed=3)
+        calls = tracking["enable_only_calls"]
+        assert len(calls) == 3
+        assert all(c['recycle'] is True for c in calls)
+
+    def test_repeat_no_reset(self):
+        """--repeat 3 --no-reset should repeat without recycling."""
+        rc, out, tracking = run_e2e("pytest-device-setup.py", "-k", "test_d455 and not excluded",
+                                     "--repeat", "3", "--no-reset")
+        assert_outcomes(out, passed=3)
+        calls = tracking["enable_only_calls"]
+        # First run enables without recycle, subsequent runs skip enable_only entirely
+        assert all(c['recycle'] is False for c in calls)
 
     def test_device_nonexistent(self):
         """--device D999 with no matching device should produce 0 parametrized instances."""

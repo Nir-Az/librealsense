@@ -373,7 +373,7 @@ def module_device_setup(request):
         log.debug(f"Test will use first matching device: {serial_number}")
 
     # Enable only this device; recycle only once per module (like run-unit-tests.py),
-    # but also recycle on retries (same test running again after failure).
+    # but also recycle on retries and repeats (--repeat / --count).
     device = devices.get(serial_number)
     device_name = device.name if device else serial_number
     log.info(f"Configuration: {device_name} [{serial_number}]")
@@ -384,9 +384,10 @@ def module_device_setup(request):
     last_device = getattr(module, '_last_device_serial', None)
     last_test = getattr(module, '_last_test_nodeid', None)
     is_retry = (last_test == nodeid)
+    is_repeat = request.config.getoption("count", default=1) > 1
     device_changed = (last_device is not None and last_device != serial_number)
     first_setup = (last_device is None)
-    recycle = not no_reset and (first_setup or device_changed or is_retry)
+    recycle = not no_reset and (first_setup or device_changed or is_retry or is_repeat)
 
     if not recycle and not first_setup:
         log.debug(f"Device {serial_number} already enabled, skipping hub setup")
