@@ -34,8 +34,7 @@ class TestLogNaming:
 
     def test_special_chars_sanitized(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455<special>]")
-        name = derive_log_name(item)
-        assert "<" not in name and ">" not in name and name.endswith(".log")
+        assert derive_log_name(item) == "pytest-depth_D455_special_.log"
 
     def test_log_key_with_brackets(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455-111]")

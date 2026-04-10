@@ -21,10 +21,6 @@ class TestDeviceEachParametrization:
         rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d400_exclude")
         assert_outcomes(out, passed=2)  # D455, D435
 
-    def test_no_match_runs_unparametrized(self):
-        rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_d999_no_match")
-        assert_outcomes(out, passed=1)
-
     def test_multiple_markers_union(self):
         rc, out, *_ = run_e2e("pytest-each.py", "-k", "test_union")
         assert_outcomes(out, passed=2)

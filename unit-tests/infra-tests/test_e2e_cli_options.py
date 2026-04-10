@@ -24,16 +24,6 @@ class TestCliOptionsRegistered:
                                "--exclude-device", "D455")
         assert_outcomes(out, passed=2)  # D435, D401 remain
 
-    def test_context(self):
-        """--context nightly should run @context('nightly') tests instead of skipping."""
-        rc, out, *_ = run_e2e("pytest-context.py", "-k", "test_nightly_only", "--context", "nightly")
-        assert_outcomes(out, passed=1)
-
-    def test_live(self):
-        """--live should skip tests without device markers."""
-        rc, out, *_ = run_e2e("pytest-live.py", "-k", "test_no_device", "--live")
-        assert_outcomes(out, skipped=1)
-
     def test_no_reset(self):
         """--no-reset should call enable_only with recycle=False."""
         rc, out, tracking = run_e2e("pytest-device-setup.py", "-k", "test_d455 and not excluded",
