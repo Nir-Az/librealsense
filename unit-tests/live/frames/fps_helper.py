@@ -12,6 +12,7 @@ count_frames = False
 # tests parameters
 TIME_FOR_STEADY_STATE = 5
 TIME_TO_COUNT_FRAMES = 5
+TIME_BETWEEN_PERMUTATIONS = 2
 
 
 ##########################################
@@ -42,8 +43,8 @@ def get_dict_for_streams(sensor_profiles_arr, streams_to_test):
 
 
 def get_time_est_string(profiles_array):
-    global TIME_TO_COUNT_FRAMES, TIME_FOR_STEADY_STATE
-    time_per_test = TIME_TO_COUNT_FRAMES + TIME_FOR_STEADY_STATE
+    global TIME_TO_COUNT_FRAMES, TIME_FOR_STEADY_STATE, TIME_BETWEEN_PERMUTATIONS
+    time_per_test = TIME_TO_COUNT_FRAMES + TIME_FOR_STEADY_STATE + TIME_BETWEEN_PERMUTATIONS
     time_est_string = (f"Estimated time for test: {len(profiles_array) * time_per_test} secs "
                        f"({len(profiles_array)} tests * {time_per_test} secs per test)")
     return time_est_string
@@ -192,6 +193,7 @@ def perform_fps_test(sensor_profiles_arr, streams_combinations):
         log.info(f"Got: {fps_dict}")
         if not check_fps_dict(fps_dict, expected_fps_dict):
             failures.append(f"{tested}: expected={expected_fps_dict}, got={fps_dict}")
+        time.sleep(TIME_BETWEEN_PERMUTATIONS)  # allow device to settle between sensor open/close cycles
     assert not failures, "FPS check failed for:\n" + "\n".join(failures)
 
 
