@@ -39,7 +39,7 @@ from rspy.pytest.logging_setup import (
     start_test_log, stop_test_log, print_terminal_summary,
 )
 from rspy.pytest.cli import consume_legacy_flags, apply_pending_flags
-from rspy.pytest.device_helpers import find_matching_devices, resolve_device_each_serials
+from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi, resolve_device_each_serials
 from rspy.pytest.collection import filter_and_sort_items
 
 log = logging.getLogger('librealsense')
@@ -356,6 +356,34 @@ def module_device_setup(request):
             yield None
             return
 
+        # Check for multi-device marker: device("D400*", "D400*") has multiple args
+        multi_device_marker = next(
+            (m for m in device_markers if m.name == 'device' and len(m.args) > 1), None
+        )
+
+        if multi_device_marker:
+            # Multi-device path: resolve each spec to a unique device
+            serial_numbers, had_candidates = find_matching_devices_multi(device_markers,
+                                                  cli_includes=request.config.getoption("--device", default=[]),
+                                                  cli_excludes=request.config.getoption("--exclude-device", default=[]))
+            expected_count = len(multi_device_marker.args)
+            if len(serial_numbers) < expected_count:
+                if had_candidates:
+                    pytest.fail(f"Need {expected_count} devices but only {len(serial_numbers)} matched after exclusions")
+                else:
+                    pytest.fail(f"Need {expected_count} devices but only {len(serial_numbers)} found")
+
+            # Enable all matched devices, recycle, and yield the list of SNs
+            names = [f"{devices.get(sn).name} [{sn}]" for sn in serial_numbers]
+            log.info(f"Configuration: {', '.join(names)}")
+            try:
+                devices.enable_only(serial_numbers, recycle=True)
+                log.debug(f"All {len(serial_numbers)} devices enabled and ready")
+            except Exception as e:
+                pytest.fail(f"Failed to enable devices: {e}")
+            yield serial_numbers
+            return
+
         serial_numbers, had_candidates = find_matching_devices(device_markers, each=False,
                                                   cli_includes=request.config.getoption("--device", default=[]),
                                                   cli_excludes=request.config.getoption("--exclude-device", default=[]))
@@ -432,6 +460,30 @@ def test_device(test_context):
     log.debug(f"Test using device: {dev.get_info(rs.camera_info.name) if dev.supports(rs.camera_info.name) else 'Unknown'}")
 
     return dev, test_context
+
+
+@pytest.fixture
+def test_devices(test_context, module_device_setup):
+    """Return (device_list, context) for multi-device tests.
+
+    Used with device("D400*", "D400*") markers. module_device_setup enables the
+    required hub ports; this fixture grabs the matching devices from the context.
+    """
+    if not isinstance(module_device_setup, list):
+        pytest.fail("test_devices fixture requires a multi-device marker, e.g. @pytest.mark.device('D400*', 'D400*')")
+
+    serial_numbers = module_device_setup
+    device_list = []
+    for sn in serial_numbers:
+        for dev in test_context.devices:
+            if dev.supports(rs.camera_info.serial_number) and dev.get_info(rs.camera_info.serial_number) == sn:
+                device_list.append(dev)
+                break
+
+    if len(device_list) < len(serial_numbers):
+        pytest.fail(f"Expected {len(serial_numbers)} devices in context but found {len(device_list)}")
+
+    return device_list, test_context
 
 
 @pytest.fixture
