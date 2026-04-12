@@ -75,6 +75,24 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 
 7. **Delete the old file**: After migration is verified, the old `test-*.py` should not remain.
 
+8. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+
+## Assertions: `assert` vs `pytest-check`
+
+The `pytest-check` plugin is available for soft assertions (non-stopping checks). Use it when the legacy test uses `test.check()` in a loop where execution should continue on failure — this matches the legacy behavior where `test.check()` recorded failures but didn't abort.
+
+| Legacy (`rspy.test`) | Hard assert (stops) | Soft check (continues) |
+|---|---|---|
+| `test.check(expr)` | `assert expr` | `check.is_true(expr)` |
+| `test.check_equal(a, b)` | `assert a == b` | `check.equal(a, b)` |
+| `test.check_approx_abs(a, b, tol)` | `assert abs(a - b) <= tol` | `check.less_equal(abs(a - b), tol)` |
+
+**When to use which:**
+- Use `assert` for fatal conditions (hardware failures, setup errors, preconditions)
+- Use `check.*` from `pytest-check` when the legacy test uses `test.check()` inside loops or across multiple configurations, so all iterations run and all failures are reported
+
+Import: `from pytest_check import check`
+
 ## Writing a New Pytest Test
 
 ### Fixture chain
@@ -82,12 +100,14 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 The fixtures form a dependency chain. Use the lowest-level fixture that gives you what you need:
 
 ```
-module_device_setup          → yields serial_number (or None)
+module_device_setup          → yields serial_number (or list of SNs for multi-device)
     ↓                           Handles hub port management (enable/disable/recycle)
 test_context                 → returns rs.context()
     ↓                           Depends on module_device_setup for hub state
 test_device                  → returns (rs.device, rs.context)
                                 Grabs the first visible device from context
+test_devices                 → returns ([rs.device, ...], rs.context)
+                                For multi-device tests (requires multi-arg device marker)
 ```
 
 ### Which fixture to use
@@ -95,7 +115,8 @@ test_device                  → returns (rs.device, rs.context)
 | You need | Use this fixture | Example |
 |---|---|---|
 | A device + context | `test_device` | Most hardware tests: streaming, options, metadata |
-| Just a context (multiple devices or custom queries) | `test_context` | Multi-device tests, device enumeration tests |
+| Multiple devices + context | `test_devices` | Multi-device tests (use with `device("D400*", "D400*")`) |
+| Just a context (custom queries) | `test_context` | Device enumeration, custom context settings |
 | Only hub setup, you create your own context | `module_device_setup` | Tests that need custom context settings (e.g., DDS config) |
 | No device at all | None (don't use any) | Algorithm tests, software-device tests |
 
@@ -119,6 +140,15 @@ pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_exclude("D401"),  # D401 has no color sensor
 ]
+
+# Multi-device: need 2 unique D400 devices (use with test_devices fixture)
+pytestmark = [pytest.mark.device("D400*", "D400*")]
+
+# Multi-device: need one D400 and one D500
+pytestmark = [pytest.mark.device("D400*", "D500*")]
+
+# Multi-device: need specific devices
+pytestmark = [pytest.mark.device("D455", "D435")]
 ```
 
 ### Example: simple test using `test_device`
