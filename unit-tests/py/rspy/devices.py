@@ -43,14 +43,20 @@ from rspy import device_hub
 try:
     import pyrealsense2 as rs
     log.d( rs )
-    hub = device_hub.create() # if there's no hub, this will hold None
     sys.path = sys.path[:-1]  # remove what we added
 except ModuleNotFoundError:
     log.w( 'No pyrealsense2 library is available! Running as if no cameras available...' )
     import sys
     log.d( 'sys.path=', sys.path )
     rs = None
-    hub = None
+
+hub = None
+
+def init_hub():
+    """Create the hub instance. Call after logging is configured so discovery prints are visible."""
+    global hub
+    if hub is None:
+        hub = device_hub.create()
 
 import time
 
@@ -807,6 +813,7 @@ if __name__ == '__main__':
     if args:
         usage()
     try:
+        init_hub()
         if hub:
             if not hub.is_connected():
                 hub.connect()

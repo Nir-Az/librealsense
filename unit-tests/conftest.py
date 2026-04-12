@@ -207,6 +207,9 @@ def pytest_configure(config):
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
 
+    # Create hub after logging is configured so discovery prints are visible
+    devices.init_hub()
+
     # Query devices early for test parametrization
     try:
         hub_reset = config.getoption("--hub-reset", default=False)
