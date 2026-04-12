@@ -39,11 +39,15 @@ class TestCliOptionsRegistered:
         assert rc == 0
         assert any(kw.get("hub_reset") is True for kw in tracking["query_kwargs"])
 
-    def test_hub_reset_default_is_false(self):
-        """Without --hub-reset, devices.query() should get hub_reset=False."""
+    def test_defaults(self):
+        """Without any flags, conftest should set correct defaults:
+        hub_reset=False, rslog off, timeout 200s/thread."""
         rc, out, tracking = run_e2e("pytest-passthrough.py")
         assert rc == 0
         assert any(kw.get("hub_reset") is False for kw in tracking["query_kwargs"])
+        assert len(tracking["rslog_calls"]) == 0
+        assert "timeout: 200s" in out
+        assert "timeout method: thread" in out
 
     def test_rslog(self):
         """--rslog should call rs.log_to_console."""
@@ -51,17 +55,10 @@ class TestCliOptionsRegistered:
         assert rc == 0
         assert len(tracking["rslog_calls"]) > 0
 
-    def test_rslog_default_is_off(self):
-        """Without --rslog, rs.log_to_console should NOT be called."""
-        rc, out, tracking = run_e2e("pytest-passthrough.py")
-        assert rc == 0
-        assert len(tracking["rslog_calls"]) == 0
-
     def test_debug(self):
         """--debug should enable pytest debug output."""
         rc, out, *_ = run_e2e("pytest-passthrough.py", "--debug")
         assert rc == 0
-        # --debug causes pytest to write debug info and show registered plugins
         assert "pytest debug information" in out or "registered" in out
 
     def test_rs_help(self):
@@ -74,16 +71,8 @@ class TestCliOptionsRegistered:
         rc, out, tracking = run_e2e("pytest-retry.py", "--retries", "1")
         assert_outcomes(out, passed=1)
         calls = tracking["enable_only_calls"]
-        # First run + retry = 2 enable_only calls, both with recycle=True
         assert len(calls) == 2
         assert all(c['recycle'] is True for c in calls)
-
-    def test_timeout_default(self):
-        """conftest should set default timeout to 200s with thread method."""
-        rc, out, *_ = run_e2e("pytest-passthrough.py")
-        assert rc == 0
-        assert "timeout: 200s" in out
-        assert "timeout method: thread" in out
 
     def test_repeat(self):
         """--repeat 3 should repeat the test 3 times, recycling the device each time."""
