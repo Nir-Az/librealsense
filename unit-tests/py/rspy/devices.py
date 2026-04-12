@@ -43,7 +43,6 @@ from rspy import device_hub
 try:
     import pyrealsense2 as rs
     log.d( rs )
-    sys.path = sys.path[:-1]  # remove what we added
 except ModuleNotFoundError:
     log.w( 'No pyrealsense2 library is available! Running as if no cameras available...' )
     import sys
@@ -57,6 +56,7 @@ def init_hub():
     global hub
     if hub is None:
         hub = device_hub.create()
+        sys.path = sys.path[:-1]  # remove what we added (pyrs_dir)
 
 import time
 
