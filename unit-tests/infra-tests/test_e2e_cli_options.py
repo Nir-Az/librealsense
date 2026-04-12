@@ -101,7 +101,8 @@ class TestCliOptionsRegistered:
         assert_outcomes(out, passed=3)
         calls = tracking["enable_only_calls"]
         # First run enables without recycle, subsequent runs skip enable_only entirely
-        assert all(c['recycle'] is False for c in calls)
+        assert len(calls) == 1
+        assert calls[0]['recycle'] is False
 
     def test_device_nonexistent(self):
         """--device D999 with no matching device should produce 0 parametrized instances."""
