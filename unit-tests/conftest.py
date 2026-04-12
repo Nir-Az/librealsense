@@ -22,6 +22,9 @@ import logging
 
 # unit-tests/py/ contains rspy — the shared helper library used by all RealSense tests
 current_dir = os.path.dirname(os.path.abspath(__file__))
+# pytest built-in: exclude infra-tests/e2e/ from collection (those are static test cases
+# run in isolated subprocesses by the infra regression tests, not by the parent pytest)
+collect_ignore = [os.path.join(current_dir, 'infra-tests', 'e2e')]
 py_dir = os.path.join(current_dir, 'py')
 if py_dir not in sys.path:
     sys.path.insert(0, py_dir)
@@ -112,6 +115,14 @@ def pytest_addoption(parser):
         default=False,
         help="Only run tests that require a live device (have at least one device/device_each marker)."
     )
+    group.addoption(
+        "--repeat",
+        action="store",
+        default=0,
+        type=int,
+        dest="repeat_count",
+        help="Repeat each test N times (alias for pytest-repeat's --count)."
+    )
     # --debug and -r/--regex conflict with pytest built-ins and are consumed before
     # pytest parses args. Document them here so they show up in --help:
     group.addoption(
@@ -134,6 +145,11 @@ def pytest_configure(config):
     global context_list
 
     apply_pending_flags(config)
+
+    # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)
+    repeat_val = config.getoption('repeat_count', default=0)
+    if repeat_val and config.getoption('count', default=1) <= 1:
+        config.option.count = repeat_val
 
     # Parse and store context
     context_str = config.getoption("--context", default="")
@@ -357,7 +373,7 @@ def module_device_setup(request):
         log.debug(f"Test will use first matching device: {serial_number}")
 
     # Enable only this device; recycle only once per module (like run-unit-tests.py),
-    # but also recycle on retries (same test running again after failure).
+    # but also recycle on retries and repeats (--repeat / --count).
     device = devices.get(serial_number)
     device_name = device.name if device else serial_number
     log.info(f"Configuration: {device_name} [{serial_number}]")
@@ -368,9 +384,10 @@ def module_device_setup(request):
     last_device = getattr(module, '_last_device_serial', None)
     last_test = getattr(module, '_last_test_nodeid', None)
     is_retry = (last_test == nodeid)
+    is_repeat = request.config.getoption("count", default=1) > 1
     device_changed = (last_device is not None and last_device != serial_number)
     first_setup = (last_device is None)
-    recycle = not no_reset and (first_setup or device_changed or is_retry)
+    recycle = not no_reset and (first_setup or device_changed or is_retry or is_repeat)
 
     if not recycle and not first_setup:
         log.debug(f"Device {serial_number} already enabled, skipping hub setup")
