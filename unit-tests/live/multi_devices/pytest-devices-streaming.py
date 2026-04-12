@@ -13,7 +13,6 @@ Requires 2 D400 series devices.
 
 import pytest
 import pyrealsense2 as rs
-from rspy import devices
 from rspy.pytest.device_helpers import is_jetson_platform
 import time
 from collections import defaultdict
@@ -23,35 +22,18 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.skipif(is_jetson_platform(), reason="Not supported on Jetson"),
     pytest.mark.skip(reason="Disabled - stress test"),
+    pytest.mark.device("D400*", "D400*"),
 ]
 
 # Test configuration
 STREAM_DURATION_SEC = 10
 MAX_FRAME_DROP_PERCENTAGE = 5.0
 STABILIZATION_TIME_SEC = 3
-MIN_DEVICES = 2
 
 TARGET_RESOLUTIONS = [
     (640, 480, 30),
     (640, 360, 30),
 ]
-
-
-@pytest.fixture
-def d400_devices():
-    """Enable and return at least 2 D400 series devices via the hub."""
-    d400_sns = list(devices.by_product_line("D400", []))
-    if len(d400_sns) < MIN_DEVICES:
-        pytest.fail(f"Requires {MIN_DEVICES} D400 devices, found {len(d400_sns)}")
-    sns = d400_sns[:MIN_DEVICES]
-    devices.enable_only(sns, recycle=True)
-    ctx = rs.context()
-    device_list = [dev for dev in ctx.devices
-                   if dev.supports(rs.camera_info.serial_number)
-                   and dev.get_info(rs.camera_info.serial_number) in sns]
-    if len(device_list) < MIN_DEVICES:
-        pytest.fail(f"Enabled {MIN_DEVICES} D400 ports but only {len(device_list)} visible in context")
-    return device_list, ctx
 
 
 def find_common_profile(devs, stream_type, stream_format, target_resolutions):
@@ -263,9 +245,9 @@ def stream_multi_and_check_frames(devs, stream_configs, duration_sec=STREAM_DURA
     return aggregate_results(all_frame_counters, all_frames, all_stream_frame_counts, device_info, actual_duration)
 
 
-def test_multi_stream_operation(d400_devices):
+def test_multi_stream_operation(test_devices):
     """Simultaneous multi-stream operation (depth + color + IR) on multiple devices"""
-    device_list, ctx = d400_devices
+    device_list, ctx = test_devices
 
     log.info("=" * 80)
     log.info(f"Testing multi-stream operation on {len(device_list)} devices:")
@@ -275,40 +257,70 @@ def test_multi_stream_operation(d400_devices):
         log.info(f"  Device {i}: {name} (SN: {sn})")
     log.info("=" * 80)
 
+    # Get common multi-stream configuration
     log.info("Finding common multi-stream configuration...")
     stream_configs = get_common_multi_stream_config(*device_list)
 
-    assert len(stream_configs) >= 2, \
-        f"At least 2 stream types needed for multi-stream test, but found {len(stream_configs)}"
+    if len(stream_configs) < 2:
+        pytest.fail(f"At least 2 stream types needed for multi-stream test, but found {len(stream_configs)}")
 
     log.info(f"Found {len(stream_configs)} common stream types")
+    log.info(f"Will stream all of them simultaneously from all {len(device_list)} devices")
 
     success, drop_percentages, stats = stream_multi_and_check_frames(
         device_list, stream_configs=stream_configs
     )
 
-    assert len(stats['devices']) > 0, "Should collect statistics from all devices"
+    # Check for analysis errors
+    if len(stats['devices']) == 0:
+        log.error("FAIL - No device statistics collected")
+        assert False, "Should collect statistics from all devices"
+    else:
+        # Print detailed results
+        log.info("=" * 80)
+        log.info("RESULTS:")
+        log.info("=" * 80)
+        log.info(f"Duration: {stats['duration']:.2f} seconds")
 
-    # Log detailed results
-    log.info("=" * 80)
-    log.info("RESULTS:")
-    log.info(f"Duration: {stats['duration']:.2f} seconds")
+        for i, dev_stats in enumerate(stats['devices'], 1):
+            log.info(f"Device {i} ({dev_stats['name']}):")
+            log.info(f"  Total frames: {dev_stats['total_frames']}")
+            log.info(f"  Overall drop rate: {dev_stats['drop_pct']:.2f}%")
+            for stream_type, stream_stats in dev_stats['streams'].items():
+                log.info(f"  {stream_type}:")
+                log.info(f"    Received: {stream_stats['received']}/{stream_stats['expected']}")
+                log.info(f"    Dropped: {stream_stats['dropped']} ({stream_stats['drop_pct']:.2f}%)")
 
-    for i, dev_stats in enumerate(stats['devices'], 1):
-        log.info(f"Device {i} ({dev_stats['name']}): "
-                  f"{dev_stats['total_frames']} frames, drop rate: {dev_stats['drop_pct']:.2f}%")
-        for stream_type, stream_stats in dev_stats['streams'].items():
-            log.info(f"  {stream_type}: {stream_stats['received']}/{stream_stats['expected']} "
-                      f"({stream_stats['drop_pct']:.2f}% dropped)")
-    log.info("=" * 80)
+        log.info("=" * 80)
 
-    assert success, \
-        f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices"
+        if success:
+            log.info("PASS - Multi-stream test successful!")
+            for i, drop_pct in enumerate(drop_percentages, 1):
+                log.info(f"  Device {i} drop rate: {drop_pct:.2f}%")
+        else:
+            log.warning("FAIL - Excessive frame drops detected!")
+            for i, drop_pct in enumerate(drop_percentages, 1):
+                log.warning(f"  Device {i} drop rate: {drop_pct:.2f}% (max: {MAX_FRAME_DROP_PERCENTAGE}%)")
 
-    # Verify stream independence
-    for i, dev_stats in enumerate(stats['devices'], 1):
-        for stream_type, stream_stats in dev_stats['streams'].items():
-            min_expected_frames = int(stream_stats['expected'] * 0.8)
-            assert stream_stats['received'] >= min_expected_frames, \
-                f"Device {i} {stream_type} received only {stream_stats['received']} frames " \
-                f"(expected >={min_expected_frames})"
+        assert success, \
+            f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices"
+
+        # Verify stream independence: Check that each stream type received adequate frames
+        # (at least 80% of expected based on actual duration and configured FPS)
+        log.info("Verifying stream independence...")
+        all_streams_ok = True
+
+        for i, dev_stats in enumerate(stats['devices'], 1):
+            for stream_type, stream_stats in dev_stats['streams'].items():
+                min_expected_frames = int(stream_stats['expected'] * 0.8)
+                if stream_stats['received'] < min_expected_frames:
+                    log.warning(f"Device {i} {stream_type} received only {stream_stats['received']} frames (expected >={min_expected_frames})")
+                    all_streams_ok = False
+
+        if all_streams_ok:
+            log.info("PASS - All streams received adequate frame counts (independence verified)")
+        else:
+            log.warning("FAIL - Some streams received fewer frames than expected")
+
+        assert all_streams_ok, \
+            "All streams should receive frames independently without interference"
