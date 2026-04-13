@@ -520,7 +520,7 @@ int run_viewer( int argc, const char ** argv,
 
             if (ImGui::Selectable("Load Recorded Sequence", false, ImGuiSelectableFlags_SpanAllColumns))
             {
-                if (auto ret = file_dialog_open(open_file, "RealSense recordings\0*.db3;*.bag\0", NULL, NULL))
+                if (auto ret = file_dialog_open(open_file, "RealSense recordings\0*.db3\0*.bag\0", NULL, NULL))
                 {
                     add_playback_device(ctx, device_models, error_message, viewer_model, ret);
                 }
