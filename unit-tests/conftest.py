@@ -77,13 +77,15 @@ def pytest_addoption(parser):
         "--device",
         action="append",
         default=[],
-        help="Include only devices matching pattern (e.g., --device D455). Can be used multiple times."
+        help="Include only devices matching pattern (e.g., --device D455). "
+             "Can be used multiple times or with a space-separated value (--device 'D455 D435')."
     )
     group.addoption(
         "--exclude-device",
         action="append",
         default=[],
-        help="Exclude devices matching pattern (e.g., --exclude-device D455). Can be used multiple times."
+        help="Exclude devices matching pattern (e.g., --exclude-device D455). "
+             "Can be used multiple times or with a space-separated value (--exclude-device 'D555 D585S')."
     )
     group.addoption(
         "--context",
