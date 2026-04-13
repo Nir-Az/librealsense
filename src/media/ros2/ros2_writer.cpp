@@ -11,6 +11,7 @@
 #include "proc/hdr-merge.h"
 #include "proc/sequence-id-filter.h"
 #include "ros2_writer.h"
+#include <zstd.h>
 #include "media/ros_factory.h"
 #include "core/motion-frame.h"
 #include <sstream>
@@ -57,10 +58,7 @@ namespace librealsense
             throw std::runtime_error(rsutils::string::from() << "Failed to open rosbag2 storage for uri '" << file
                 << "' using storage id 'sqlite3'");
 
-        if (compress_while_record)
-        {
-            // TODO: implement
-        }
+        _compress = compress_while_record;
 
         write_file_version();
     }
@@ -77,25 +75,18 @@ namespace librealsense
         _topics.emplace(name, md);
     }
 
-    std::shared_ptr<rcutils_uint8_array_t> ros2_writer::create_buffer(size_t size) const
+    std::shared_ptr<rcutils_uint8_array_t> ros2_writer::compress_buffer(const std::shared_ptr<rcutils_uint8_array_t>& input)
     {
-        auto buffer = std::shared_ptr<rcutils_uint8_array_t>(new rcutils_uint8_array_t(),
-            [](rcutils_uint8_array_t* arr) {
-                if (arr) {
-                    rcutils_ret_t ret = rcutils_uint8_array_fini(arr);
-                    (void)ret; // Cast to void to suppress unused warning
-                } 
-                delete arr;
-            });
+        auto bound = ZSTD_compressBound(input->buffer_length);
+        auto& out = ensure_buffer_capacity(_compress_buf, bound);
 
-        rcutils_allocator_t alloc = rcutils_get_default_allocator();
-        auto ret = rcutils_uint8_array_init(buffer.get(), size, &alloc);
-        if (ret != RCUTILS_RET_OK)
-            throw std::runtime_error("Failed to initialize rosbag2 buffer");
-
-        return buffer;
+        // Level 1 is the fastest zstd level with good-enough ratio; comparable in speed to LZ4 used by rosbag1
+        auto compressed_size = ZSTD_compress(out->buffer, out->buffer_capacity, input->buffer, input->buffer_length, 1);
+        if (ZSTD_isError(compressed_size))
+            throw std::runtime_error(rsutils::string::from() << "Zstd compression failed: " << ZSTD_getErrorName(compressed_size));
+        out->buffer_length = compressed_size;
+        return out;
     }
-
 
     void ros2_writer::write_string(std::string const& topic, const nanoseconds& ts, std::string const& payload)
     {

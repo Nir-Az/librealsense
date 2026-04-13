@@ -139,6 +139,8 @@ namespace librealsense
 
         std::map< stream_identifier, std::pair< uint32_t, rs2_extrinsics > > m_extrinsics_map;
 
+        static void decompress_if_needed(std::shared_ptr<rosbag2_storage::SerializedBagMessage>& msg);
+
         std::shared_ptr<rosbag2_storage::SerializedBagMessage> _cached_message;
         bool _cache_valid = false;  // true means _cached_message contains valid unconsumed data
 

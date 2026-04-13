@@ -10,7 +10,7 @@
 
 #include "ros_factory.h"
 #include "ros_common.h"
-#include "ros2/ros2_writer.h"
+#include "rosbag/bag.h"
 #include <rsutils/string/from.h>
 
 namespace librealsense
@@ -69,8 +69,19 @@ namespace librealsense
 
         LOG_INFO("Converting " << input_bag << " to " << output_db3);
 
+        // Match the source file's compression: if the .bag was compressed, compress the .db3 too
+        bool compress = false;
+        {
+            rosbag::Bag bag;
+            bag.open(input_bag, rosbag::BagMode::Read);
+            auto compression_name = std::get<0>(bag.getCompressionInfo());
+            compress = (!compression_name.empty() && compression_name != "none");
+            bag.close();
+        }
+        LOG_INFO("Source bag compression: " << (compress ? "ON" : "OFF"));
+
         auto reader = create_reader_for_file(input_bag, ctx);
-        std::shared_ptr<writer> writer = std::make_shared<ros2_writer>(output_db3, false);
+        auto writer = create_writer_for_file(output_db3, compress);
 
         auto device_desc = reader->query_device_description(nanoseconds(0));
         writer->write_device_description(device_desc);

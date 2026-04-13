@@ -2,6 +2,7 @@
 // Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
 
 #include "ros2_reader.h"
+#include <zstd.h>
 #include "image.h"
 #include "ds/ds-device-common.h"
 #include "ds/d400/d400-private.h"
@@ -1200,6 +1201,45 @@ namespace librealsense
         return _storage->has_next();
     }
 
+    void ros2_reader::decompress_if_needed(std::shared_ptr<rosbag2_storage::SerializedBagMessage>& msg)
+    {
+        if (!msg || !msg->serialized_data || !msg->serialized_data->buffer || msg->serialized_data->buffer_length == 0)
+            return;
+
+        auto src = msg->serialized_data->buffer;
+        auto src_size = msg->serialized_data->buffer_length;
+
+        // Zstd frame magic number: 0xFD2FB528 (little-endian)
+        if (src_size < 4 || src[0] != 0x28 || src[1] != 0xB5 || src[2] != 0x2F || src[3] != 0xFD)
+            return;
+
+        auto frame_content_size = ZSTD_getFrameContentSize(src, src_size);
+        if (frame_content_size == ZSTD_CONTENTSIZE_UNKNOWN || frame_content_size == ZSTD_CONTENTSIZE_ERROR)
+            throw std::runtime_error("Failed to determine decompressed size for zstd-compressed message");
+
+        // Guard against malformed frames claiming an absurd decompressed size — zstd's frame
+        // header is untrusted input and a malicious file could request a huge allocation.
+        constexpr size_t MAX_DECOMPRESSED_SIZE = 256 * 1024 * 1024; // 256 MB
+        if (frame_content_size > MAX_DECOMPRESSED_SIZE)
+            throw std::runtime_error(rsutils::string::from()
+                << "Zstd decompressed size " << frame_content_size << " exceeds safety limit");
+
+        auto decompressed_size = static_cast<size_t>(frame_content_size);
+
+        // Fresh buffer per call: callers (e.g. create_frame -> read_frame_metadata) can
+        // hold onto msg->serialized_data across a subsequent decompress, so a reusable
+        // member buffer would silently overwrite in-flight data.
+        std::shared_ptr<rcutils_uint8_array_t> out;
+        ensure_buffer_capacity(out, decompressed_size);
+
+        auto result = ZSTD_decompress(out->buffer, out->buffer_capacity, src, src_size);
+        if (ZSTD_isError(result))
+            throw std::runtime_error(rsutils::string::from() << "Zstd decompression failed: " << ZSTD_getErrorName(result));
+
+        out->buffer_length = result;
+        msg->serialized_data = std::move(out);
+    }
+
     std::shared_ptr<rosbag2_storage::SerializedBagMessage> ros2_reader::read_next_cached()
     {
         // If cache is valid, return cached message and mark as consumed
@@ -1213,7 +1253,9 @@ namespace librealsense
         if (!_storage->has_next())
             return nullptr;
 
-        return _storage->read_next();
+        auto msg = _storage->read_next();
+        decompress_if_needed(msg);
+        return msg;
     }
 
     std::shared_ptr<rosbag2_storage::SerializedBagMessage> ros2_reader::peek_next_cached()
@@ -1227,6 +1269,7 @@ namespace librealsense
             return nullptr;
 
         _cached_message = _storage->read_next();
+        decompress_if_needed(_cached_message);
         _cache_valid = true;
         return _cached_message;
     }
