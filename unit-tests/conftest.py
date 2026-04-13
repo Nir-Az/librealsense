@@ -225,6 +225,14 @@ def pytest_configure(config):
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
 
+    # Echo CLI device filters once (' '.join handles both repeated-flag and space-separated forms)
+    exclude_list = config.getoption("--exclude-device", default=[])
+    if exclude_list:
+        print(f"-D- excluding devices: {' '.join(exclude_list)}")
+    include_list = config.getoption("--device", default=[])
+    if include_list:
+        print(f"-D- including only devices: {' '.join(include_list)}")
+
     # Query devices early for test parametrization
     try:
         hub_reset = config.getoption("--hub-reset", default=False)
