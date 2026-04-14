@@ -8,6 +8,8 @@ In addition to streaming video and other data from devices and sensors, the Real
 
 The SDK records a single device to a single `.db3` file using the [ROS2 rosbag2](https://github.com/ros2/rosbag2) storage format (SQLite-based). The output file path must end with the `.db3` extension. This allows files recorded by the SDK to be inspected using standard ROS2-compatible tools.
 
+> **Note:** The SDK supports optional compression to reduce file size. Compressed recordings are only playable using the SDK. For compatibility with standard ROS2-compatible tools, disable compression in the viewer settings (Settings > Playback & Record > Never Compress).
+
 > For example recording files, please see [Sample Data](./sample-data.md)
 
 > For the legacy ROS1 `.bag` format documentation, see [Record and Playback (Legacy ROS1)](./record-and-playback-legacy-ros1.md)
