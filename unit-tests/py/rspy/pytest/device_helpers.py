@@ -11,6 +11,19 @@ from rspy import devices
 log = logging.getLogger('librealsense')
 
 
+def split_cli_patterns(patterns):
+    """Flatten a list of patterns by splitting each entry on whitespace.
+
+    Supports both repeated flags (``--exclude-device D555 --exclude-device D585S``)
+    and a single flag with a space-separated value (``--exclude-device 'D555 D585S'``),
+    matching the legacy run-unit-tests.py behavior.
+    """
+    out = []
+    for p in patterns or []:
+        out.extend(p.split())
+    return out
+
+
 def find_matching_devices(device_markers, each=True, cli_includes=None, cli_excludes=None):
     """Resolve device markers + CLI filters into a list of matching serial numbers.
 
@@ -21,10 +34,9 @@ def find_matching_devices(device_markers, each=True, cli_includes=None, cli_excl
     matching_sns = []
     had_candidates = False
 
-    if cli_includes is None:
-        cli_includes = []
-    if cli_excludes is None:
-        cli_excludes = []
+    # Flatten whitespace-separated entries so "D555 D585S" works as well as repeated flags
+    cli_includes = split_cli_patterns(cli_includes)
+    cli_excludes = split_cli_patterns(cli_excludes)
 
     # Resolve exclusion patterns (markers + CLI) to a set of excluded serial numbers
     exclude_patterns = []
@@ -87,14 +99,14 @@ def resolve_device_each_serials(metafunc):
     # Resolve exclusion patterns (markers + CLI) to a set of excluded serial numbers
     exclude_markers = [m for m in metafunc.definition.iter_markers("device_exclude")]
     exclude_patterns = [m.args[0] for m in exclude_markers if m.args]
-    cli_excludes = metafunc.config.getoption("--exclude-device", default=[])
+    cli_excludes = split_cli_patterns(metafunc.config.getoption("--exclude-device", default=[]))
     exclude_patterns.extend(cli_excludes)
     excluded_sns = set()
     for pattern in exclude_patterns:
         excluded_sns.update(devices.by_spec(pattern, []))
 
     # Resolve CLI --device includes to a set of allowed serial numbers (None = no filter)
-    cli_includes = metafunc.config.getoption("--device", default=[])
+    cli_includes = split_cli_patterns(metafunc.config.getoption("--device", default=[]))
     included_sns = None
     if cli_includes:
         included_sns = set()

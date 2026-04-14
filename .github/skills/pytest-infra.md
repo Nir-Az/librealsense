@@ -233,6 +233,43 @@ def test_long_running(test_device):
 - **Test log cuts off without result**: Exception killed the test before it could log the outcome — check for `-E-` error lines
 - **`ERROR` vs `FAILED` in pytest**: `ERROR` = fixture/setup failure, `FAILED` = test assertion failure. Both should appear in the report with clickable links.
 
+## Infra Regression Tests
+
+The `unit-tests/infra-tests/` directory contains regression tests for the pytest infrastructure itself. **No cameras or pyrealsense2 required** — only the hardware layer is mocked. These tests run on GHA for every PR.
+
+### Rules
+
+- **Every change to `conftest.py` or `rspy/pytest/*.py` must pass these tests.** Run `cd unit-tests && python -m pytest infra-tests/ -v` before pushing.
+- **Every new infra feature needs a corresponding test.** New marker? Add to `test_e2e_markers.py`. New CLI flag? Add to `test_e2e_cli_options.py`. Changed skip/fail logic? Add to `test_e2e_skip_fail.py`.
+
+### File layout
+
+| File | What it tests |
+|---|---|
+| `helpers.py` | Shared: fake device inventory, mock builders, `run_e2e()` subprocess runner |
+| `e2e_conftest.py` | Mock conftest copied into subprocess temp dirs (mocks hardware, exec()s real conftest) |
+| `test_collection.py` | `collection.py`: context gating, `--live` filtering, priority sorting, device grouping |
+| `test_device_helpers.py` | `device_helpers.py`: pattern matching, wildcards, excludes, CLI filters |
+| `test_cli.py` | `cli.py`: `-r`/`--regex` → `-k` translation |
+| `test_log_naming.py` | `logging_setup.py`: per-test log file naming |
+| `test_e2e_markers.py` | All custom markers registered without warnings |
+| `test_e2e_collection.py` | Context gating, `--live`, priority ordering in a real subprocess |
+| `test_e2e_device_each.py` | `@device_each` parametrization, excludes, CLI filters, test IDs |
+| `test_e2e_skip_fail.py` | `@device` fails vs `@device_each` skips when no match |
+| `test_e2e_cli_options.py` | All CLI flags accepted (`--device`, `--context`, `--live`, `--debug`, etc.) |
+| `test_e2e_port_management.py` | `enable_only()` called with correct serials and recycle flag |
+
+### How E2E tests work
+
+The E2E tests use `subprocess.run([sys.executable, "-m", "pytest", ...])` — same Python, same packages, works on CI. Each test:
+
+1. Copies `e2e_conftest.py` to a temp dir (mocks hardware, then `exec()`s the real `conftest.py`)
+2. Writes an inline test file with specific markers/assertions
+3. Runs pytest in the temp dir as a subprocess
+4. Parses the output for pass/fail/skip counts and `enable_only()` call logs
+
+This means the E2E tests exercise the **real** production code. If someone changes `module_device_setup`, `filter_and_sort_items`, `resolve_device_each_serials`, or any hook in `conftest.py` — these tests break.
+
 ### Comparing with baseline
 
 Always compare failing tests against a known-good build before dismissing failures:
