@@ -43,14 +43,24 @@ from rspy import device_hub
 try:
     import pyrealsense2 as rs
     log.d( rs )
-    hub = device_hub.create() # if there's no hub, this will hold None
-    sys.path = sys.path[:-1]  # remove what we added
 except ModuleNotFoundError:
     log.w( 'No pyrealsense2 library is available! Running as if no cameras available...' )
     import sys
     log.d( 'sys.path=', sys.path )
     rs = None
-    hub = None
+
+hub = None
+_hub_attempted = False
+
+def init_hub():
+    """Create the hub instance. Call after logging is configured so discovery prints are visible."""
+    global hub, _hub_attempted
+    if _hub_attempted:
+        return
+    _hub_attempted = True
+    hub = device_hub.create()
+    if pyrs_dir in sys.path:
+        sys.path.remove( pyrs_dir )
 
 import time
 
@@ -246,6 +256,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
     global rs
     if not rs:
         return
+    init_hub()
     #
     # Before we can start a context and query devices, we need to enable all the ports
     # on the hub, if any:
@@ -807,6 +818,7 @@ if __name__ == '__main__':
     if args:
         usage()
     try:
+        init_hub()
         if hub:
             if not hub.is_connected():
                 hub.connect()
@@ -866,6 +878,7 @@ if __name__ == '__main__':
             hub.recycle_ports()
     finally:
         # Disconnect from the hub -- if we don't it might crash on Linux...
-        hub.disconnect()
+        if hub:
+            hub.disconnect()
 
 

@@ -225,6 +225,9 @@ def pytest_configure(config):
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
 
+    # Create hub after logging is configured so discovery prints are visible
+    devices.init_hub()
+
     # Echo CLI device filters once (' '.join handles both repeated-flag and space-separated forms)
     exclude_list = config.getoption("--exclude-device", default=[])
     if exclude_list:

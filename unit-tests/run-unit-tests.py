@@ -550,6 +550,7 @@ try:
         if pyrs:
             sys.path.insert( 1, pyrs_path )  # Make sure we pick up the right pyrealsense2!
         from rspy import devices
+        devices.init_hub()
         register_signal_handlers(close_hubs)
         disable_dds = "dds" not in context
         devices.query( hub_reset = hub_reset, disable_dds = disable_dds, rslog = rslog ) #resets the device
