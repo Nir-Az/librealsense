@@ -50,13 +50,17 @@ except ModuleNotFoundError:
     rs = None
 
 hub = None
+_hub_attempted = False
 
 def init_hub():
     """Create the hub instance. Call after logging is configured so discovery prints are visible."""
-    global hub
-    if hub is None:
-        hub = device_hub.create()
-        sys.path = sys.path[:-1]  # remove what we added (pyrs_dir)
+    global hub, _hub_attempted
+    if _hub_attempted:
+        return
+    _hub_attempted = True
+    hub = device_hub.create()
+    if pyrs_dir in sys.path:
+        sys.path.remove( pyrs_dir )
 
 import time
 
@@ -252,6 +256,7 @@ def query( monitor_changes=True, hub_reset=False, recycle_ports=True, disable_dd
     global rs
     if not rs:
         return
+    init_hub()
     #
     # Before we can start a context and query devices, we need to enable all the ports
     # on the hub, if any:
@@ -873,6 +878,7 @@ if __name__ == '__main__':
             hub.recycle_ports()
     finally:
         # Disconnect from the hub -- if we don't it might crash on Linux...
-        hub.disconnect()
+        if hub:
+            hub.disconnect()
 
 
