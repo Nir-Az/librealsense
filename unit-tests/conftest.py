@@ -77,13 +77,15 @@ def pytest_addoption(parser):
         "--device",
         action="append",
         default=[],
-        help="Include only devices matching pattern (e.g., --device D455). Can be used multiple times."
+        help="Include only devices matching pattern (e.g., --device D455). "
+             "Can be used multiple times or with a space-separated value (--device 'D455 D435')."
     )
     group.addoption(
         "--exclude-device",
         action="append",
         default=[],
-        help="Exclude devices matching pattern (e.g., --exclude-device D455). Can be used multiple times."
+        help="Exclude devices matching pattern (e.g., --exclude-device D455). "
+             "Can be used multiple times or with a space-separated value (--exclude-device 'D555 D585S')."
     )
     group.addoption(
         "--context",
@@ -222,6 +224,14 @@ def pytest_configure(config):
     if repo.build:
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
+
+    # Echo CLI device filters once (' '.join handles both repeated-flag and space-separated forms)
+    exclude_list = config.getoption("--exclude-device", default=[])
+    if exclude_list:
+        print(f"-D- excluding devices: {' '.join(exclude_list)}")
+    include_list = config.getoption("--device", default=[])
+    if include_list:
+        print(f"-D- including only devices: {' '.join(include_list)}")
 
     # Query devices early for test parametrization
     try:
