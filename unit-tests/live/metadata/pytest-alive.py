@@ -78,8 +78,8 @@ def are_metadata_values_different(frame_queue, metadata_type_1, metadata_type_2,
         f = frame_queue.wait_for_frame()
         current_md_1_value = f.get_frame_metadata(metadata_type_1)
         current_md_2_value = f.get_frame_metadata(metadata_type_2)
-        log.debug(f"{metadata_type_1}: {current_md_1_value}")
-        log.debug(f"{metadata_type_2}: {current_md_2_value}")
+        log.info(f"{metadata_type_1}: {current_md_1_value}")
+        log.info(f"{metadata_type_2}: {current_md_2_value}")
         check.is_true(current_md_1_value != current_md_2_value,
                        f"Metadata values should differ: {metadata_type_1}={current_md_1_value}, {metadata_type_2}={current_md_2_value}")
         number_frames_to_test -= 1
@@ -96,9 +96,9 @@ def is_value_keep_increasing(frame_queue, metadata_type, number_frames_to_test=5
     while number_frames_to_test > 0:
         f = frame_queue.wait_for_frame()
         current_value = f.get_frame_metadata(metadata_type)
-        log.debug(f"metadata_type: {metadata_type}")
-        log.debug(f"prev_metadata_value: {prev_metadata_value}")
-        log.debug(f"current_value: {current_value}")
+        log.info(f"metadata_type: {metadata_type}")
+        log.info(f"prev_metadata_value: {prev_metadata_value}")
+        log.info(f"current_value: {current_value}")
         check.is_true(prev_metadata_value < current_value,
                        f"Metadata {metadata_type} not increasing: prev={prev_metadata_value}, current={current_value}")
         prev_metadata_value = current_value

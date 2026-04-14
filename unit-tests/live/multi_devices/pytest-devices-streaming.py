@@ -13,6 +13,7 @@ Requires 2 D400 series devices.
 
 import pytest
 import pyrealsense2 as rs
+from pytest_check import check
 from rspy.pytest.device_helpers import is_jetson_platform
 import time
 from collections import defaultdict
@@ -30,9 +31,10 @@ STREAM_DURATION_SEC = 10
 MAX_FRAME_DROP_PERCENTAGE = 5.0
 STABILIZATION_TIME_SEC = 3
 
+# Target resolutions to try in order of preference
 TARGET_RESOLUTIONS = [
-    (640, 480, 30),
-    (640, 360, 30),
+    (640, 480, 30),  # Standard VGA resolution
+    (640, 360, 30),  # Fallback for safety cameras and other devices
 ]
 
 
@@ -302,8 +304,8 @@ def test_multi_stream_operation(test_devices):
             for i, drop_pct in enumerate(drop_percentages, 1):
                 log.warning(f"  Device {i} drop rate: {drop_pct:.2f}% (max: {MAX_FRAME_DROP_PERCENTAGE}%)")
 
-        assert success, \
-            f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices"
+        check.is_true(success,
+            f"Multi-stream operation should have <{MAX_FRAME_DROP_PERCENTAGE}% drops on all devices")
 
         # Verify stream independence: Check that each stream type received adequate frames
         # (at least 80% of expected based on actual duration and configured FPS)
@@ -322,5 +324,5 @@ def test_multi_stream_operation(test_devices):
         else:
             log.warning("FAIL - Some streams received fewer frames than expected")
 
-        assert all_streams_ok, \
-            "All streams should receive frames independently without interference"
+        check.is_true(all_streams_ok,
+            "All streams should receive frames independently without interference")

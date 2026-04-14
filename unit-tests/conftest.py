@@ -368,10 +368,7 @@ def module_device_setup(request):
                                                   cli_excludes=request.config.getoption("--exclude-device", default=[]))
             expected_count = len(multi_device_marker.args)
             if len(serial_numbers) < expected_count:
-                if had_candidates:
-                    pytest.fail(f"Need {expected_count} devices but only {len(serial_numbers)} matched after exclusions")
-                else:
-                    pytest.fail(f"Need {expected_count} devices but only {len(serial_numbers)} found")
+                pytest.fail(f"Need {expected_count} devices but only {len(serial_numbers)} found")
 
             # Enable all matched devices, recycle, and yield the list of SNs
             names = [f"{devices.get(sn).name} [{sn}]" for sn in serial_numbers]

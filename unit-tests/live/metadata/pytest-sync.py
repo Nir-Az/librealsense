@@ -126,12 +126,12 @@ def run_test(device, ctx, resolution, fps):
             log.debug(f"Global TS - Depth:{depth_frame.timestamp}, IR1:{ir1_frame.timestamp}, "
                        f"IR2:{ir2_frame.timestamp}, Color:{color_frame.timestamp}")
 
-            check.less_equal(abs(depth_frame.timestamp - ir1_frame.timestamp), TS_TOLERANCE_MS,
-                f"Depth-IR1 timestamp diff {abs(depth_frame.timestamp - ir1_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
-            check.less_equal(abs(depth_frame.timestamp - ir2_frame.timestamp), TS_TOLERANCE_MS,
-                f"Depth-IR2 timestamp diff {abs(depth_frame.timestamp - ir2_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
-            check.less_equal(abs(depth_frame.timestamp - color_frame.timestamp), TS_TOLERANCE_MS,
-                f"Depth-Color timestamp diff {abs(depth_frame.timestamp - color_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
+            check.almost_equal(depth_frame.timestamp, ir1_frame.timestamp, abs=TS_TOLERANCE_MS,
+                msg=f"Depth-IR1 timestamp diff {abs(depth_frame.timestamp - ir1_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
+            check.almost_equal(depth_frame.timestamp, ir2_frame.timestamp, abs=TS_TOLERANCE_MS,
+                msg=f"Depth-IR2 timestamp diff {abs(depth_frame.timestamp - ir2_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
+            check.almost_equal(depth_frame.timestamp, color_frame.timestamp, abs=TS_TOLERANCE_MS,
+                msg=f"Depth-Color timestamp diff {abs(depth_frame.timestamp - color_frame.timestamp):.3f}ms exceeds tolerance {TS_TOLERANCE_MS}ms")
 
             # Test frame metadata timestamps if supported
             if all(f.supports_frame_metadata(rs.frame_metadata_value.frame_timestamp) for f in frames_dict.values()):
@@ -141,12 +141,12 @@ def run_test(device, ctx, resolution, fps):
                 log.debug(f"Frame TS - Depth:{frame_timestamps['depth']}, IR1:{frame_timestamps['ir1']}, "
                            f"IR2:{frame_timestamps['ir2']}, Color:{frame_timestamps['color']}")
 
-                check.less_equal(abs(frame_timestamps['depth'] - frame_timestamps['ir1']), TS_TOLERANCE_MICROSEC,
-                    f"Depth-IR1 frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
-                check.less_equal(abs(frame_timestamps['depth'] - frame_timestamps['ir2']), TS_TOLERANCE_MICROSEC,
-                    f"Depth-IR2 frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
-                check.less_equal(abs(frame_timestamps['depth'] - frame_timestamps['color']), TS_TOLERANCE_MICROSEC,
-                    f"Depth-Color frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
+                check.almost_equal(frame_timestamps['depth'], frame_timestamps['ir1'], abs=TS_TOLERANCE_MICROSEC,
+                    msg=f"Depth-IR1 frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
+                check.almost_equal(frame_timestamps['depth'], frame_timestamps['ir2'], abs=TS_TOLERANCE_MICROSEC,
+                    msg=f"Depth-IR2 frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
+                check.almost_equal(frame_timestamps['depth'], frame_timestamps['color'], abs=TS_TOLERANCE_MICROSEC,
+                    msg=f"Depth-Color frame TS diff exceeds tolerance {TS_TOLERANCE_MICROSEC}us")
     finally:
         pipeline.stop()
 
