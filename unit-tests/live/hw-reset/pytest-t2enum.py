@@ -18,6 +18,7 @@ pytestmark = [
 ]
 
 dev = None
+target_sn = None   # cached once before hardware_reset() - the removed dev handle cannot be queried safely
 device_removed = False
 device_added = False
 MAX_ENUM_TIME_D400 = 7 # [sec]
@@ -25,33 +26,33 @@ MAX_ENUM_TIME_D500 = 15 # [sec]
 
 def device_changed( info ):
     global dev, device_removed, device_added
-    if info.was_removed(dev):
+    if dev and info.was_removed( dev ):
         log.info( "Device removal detected at: %s", time.perf_counter() )
         device_removed = True
     for new_dev in info.get_new_devices():
-        added_sn = new_dev.get_info(rs.camera_info.serial_number)
-        tested_dev_sn = dev.get_info(rs.camera_info.serial_number)
-        if added_sn == tested_dev_sn:
+        if new_dev.get_info( rs.camera_info.serial_number ) == target_sn:
             log.info( "Device addition detected at: %s", time.perf_counter() )
             device_added = True
 
 def get_max_enum_time_by_device( dev ):
-    if dev.get_info( rs.camera_info.product_line ) == "D400":
+    product_line = dev.get_info( rs.camera_info.product_line )
+    if product_line == "D400":
         return MAX_ENUM_TIME_D400
-    elif dev.get_info( rs.camera_info.product_line ) == "D500":
-        if dev.get_info( rs.camera_info.connection_type) == "DDS":
+    elif product_line == "D500":
+        if dev.supports( rs.camera_info.connection_type ) and dev.get_info( rs.camera_info.connection_type ) == "DDS":
             return MAX_ENUM_TIME_D500 + 3  # some extra time for discovery and initialization for DDS
         return MAX_ENUM_TIME_D500
     return 0
 
 
 def test_hw_reset_to_enumeration_time( test_device ):
-    global dev, device_removed, device_added
+    global dev, target_sn, device_removed, device_added
     device_removed = False
     device_added = False
 
     # get max enumeration time per device
     dev, ctx = test_device
+    target_sn = dev.get_info( rs.camera_info.serial_number )
     ctx.set_devices_changed_callback( device_changed )
 
     max_dev_enum_time = get_max_enum_time_by_device( dev )
@@ -71,7 +72,7 @@ def test_hw_reset_to_enumeration_time( test_device ):
     assert device_removed and not t.has_expired() # verifying we are not timed out
 
     log.info( "Pending for device addition" )
-    buffer = 5 # we add 5 seconds so if the test pass the creteria by a short amount of time we can print it
+    buffer = 5 # we add 5 seconds so if the test pass the criteria by a short amount of time we can print it
     t = Timer( max_dev_enum_time + buffer )
     r_2_e_time = 0 # reset to enumeration time
     while not t.has_expired():
