@@ -113,11 +113,11 @@ def make_mock_config(context="", live=False, markexpr=""):
     return config
 
 
-def make_device_marker(name, pattern):
+def make_device_marker(name, *patterns):
     """Build a mock marker (device/device_each/device_exclude) for find_matching_devices tests."""
     m = MagicMock()
     m.name = name
-    m.args = (pattern,)
+    m.args = patterns
     return m
 
 

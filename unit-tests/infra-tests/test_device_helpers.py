@@ -14,7 +14,7 @@ Verifies how device markers resolve to serial numbers:
 """
 
 import pytest
-from rspy.pytest.device_helpers import find_matching_devices
+from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi
 from helpers import fake_by_spec, fake_get, make_device_marker
 
 
@@ -81,3 +81,68 @@ class TestFindMatchingDevices:
                    make_device_marker('device_each', 'D400*')]
         sns, _ = find_matching_devices(markers, each=True)
         assert sns.count('111') == 1
+
+
+class TestFindMatchingDevicesMulti:
+    """Multi-device marker resolution: device("D400*", "D400*") etc."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_devices(self):
+        import rspy.devices as dev
+        orig_by_spec, orig_get = dev.by_spec, dev.get
+        dev.by_spec, dev.get = fake_by_spec, fake_get
+        yield
+        dev.by_spec, dev.get = orig_by_spec, orig_get
+
+    def test_two_d400_devices(self):
+        """device("D400*", "D400*") should return 2 unique D400 serial numbers."""
+        markers = [make_device_marker('device', 'D400*', 'D400*')]
+        sns, had = find_matching_devices_multi(markers)
+        assert len(sns) == 2
+        assert sns[0] != sns[1]
+        assert had is True
+
+    def test_d400_plus_d500(self):
+        """device("D400*", "D500*") should return one D400 and one D500."""
+        from helpers import DEVICES
+        markers = [make_device_marker('device', 'D400*', 'D500*')]
+        sns, had = find_matching_devices_multi(markers)
+        assert len(sns) == 2
+        d400_sns = {sn for name, (sn, pl) in DEVICES.items() if pl == 'D400'}
+        d500_sns = {sn for name, (sn, pl) in DEVICES.items() if pl == 'D500'}
+        assert sns[0] in d400_sns
+        assert sns[1] in d500_sns
+
+    def test_specific_devices(self):
+        """device("D455", "D435") should return exact matches."""
+        markers = [make_device_marker('device', 'D455', 'D435')]
+        sns, _ = find_matching_devices_multi(markers)
+        assert sns == ['111', '222']
+
+    def test_three_devices(self):
+        """device("D400*", "D400*", "D400*") should return 3 unique D400 devices."""
+        markers = [make_device_marker('device', 'D400*', 'D400*', 'D400*')]
+        sns, _ = find_matching_devices_multi(markers)
+        assert len(sns) == 3
+        assert len(set(sns)) == 3  # all unique
+
+    def test_insufficient_devices(self):
+        """device("D500*", "D500*", "D500*") with only 2 D500 devices should return fewer than requested."""
+        markers = [make_device_marker('device', 'D500*', 'D500*', 'D500*')]
+        sns, had = find_matching_devices_multi(markers)
+        assert len(sns) < 3  # only D515 and D555 exist, requested 3
+        assert had is True
+
+    def test_with_exclusion(self):
+        """device("D400*", "D400*") + device_exclude("D455") should skip D455."""
+        markers = [make_device_marker('device', 'D400*', 'D400*'),
+                   make_device_marker('device_exclude', 'D455')]
+        sns, _ = find_matching_devices_multi(markers)
+        assert len(sns) == 2
+        assert '111' not in sns  # D455 serial excluded
+
+    def test_no_device_marker(self):
+        """No device marker should return empty."""
+        markers = [make_device_marker('device_exclude', 'D455')]
+        sns, had = find_matching_devices_multi(markers)
+        assert sns == [] and had is False

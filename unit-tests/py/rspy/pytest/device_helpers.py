@@ -131,6 +131,75 @@ def resolve_device_each_serials(metafunc):
         metafunc.parametrize("_test_device_serial", all_serials, ids=ids, scope="function")
 
 
+def find_matching_devices_multi(device_markers, cli_includes=None, cli_excludes=None):
+    """Resolve a multi-device marker into a list of unique serial numbers.
+
+    Supports device("D400*", "D400*") meaning "need 2 unique D400 devices",
+    or device("D400*", "D500*") meaning "need one D400 and one D500".
+    Each spec grabs a unique device not already taken by a previous spec
+    (same logic as legacy devices.by_configuration).
+
+    Returns (matching_sns, had_candidates):
+        matching_sns: list of serial numbers, one per spec
+        had_candidates: True if any devices matched before exclusions
+    """
+    if cli_includes is None:
+        cli_includes = []
+    if cli_excludes is None:
+        cli_excludes = []
+
+    # Resolve exclusion patterns
+    exclude_patterns = []
+    for marker in device_markers:
+        if marker.name == 'device_exclude' and marker.args:
+            exclude_patterns.append(marker.args[0])
+    exclude_patterns.extend(cli_excludes)
+
+    excluded_sns = set()
+    for pattern in exclude_patterns:
+        excluded_sns.update(devices.by_spec(pattern, []))
+
+    # Resolve CLI includes
+    included_sns = None
+    if cli_includes:
+        included_sns = set()
+        for inc in cli_includes:
+            included_sns.update(devices.by_spec(inc, []))
+
+    # Find the multi-device marker (only one expected)
+    specs = []
+    for marker in device_markers:
+        if marker.name == 'device' and marker.args:
+            specs = list(marker.args)
+            break
+
+    if not specs:
+        return [], False
+
+    # Resolve each spec to a unique device (like legacy by_configuration)
+    matching_sns = []
+    taken = set()
+    had_candidates = False
+
+    for spec in specs:
+        found = False
+        for sn in devices.by_spec(spec, []):
+            had_candidates = True
+            if sn in excluded_sns or sn in taken:
+                continue
+            if included_sns is not None and sn not in included_sns:
+                continue
+            matching_sns.append(sn)
+            taken.add(sn)
+            found = True
+            log.debug(f"  Spec '{spec}' matched: {devices.get(sn).name} ({sn})")
+            break
+        if not found:
+            log.debug(f"  Spec '{spec}' found no available device")
+
+    return matching_sns, had_candidates
+
+
 def is_jetson_platform():
     """Detect NVIDIA Jetson — some tests behave differently on embedded platforms."""
     try:
