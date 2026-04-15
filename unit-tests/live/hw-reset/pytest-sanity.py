@@ -29,12 +29,9 @@ def device_changed( info ):
         device_removed_time = time.perf_counter()
         device_removed = True
     for new_dev in info.get_new_devices():
-        try:
-            if new_dev.get_info( rs.camera_info.serial_number ) == target_sn:
-                device_added_time = time.perf_counter()
-                device_added = True
-        except RuntimeError:
-            continue
+        if new_dev.get_info( rs.camera_info.serial_number ) == target_sn:
+            device_added_time = time.perf_counter()
+            device_added = True
 
 
 def test_hw_reset_sanity( test_device ):
