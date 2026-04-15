@@ -289,29 +289,34 @@ namespace librealsense
         static size_t getCdrSerializedSize(const cdr_uint32&, size_t = 0) { return sizeof(uint32_t); }
     };
 
-    // Lazily allocate or grow a rcutils uint8 array.
-    // ros2_writer reuses buffers across calls; ros2_reader allocates fresh to avoid
-    // overwriting a previous message still being processed.
+    inline std::shared_ptr<rcutils_uint8_array_t> create_buffer(size_t size)
+    {
+        auto buffer = std::shared_ptr<rcutils_uint8_array_t>(new rcutils_uint8_array_t(),
+            [](rcutils_uint8_array_t* arr) {
+                if (arr) {
+                    rcutils_ret_t ret = rcutils_uint8_array_fini(arr);
+                    (void)ret; // Cast to void to suppress unused warning
+                }
+                delete arr;
+            });
+
+        rcutils_allocator_t alloc = rcutils_get_default_allocator();
+        auto ret = rcutils_uint8_array_init(buffer.get(), size, &alloc);
+        if (ret != RCUTILS_RET_OK)
+            throw std::runtime_error("Failed to initialize rosbag2 buffer");
+
+        return buffer;
+    }
+
+    // Make sure `buf` has at least `size` bytes. Allocates on first call, grows if too small, otherwise reuses as is.
     inline std::shared_ptr<rcutils_uint8_array_t>& ensure_buffer_capacity(
         std::shared_ptr<rcutils_uint8_array_t>& buf, size_t size)
     {
         if (!buf)
-        {
-            buf = std::shared_ptr<rcutils_uint8_array_t>(new rcutils_uint8_array_t(),
-                [](rcutils_uint8_array_t* arr) {
-                    auto ret = rcutils_uint8_array_fini(arr);
-                    (void)ret;
-                    delete arr;
-                });
-            rcutils_allocator_t alloc = rcutils_get_default_allocator();
-            if (rcutils_uint8_array_init(buf.get(), size, &alloc) != RCUTILS_RET_OK)
-                throw std::runtime_error("Failed to initialize rcutils uint8 array");
-        }
-        else if (buf->buffer_capacity < size)
-        {
+            buf = create_buffer(size);  // no buffer yet
+        else if (buf->buffer_capacity < size)  // buffer too small
             if (rcutils_uint8_array_resize(buf.get(), size) != RCUTILS_RET_OK)
-                throw std::runtime_error("Failed to resize rcutils uint8 array");
-        }
+                throw std::runtime_error("Failed to resize rosbag2 buffer");
         return buf;
     }
 }

@@ -1201,6 +1201,12 @@ namespace librealsense
         return _storage->has_next();
     }
 
+    static bool is_zstd_compressed(const uint8_t* src, size_t src_size)
+    {
+        // Zstd frame magic number: 0xFD2FB528 (little-endian)
+        return src_size >= 4 && src[0] == 0x28 && src[1] == 0xB5 && src[2] == 0x2F && src[3] == 0xFD;
+    }
+
     void ros2_reader::decompress_if_needed(std::shared_ptr<rosbag2_storage::SerializedBagMessage>& msg)
     {
         if (!msg || !msg->serialized_data || !msg->serialized_data->buffer || msg->serialized_data->buffer_length == 0)
@@ -1209,8 +1215,7 @@ namespace librealsense
         auto src = msg->serialized_data->buffer;
         auto src_size = msg->serialized_data->buffer_length;
 
-        // Zstd frame magic number: 0xFD2FB528 (little-endian)
-        if (src_size < 4 || src[0] != 0x28 || src[1] != 0xB5 || src[2] != 0x2F || src[3] != 0xFD)
+        if (!is_zstd_compressed(src, src_size))
             return;
 
         auto frame_content_size = ZSTD_getFrameContentSize(src, src_size);
@@ -1226,11 +1231,11 @@ namespace librealsense
 
         auto decompressed_size = static_cast<size_t>(frame_content_size);
 
-        // Fresh buffer per call: callers (e.g. create_frame -> read_frame_metadata) can
-        // hold onto msg->serialized_data across a subsequent decompress, so a reusable
-        // member buffer would silently overwrite in-flight data.
-        std::shared_ptr<rcutils_uint8_array_t> out;
-        ensure_buffer_capacity(out, decompressed_size);
+        // We create a new buffer for the decompressed data each time. We could use
+        // a reusable member buffer like the writer does, but here the frame data may
+        // still be in use when the metadata is read next and overwrite it — allowing
+        // it to reallocate for simplicity for now.
+        auto out = create_buffer(decompressed_size);
 
         auto result = ZSTD_decompress(out->buffer, out->buffer_capacity, src, src_size);
         if (ZSTD_isError(result))
