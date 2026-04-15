@@ -14,7 +14,7 @@ add_executable(rs-embed
 
 set_property(TARGET rs-embed PROPERTY CXX_STANDARD 11)
 
-include_directories(rs-embed ../../third-party)
+target_include_directories(rs-embed PRIVATE ../../third-party)
 target_link_libraries( rs-embed PRIVATE tclap rs_lz4 )
 set_target_properties (rs-embed PROPERTIES FOLDER Tools)
 

@@ -41,9 +41,9 @@ add_library(${REALSENSE_FILE_TARGET} STATIC
 
 target_compile_features(${REALSENSE_FILE_TARGET} PUBLIC cxx_std_14)
 
-target_include_directories(${REALSENSE_FILE_TARGET} PUBLIC
-        "$<BUILD_INTERFACE:${ROSBAG_HEADER_DIRS}>"
-)
+foreach(_dir ${ROSBAG_HEADER_DIRS})
+    target_include_directories(${REALSENSE_FILE_TARGET} PUBLIC $<BUILD_INTERFACE:${_dir}>)
+endforeach()
 
 disable_third_party_warnings(${REALSENSE_FILE_TARGET})
 
@@ -65,7 +65,7 @@ if(BUILD_ROSBAG2)
     add_dependencies(${REALSENSE_FILE_TARGET} yaml_cpp)
 endif()
 
-target_link_libraries(${REALSENSE_FILE_TARGET} PRIVATE rs_lz4)
+target_link_libraries(${REALSENSE_FILE_TARGET} PUBLIC rs_lz4)
 if(BUILD_ROSBAG2)
     target_link_libraries(${REALSENSE_FILE_TARGET} PRIVATE sqlite3_lib)
 endif()
@@ -76,10 +76,7 @@ set_target_properties (${REALSENSE_FILE_TARGET} PROPERTIES FOLDER Library)
 
 set(CMAKECONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/../cmake/realsense2")
 
-set(_install_targets ${REALSENSE_FILE_TARGET})
-if(NOT USE_EXTERNAL_LZ4)
-    list(APPEND _install_targets rs_lz4)
-endif()
+set(_install_targets ${REALSENSE_FILE_TARGET} rs_lz4)
 if(BUILD_ROSBAG2)
     list(APPEND _install_targets sqlite3_lib)
 endif()
