@@ -22,6 +22,7 @@ pytestmark = [
     pytest.mark.device_exclude("D585S"),
     pytest.mark.device_exclude("D555"),
     pytest.mark.context("nightly"),
+    pytest.mark.timeout(3600),
 ]
 
 STRESS_ITERATIONS              = 100
@@ -63,7 +64,6 @@ def get_max_enum_time( d ):
     return MAX_ENUM_TIME_D400  # safe fallback
 
 
-@pytest.mark.timeout(3600)
 def test_hw_reset_stress( test_device, test_context_var ):
     global dev, target_sn, is_dds, device_removed, device_added
 
