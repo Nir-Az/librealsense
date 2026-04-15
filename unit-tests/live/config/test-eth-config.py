@@ -64,6 +64,7 @@ with test.closure("Test link timeout configuration"):
             test.check_exception( e, ValueError, "Link timeout must be divisible by 100. Current 2345" )
         else:
             test.unreachable()
+    new_config.link.timeout = orig_config.link.timeout # Restore field that might fail other tests, depending header version.
 
 with test.closure("Test MTU configuration"):
     new_config.link.mtu = 4000
