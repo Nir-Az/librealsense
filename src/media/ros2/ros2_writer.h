@@ -32,7 +32,6 @@ namespace librealsense
         void write_frame_metadata(const stream_identifier& stream_id, const nanoseconds& timestamp, frame_interface* frame);
         void write_string( std::string const & topic, const device_serializer::nanoseconds & ts, std::string const & payload );
         void ensure_topic( const std::string & name, const std::string & type );
-        std::shared_ptr<rcutils_uint8_array_t> create_buffer(size_t size) const;
 
         void write_notification(const sensor_identifier& sensor_id, const nanoseconds& timestamp, const notification& n) override;
         void write_extrinsics(const stream_identifier& stream_id, uint32_t reference_id, const rs2_extrinsics& ext) override;
@@ -68,9 +67,9 @@ namespace librealsense
         template<typename T>
         void write_message(const std::string& topic, const std::string& msg_type, const nanoseconds& timestamp, const T& data)
         {
-            // Serialize
+            // Serialize into reusable CDR buffer — avoids per-message malloc on the hot path
             auto total_size = T::getCdrSerializedSize(data) + CDR_HEADER_SIZE;
-            auto buffer = create_buffer(total_size);
+            auto& buffer = ensure_buffer_capacity(_cdr_buf, total_size);
             eprosima::fastcdr::FastBuffer fb(reinterpret_cast<char*>(buffer->buffer), total_size);
             eprosima::fastcdr::Cdr cdr(fb, eprosima::fastcdr::Cdr::DEFAULT_ENDIAN, eprosima::fastcdr::Cdr::DDS_CDR);
             cdr.serialize_encapsulation();
@@ -80,14 +79,21 @@ namespace librealsense
             // Write to storage
             ensure_topic(topic, msg_type);
             auto msg = std::make_shared<rosbag2_storage::SerializedBagMessage>();
-            msg->serialized_data = buffer;
+            msg->serialized_data = _compress ? compress_buffer(buffer) : buffer;
             msg->time_stamp = static_cast<rcutils_time_point_value_t>(timestamp.count());
             msg->topic_name = topic;
             _storage->write(msg);
         }
 
+        std::shared_ptr<rcutils_uint8_array_t> compress_buffer(const std::shared_ptr<rcutils_uint8_array_t>& input);
+
         static uint8_t is_big_endian();
         std::string m_file_path;
+        bool _compress = false;
+        // Reused across calls. Safe only while _storage->write() stays synchronous
+        // (sqlite binds SQLITE_STATIC and drops the ref in execute_and_reset).
+        std::shared_ptr<rcutils_uint8_array_t> _cdr_buf;
+        std::shared_ptr<rcutils_uint8_array_t> _compress_buf;
         std::map< std::string, rosbag2_storage::TopicMetadata > _topics; // created topics cache
         std::shared_ptr< rosbag2_storage::storage_interfaces::ReadWriteInterface > _storage;
         std::map<uint32_t, std::set<rs2_option>> m_written_options_descriptions;

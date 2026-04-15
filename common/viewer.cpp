@@ -2638,12 +2638,12 @@ namespace rs2
 
                     ImGui::Text("ROS-bag Compression:");
                     int recording_compression = temp_cfg.get(configurations::record::compression_mode);
-                    if (ImGui::RadioButton("Always Compress (might cause frame drops)", recording_compression == 0))
+                    if (ImGui::RadioButton("Always Compress (only playable using the SDK, might cause frame drops)", recording_compression == 0))
                     {
                         recording_compression = 0;
                         temp_cfg.set(configurations::record::compression_mode, recording_compression);
                     }
-                    if (ImGui::RadioButton("Never Compress (larger .bag file size)", recording_compression == 1))
+                    if (ImGui::RadioButton("Never Compress (larger file size)", recording_compression == 1))
                     {
                         recording_compression = 1;
                         temp_cfg.set(configurations::record::compression_mode, recording_compression);

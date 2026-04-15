@@ -158,6 +158,7 @@ set(ROSBAG2_HEADER_DIRS
     ${CMAKE_CURRENT_LIST_DIR}/rosbag2_storage/include/
     ${CMAKE_CURRENT_LIST_DIR}/rosbag2_storage_default_plugins/include/
     ${CMAKE_CURRENT_LIST_DIR}/tinyxml2/
+    ${CMAKE_CURRENT_LIST_DIR}/zstd/
     ${HEADER_DIR_SQLITE3}
     ${HEADER_DIR_YAML_CPP}
 )
