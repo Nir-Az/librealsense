@@ -5,6 +5,7 @@
 
 import pytest
 import pyrealsense2 as rs
+from rspy import devices
 from rspy.timer import Timer
 from rspy.stopwatch import Stopwatch
 import time
@@ -30,15 +31,11 @@ STRESS_ITERATIONS_DDS          =  50
 STRESS_ITERATIONS_NIGHTLY      =  10
 STRESS_ITERATIONS_NIGHTLY_DDS  =   5
 REMOVAL_TIMEOUT        = 10   # [sec] max wait for any device event after reset
-MAX_ENUM_TIME_D400     = 10   # [sec] increased vs single-shot KPI to allow for slower reconnects after rapid resets
-MAX_ENUM_TIME_D500     = 15   # [sec]
-MAX_ENUM_TIME_D500_DDS = 18   # [sec] extra time for DDS discovery / initialization
 
 dev             = None   # current live handle - used for hardware_reset() and serial-number matching
 device_removed  = False
 device_added    = False
 target_sn       = None   # serial number of the device under test - set once, never changes
-is_dds          = False  # set once at test start; consulted by get_max_enum_time
 
 
 def device_changed( info ):
@@ -55,17 +52,8 @@ def device_changed( info ):
             continue
 
 
-def get_max_enum_time( d ):
-    pl = d.get_info( rs.camera_info.product_line )
-    if pl == "D400":
-        return MAX_ENUM_TIME_D400
-    if pl == "D500":
-        return MAX_ENUM_TIME_D500_DDS if is_dds else MAX_ENUM_TIME_D500  # is_dds: module-level
-    return MAX_ENUM_TIME_D400  # safe fallback
-
-
 def test_hw_reset_stress( test_device, test_context_var ):
-    global dev, target_sn, is_dds, device_removed, device_added
+    global dev, target_sn, device_removed, device_added
 
     dev, ctx = test_device
     target_sn = dev.get_info( rs.camera_info.serial_number )
@@ -78,7 +66,7 @@ def test_hw_reset_stress( test_device, test_context_var ):
         iterations = STRESS_ITERATIONS_DDS          if is_dds else STRESS_ITERATIONS
     else:
         iterations = STRESS_ITERATIONS_NIGHTLY_DDS  if is_dds else STRESS_ITERATIONS_NIGHTLY
-    max_enum    = get_max_enum_time( dev )
+    max_enum    = devices.MAX_ENUMERATION_TIME
     conn_type   = "DDS" if is_dds else "USB/GMSL"
 
     log.info( f"Running {iterations} HW-reset iterations on {conn_type} device "

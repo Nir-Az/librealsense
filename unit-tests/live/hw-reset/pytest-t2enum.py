@@ -3,6 +3,7 @@
 
 import pytest
 import pyrealsense2 as rs
+from rspy import devices
 from rspy.timer import Timer
 from rspy.stopwatch import Stopwatch
 import time
@@ -21,8 +22,7 @@ dev = None
 target_sn = None   # cached once before hardware_reset() - the removed dev handle cannot be queried safely
 device_removed = False
 device_added = False
-MAX_ENUM_TIME_D400 = 7 # [sec]
-MAX_ENUM_TIME_D500 = 15 # [sec]
+MAX_ENUM_TIME_D400 = 7 # [sec] tight per-D400 KPI to catch enumeration regressions
 
 def device_changed( info ):
     global dev, device_removed, device_added
@@ -39,9 +39,7 @@ def get_max_enum_time_by_device( dev ):
     if product_line == "D400":
         return MAX_ENUM_TIME_D400
     elif product_line == "D500":
-        if dev.supports( rs.camera_info.connection_type ) and dev.get_info( rs.camera_info.connection_type ) == "DDS":
-            return MAX_ENUM_TIME_D500 + 3  # some extra time for discovery and initialization for DDS
-        return MAX_ENUM_TIME_D500
+        return devices.MAX_ENUMERATION_TIME  # covers both USB/GMSL and DDS variants
     return 0
 
 
