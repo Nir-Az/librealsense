@@ -16,15 +16,16 @@ DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
 expected_colors = {
-    "red":   (132, 60, 60),
-    "green": (40, 84, 72),
-    "blue":  (20, 67, 103),
-    "black": (35, 35, 35),
-    "white": (150, 150, 150),
-    "gray": (90, 90, 90),
-    "purple": (56, 72, 98),
-    "orange": (136, 86, 70),
-    "yellow": (166, 142, 80),
+    # All expected values are empirical means across 10 camera instances
+    "red":   (175, 77, 82),
+    "green": (64, 123, 95),
+    "blue":  (26, 104, 146),
+    "black": (50, 50, 46),
+    "white": (183, 184, 186),
+    "gray":  (121, 129, 130),
+    "purple": (69, 77, 109),
+    "orange": (182, 94, 83),
+    "yellow": (199, 178, 85),
 }
 # list of color names in insertion order -> used left->right, top->bottom
 color_names = list(expected_colors.keys())
@@ -57,8 +58,9 @@ def draw_debug(frame_bgr, a4_page_bgr):
     for i, (cx, cy) in enumerate(centers):
         cx_i, cy_i = int(round(cx)), int(round(cy))
         lbl = color_names[i] if i < len(color_names) else str(i)
-        # white marker with black text for readability
-        cv2.circle(a4_page_bgr, (cx_i, cy_i), 10, (255, 255, 255), -1)
+        # marker in the expected color for visual reference
+        expected_rgb = expected_colors.get(lbl, (255, 255, 255))
+        cv2.circle(a4_page_bgr, (cx_i, cy_i), 10, expected_rgb[::-1], -1)  # RGB -> BGR
         cv2.putText(a4_page_bgr, lbl, (cx_i + 12, cy_i + 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
 
@@ -73,6 +75,7 @@ def draw_debug(frame_bgr, a4_page_bgr):
 
 def run_test(resolution, fps):
     color_match_count = {color: 0 for color in expected_colors.keys()}
+    color_sums = {color: np.zeros(3, dtype=int) for color in expected_colors.keys()}
     pipeline = rs.pipeline(ctx)
     cfg = rs.config()
     cfg.enable_stream(rs.stream.color, resolution[0], resolution[1], rs.format.bgr8, fps)
@@ -107,6 +110,7 @@ def run_test(resolution, fps):
                 y = int(round(y))
                 b, g, r = (int(v) for v in color_frame_roi[y, x])  # stream is BGR, convert to RGB
                 pixel = (r, g, b)
+                color_sums[color] += pixel
                 if is_color_close(pixel, expected_rgb, COLOR_TOLERANCE):
                     color_match_count[color] += 1
                 else:
@@ -124,7 +128,8 @@ def run_test(resolution, fps):
         # check colors sampled correctly
         min_passes = int(NUM_FRAMES * FRAMES_PASS_THRESHOLD)
         for name, count in color_match_count.items():
-            log.i(f"{name.title()} passed in {count}/{NUM_FRAMES} frames")
+            avg = tuple(int(v) for v in color_sums[name] // NUM_FRAMES)
+            log.i(f"{name.title()} passed in {count}/{NUM_FRAMES} frames  avg={avg} expected={expected_colors[name]}")
             test.check(count >= min_passes)
 
         if test.test_failed and last_frame_bgr is not None:
