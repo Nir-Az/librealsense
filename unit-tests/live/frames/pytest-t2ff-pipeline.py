@@ -65,6 +65,11 @@ def test_pipeline_first_depth_frame_delay(pipeline_device):
 
     assert frame_delay < max_delay, \
         f"Depth frame delay {frame_delay:.3f}s exceeds maximum {max_delay:.1f}s"
+    
+    # Allow some time to close the depth pipe completely, stream stops when DDS reader closure is detected by device
+    dds_dev = dev.supports(rs.camera_info.connection_type) and dev.get_info(rs.camera_info.connection_type) == "DDS"
+    if dds_dev:
+        time.sleep(1)
 
 
 def test_pipeline_first_color_frame_delay(pipeline_device):
@@ -75,10 +80,6 @@ def test_pipeline_first_color_frame_delay(pipeline_device):
 
     if any(model in product_name for model in ['D421', 'D405', 'D430', 'D401']):
         pytest.skip(f"Device {product_name} has no color sensor")
-
-    # Allow HKR some time to close the depth pipe completely (runs after depth test)
-    if 'D555' in product_name:
-        time.sleep(1)
 
     log.info(f"Testing pipeline first color frame delay on {product_name} device - {os_name} OS")
 
