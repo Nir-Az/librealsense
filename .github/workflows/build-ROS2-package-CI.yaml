@@ -17,7 +17,7 @@ jobs:
       matrix:
         ros_distribution:
           - humble
-          - iron
+          - kilted
           - rolling
           - jazzy
 
@@ -26,9 +26,9 @@ jobs:
           - docker_image: ubuntu:jammy
             ros_distribution: humble
 
-          # Iron Irwini
-          - docker_image: ubuntu:jammy
-            ros_distribution: iron
+          # Kilted Kaiju
+          - docker_image: ubuntu:noble
+            ros_distribution: kilted
 
           # Rolling Ridley
           - docker_image: ubuntu:noble
