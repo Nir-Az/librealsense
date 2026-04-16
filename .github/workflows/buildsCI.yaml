@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Install
       run: pip3 install pytest pytest-retry pytest-timeout pytest-repeat
@@ -40,7 +40,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Enable Long Paths
       shell: powershell
@@ -82,7 +82,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Enable Long Paths
       shell: powershell
@@ -124,8 +124,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-    - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
       with:
        python-version: '3.9'
 
@@ -184,8 +184,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-    - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
       with:
        python-version: '3.9'
 
@@ -233,8 +233,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
       with:
        python-version: '3.9'
 
@@ -277,8 +277,8 @@ jobs:
     timeout-minutes: 60
       
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
-    - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 #v5
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
       with:
        python-version: '3.9'
 
@@ -328,7 +328,7 @@ jobs:
     name: ${{ matrix.name }}_ST_Py_EX_CfU
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Install CMake 4
       if: matrix.os == 'ubuntu-24.04'
@@ -362,7 +362,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Prebuild
       shell: bash
@@ -402,7 +402,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Prebuild
       shell: bash
@@ -455,7 +455,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Prebuild
       shell: bash
@@ -510,7 +510,7 @@ jobs:
     name: ${{ matrix.name }}_SH_Py_DDS_CI
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Install CMake 4
       if: matrix.os == 'ubuntu-24.04'
@@ -557,7 +557,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
     
     - name: Prebuild
       shell: bash
@@ -586,7 +586,7 @@ jobs:
     timeout-minutes: 60
     
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Prebuild
       run: |
@@ -613,7 +613,7 @@ jobs:
     runs-on: ubuntu-22.04   
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Check_API
       shell: bash
@@ -645,7 +645,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Prebuild
       shell: bash
@@ -676,7 +676,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Enable Long Paths
       shell: powershell
