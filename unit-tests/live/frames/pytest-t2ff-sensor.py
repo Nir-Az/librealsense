@@ -16,6 +16,7 @@ import logging
 log = logging.getLogger(__name__)
 import time
 import platform
+from rspy.snippets import is_dds_dev
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
@@ -79,9 +80,7 @@ def test_device_creation_time(module_device_setup):
     assert len(devs) > 0, "No devices found"
     dev = devs[0]
 
-    is_dds = dev.supports(rs.camera_info.connection_type) and \
-             dev.get_info(rs.camera_info.connection_type) == "DDS"
-    max_time = 5 if is_dds else 1
+    max_time = 5 if is_dds_dev(dev) else 1
 
     log.info(f"Device creation time is: {creation_time:.3f} [sec] max allowed is: {max_time:.1f} [sec]")
     assert creation_time < max_time, \
@@ -110,6 +109,10 @@ def test_first_depth_frame_delay(sensor_device):
     assert delay < max_delay, \
         f"Depth frame delay {delay:.3f}s exceeds maximum {max_delay:.1f}s"
 
+    # Allow some time to close the depth pipe completely, stream stops when DDS reader closure is detected by device
+    if is_dds_dev(dev):
+        time.sleep(1)
+
 
 def test_first_color_frame_delay(sensor_device):
     dev, ctx = sensor_device
@@ -119,10 +122,6 @@ def test_first_color_frame_delay(sensor_device):
 
     if any(model in product_name for model in ['D421', 'D405']):
         pytest.skip(f"Device {product_name} has no color sensor")
-
-    # Allow HKR some time to close the depth pipe completely (runs after depth test)
-    if 'D555' in product_name:
-        time.sleep(1)
 
     log.info(f"Testing first color frame delay on {product_name} device - {os_name} OS")
 

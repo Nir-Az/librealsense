@@ -11,6 +11,7 @@ import pyrealsense2 as rs
 from rspy import test, log, config_file, devices
 import pyrsutils as rsutils
 from time import sleep
+from rspy.snippets import is_dds_dev
 
 # Make sure D555 is detected on CI machines (DDS connection)
 # To run locally with other devices use `--device` flag
@@ -25,7 +26,7 @@ with test.closure( "Detect D555 DDS device" ):
     devs = ctx.query_devices()
     if len(devs) > 0:
         dev = devs[0]
-        dev_found = dev.supports(rs.camera_info.connection_type) and dev.get_info(rs.camera_info.connection_type) == "DDS"
+        dev_found = is_dds_dev( dev )
     test.check( dev_found )
 
 with test.closure("restore d555 domain if was reset to 0"):

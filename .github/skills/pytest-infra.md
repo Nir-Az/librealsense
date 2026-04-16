@@ -77,6 +77,8 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 
 8. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
 
+9. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+
 ## Assertions: `assert` vs `pytest-check`
 
 The `pytest-check` plugin is available for soft assertions (non-stopping checks). Use it when the legacy test uses `test.check()` in a loop where execution should continue on failure — this matches the legacy behavior where `test.check()` recorded failures but didn't abort.

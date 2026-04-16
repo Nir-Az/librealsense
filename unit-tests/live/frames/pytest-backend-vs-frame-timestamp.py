@@ -10,6 +10,7 @@ import pytest
 import pyrealsense2 as rs
 import time
 import logging
+from rspy.snippets import is_dds_dev
 log = logging.getLogger(__name__)
 
 pytestmark = [
@@ -72,6 +73,10 @@ def test_depth_backend_vs_frame_timestamp(test_device):
 
     log.info("Testing depth backend vs frame timestamp")
     _run_timestamp_check(ds, dp, "Depth")
+
+    # Allow some time to close the depth pipe completely, stream stops when DDS reader closure is detected by device
+    if is_dds_dev(dev):
+        time.sleep(1)
 
 
 def test_color_backend_vs_frame_timestamp(test_device):
