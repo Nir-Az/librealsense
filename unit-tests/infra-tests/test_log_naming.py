@@ -5,8 +5,10 @@
 Tests for rspy/pytest/logging_setup.py (test_log_name, _log_key).
 
 Verifies how per-test log filenames are derived:
-- With device param: pytest-depth.py::test[D455-111] → pytest-depth_D455-111.log
-- Without device param: pytest-depth.py::test_basic → pytest-depth.log
+- Directory components are included: live/frames/pytest-depth.py → pytest-live-frames-depth.log
+- With device param: pytest-depth.py::test[D455-111] → pytest-live-frames-depth_D455-111.log
+- Without device param: pytest-depth.py::test_basic → pytest-live-frames-depth.log
+- No parent dir: pytest-standalone.py::test → pytest-standalone.log
 - Special characters (<, >, etc.) are sanitized to underscores
 - _log_key extracts (fspath, device_id) for grouping tests into shared log files
 """
@@ -26,15 +28,35 @@ class TestLogNaming:
 
     def test_with_device_param(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455-104623060005]")
-        assert derive_log_name(item) == "pytest-depth_D455-104623060005.log"
+        assert derive_log_name(item) == "pytest-live-frames-depth_D455-104623060005.log"
 
     def test_without_device_param(self):
         item = self._item("live/frames/pytest-depth.py", "test_depth_basic")
-        assert derive_log_name(item) == "pytest-depth.log"
+        assert derive_log_name(item) == "pytest-live-frames-depth.log"
 
     def test_special_chars_sanitized(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455<special>]")
-        assert derive_log_name(item) == "pytest-depth_D455_special_.log"
+        assert derive_log_name(item) == "pytest-live-frames-depth_D455_special_.log"
+
+    def test_no_parent_dir(self):
+        """Test at root of unit-tests/ — no directory prefix added."""
+        item = self._item("pytest-standalone.py", "test_basic")
+        assert derive_log_name(item) == "pytest-standalone.log"
+
+    def test_single_parent_dir(self):
+        """Test one level deep — e.g. live/pytest-foo.py."""
+        item = self._item("live/pytest-foo.py", "test_bar")
+        assert derive_log_name(item) == "pytest-live-foo.log"
+
+    def test_deep_nesting(self):
+        """Test in hw-reset subdirectory."""
+        item = self._item("live/hw-reset/pytest-sanity.py", "test_x[D455-111]")
+        assert derive_log_name(item) == "pytest-live-hw-reset-sanity_D455-111.log"
+
+    def test_absolute_path_with_unit_tests(self):
+        """Absolute path — unit-tests/ marker is found and stripped."""
+        item = self._item("/home/user/librealsense/unit-tests/live/frames/pytest-depth.py", "test_x")
+        assert derive_log_name(item) == "pytest-live-frames-depth.log"
 
     def test_log_key_with_brackets(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455-111]")

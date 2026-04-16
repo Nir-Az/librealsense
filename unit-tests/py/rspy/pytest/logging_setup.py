@@ -239,14 +239,35 @@ def ensure_newline():
 
 
 def test_log_name(item):
-    """Derive log filename from file basename + device param (from brackets in item.name).
+    """Derive log filename from directory path + file basename + device param.
+
+    Mirrors the legacy run-unit-tests.py naming: directory components (relative to
+    unit-tests/) are joined with '-' and prepended to the file's short name.
 
     Examples:
-      'live/frames/pytest-t2ff-pipeline.py::test_x[D455-104623060005]' -> 'pytest-t2ff-pipeline_D455-104623060005.log'
-      'live/frames/pytest-t2ff-pipeline.py::test_x'                   -> 'pytest-t2ff-pipeline.log'
+      'live/frames/pytest-t2ff-pipeline.py::test_x[D455-104623060005]' -> 'pytest-live-frames-t2ff-pipeline_D455-104623060005.log'
+      'live/frames/pytest-t2ff-pipeline.py::test_x'                   -> 'pytest-live-frames-t2ff-pipeline.log'
+      'pytest-standalone.py::test_x'                                   -> 'pytest-standalone.log'
     """
-    file_path = item.fspath
-    basename = os.path.splitext(os.path.basename(str(file_path)))[0]
+    file_path = str(item.fspath)
+
+    # Resolve relative path within the unit-tests tree
+    normalized = file_path.replace(os.sep, '/')
+    marker = 'unit-tests/'
+    idx = normalized.rfind(marker)
+    if idx >= 0:
+        rel_path = normalized[idx + len(marker):]
+    else:
+        rel_path = normalized
+
+    dirname = os.path.dirname(rel_path)
+    basename = os.path.splitext(os.path.basename(rel_path))[0]
+
+    if dirname:
+        # Strip 'pytest-' prefix, prepend 'pytest-' + dir components joined by '-'
+        stripped = basename[7:] if basename.startswith('pytest-') else basename
+        dir_parts = dirname.replace('/', '-')
+        basename = f"pytest-{dir_parts}-{stripped}"
 
     match = re.search(r'\[(.+)\]', item.name)
     if match:
