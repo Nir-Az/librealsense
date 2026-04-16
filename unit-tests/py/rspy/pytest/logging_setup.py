@@ -257,6 +257,10 @@ def test_log_name(item):
     idx = normalized.rfind(marker)
     if idx >= 0:
         rel_path = normalized[idx + len(marker):]
+    elif os.path.isabs(file_path) or normalized.startswith('/'):
+        # Absolute path outside the unit-tests tree — use basename only to avoid
+        # embedding host filesystem paths in the log filename.
+        rel_path = os.path.basename(normalized)
     else:
         rel_path = normalized
 

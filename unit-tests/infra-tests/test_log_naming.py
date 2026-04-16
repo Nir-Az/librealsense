@@ -6,8 +6,8 @@ Tests for rspy/pytest/logging_setup.py (test_log_name, _log_key).
 
 Verifies how per-test log filenames are derived:
 - Directory components are included: live/frames/pytest-depth.py → pytest-live-frames-depth.log
-- With device param: pytest-depth.py::test[D455-111] → pytest-live-frames-depth_D455-111.log
-- Without device param: pytest-depth.py::test_basic → pytest-live-frames-depth.log
+- With device param: live/frames/pytest-depth.py::test[D455-111] → pytest-live-frames-depth_D455-111.log
+- Without device param: live/frames/pytest-depth.py::test_basic → pytest-live-frames-depth.log
 - No parent dir: pytest-standalone.py::test → pytest-standalone.log
 - Special characters (<, >, etc.) are sanitized to underscores
 - _log_key extracts (fspath, device_id) for grouping tests into shared log files
@@ -57,6 +57,11 @@ class TestLogNaming:
         """Absolute path — unit-tests/ marker is found and stripped."""
         item = self._item("/home/user/librealsense/unit-tests/live/frames/pytest-depth.py", "test_x")
         assert derive_log_name(item) == "pytest-live-frames-depth.log"
+
+    def test_absolute_path_outside_tree(self):
+        """Absolute path without unit-tests/ — falls back to basename only."""
+        item = self._item("/tmp/other/pytest-depth.py", "test_x")
+        assert derive_log_name(item) == "pytest-depth.log"
 
     def test_log_key_with_brackets(self):
         item = self._item("live/frames/pytest-depth.py", "test_x[D455-111]")
