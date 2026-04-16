@@ -8,6 +8,7 @@
 import pyrealsense2 as rs
 from rspy import log, repo, test
 from rspy.stopwatch import Stopwatch
+from rspy.snippets import is_dds_dev
 
 #############################################################################################
 #
@@ -16,7 +17,7 @@ rs_enumerate_devices = repo.find_built_exe( 'tools/enumerate-devices', 'rs-enume
 test.check(rs_enumerate_devices)
 if rs_enumerate_devices:
     dev, ctx = test.find_first_device_or_exit()
-    is_dds = dev.supports(rs.camera_info.connection_type) and dev.get_info(rs.camera_info.connection_type) == "DDS"
+    is_dds = is_dds_dev(dev)
     import subprocess
     run_time_stopwatch = Stopwatch()
     run_time_threshold = 5 if is_dds else 2  # currently, DDS devices take longer time to complete rs_enumerate_devices

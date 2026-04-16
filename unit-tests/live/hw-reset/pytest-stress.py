@@ -10,6 +10,7 @@ from rspy.timer import Timer
 from rspy.stopwatch import Stopwatch
 import time
 import logging
+from rspy.snippets import is_dds_dev
 log = logging.getLogger(__name__)
 
 # HW-reset stress test: repeatedly reset the device and verify it reconnects each time.
@@ -59,13 +60,12 @@ def test_hw_reset_stress( test_device, test_context_var ):
     target_sn = dev.get_info( rs.camera_info.serial_number )
     ctx.set_devices_changed_callback( device_changed )
 
-    is_dds      = ( dev.supports( rs.camera_info.connection_type )
-                    and dev.get_info( rs.camera_info.connection_type ) == "DDS" )
-    is_weekly   = 'weekly' in test_context_var
+    is_dds    = is_dds_dev(dev)
+    is_weekly = 'weekly' in test_context_var
     if is_weekly:
-        iterations = STRESS_ITERATIONS_DDS          if is_dds else STRESS_ITERATIONS
+        iterations = STRESS_ITERATIONS_DDS         if is_dds else STRESS_ITERATIONS
     else:
-        iterations = STRESS_ITERATIONS_NIGHTLY_DDS  if is_dds else STRESS_ITERATIONS_NIGHTLY
+        iterations = STRESS_ITERATIONS_NIGHTLY_DDS if is_dds else STRESS_ITERATIONS_NIGHTLY
     max_enum    = devices.MAX_ENUMERATION_TIME
     conn_type   = "DDS" if is_dds else "USB/GMSL"
 

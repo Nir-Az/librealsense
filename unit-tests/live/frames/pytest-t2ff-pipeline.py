@@ -16,6 +16,7 @@ import logging
 log = logging.getLogger(__name__)
 import time
 import platform
+from rspy.snippets import is_dds_dev
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
@@ -65,10 +66,9 @@ def test_pipeline_first_depth_frame_delay(pipeline_device):
 
     assert frame_delay < max_delay, \
         f"Depth frame delay {frame_delay:.3f}s exceeds maximum {max_delay:.1f}s"
-    
+
     # Allow some time to close the depth pipe completely, stream stops when DDS reader closure is detected by device
-    dds_dev = dev.supports(rs.camera_info.connection_type) and dev.get_info(rs.camera_info.connection_type) == "DDS"
-    if dds_dev:
+    if is_dds_dev(dev):
         time.sleep(1)
 
 
