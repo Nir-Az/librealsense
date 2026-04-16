@@ -96,7 +96,6 @@ macro(global_target_config)
     target_include_directories(${LRS_TARGET}
         PRIVATE
             src
-            ${BOOST_INCLUDE_PATH}
             ${LIBUSB_LOCAL_INCLUDE_PATH}
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
