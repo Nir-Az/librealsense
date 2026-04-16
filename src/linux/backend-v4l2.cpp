@@ -2430,9 +2430,9 @@ namespace librealsense
                                     static_cast<float>(frame_interval.discrete.numerator);
 
                                 // On D585S, we need to distinguish the occupancy and the label point cloud streams.
-                                // The condition currently support 2 resolutions for LPC
+                                // The condition currently support 3 resolutions for LPC
                                 // This needs to be refactored!
-                                if (this->_info.pid == 0X0B6B && frame_size.discrete.width == 2880 && (frame_size.discrete.height == 1040 || frame_size.discrete.height == 260)) // 0x0B6B pid for D585S_PID
+                                if (this->_info.pid == 0X0B6B && frame_size.discrete.width == 2880 && (frame_size.discrete.height == 1040 || frame_size.discrete.height == 260 || frame_size.discrete.height == 32)) // 0x0B6B pid for D585S_PID
                                 {
                                     fourcc = 0x50414c38; // PAL8 used instead of GREY in order to distinguish between occupancy and point cloud streams
                                 }
