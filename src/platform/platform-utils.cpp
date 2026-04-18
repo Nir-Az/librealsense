@@ -6,6 +6,7 @@
 #include "uvc-device-info.h"
 #include "hid-device-info.h"
 #include <src/librealsense-exception.h>
+#include <algorithm>
 #include <rsutils/version.h>
 #include <fstream>
 
