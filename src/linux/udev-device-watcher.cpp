@@ -38,10 +38,17 @@ namespace {
         {
             char const * sysname = udev_device_get_sysname( dev );
             char const * model = udev_device_get_property_value( dev, "ID_MODEL" );
+            
+            // For bind/unbind events, ID_MODEL and sysname may be null
             if( ! model  ||  strncmp( model, "Intel", 5 ))
                 model = sysname;
-            os << model;
-            if( model != sysname )
+            
+            if( model )
+                os << model;
+            else
+                os << "<unknown>";
+            
+            if( sysname && model != sysname )
                 os << " [" << sysname << ']';
             //os << udev_device_get_syspath( dev );
 
