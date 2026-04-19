@@ -259,11 +259,21 @@ namespace librealsense
         std::string timestamp_domain = librealsense::get_string(frame->get_frame_timestamp_domain());
         std::string frame_number = std::to_string(frame->get_frame_number());
         std::string ts = std::to_string(frame->get_frame_timestamp());
+        std::string depth_units;
+        if (auto df = dynamic_cast<librealsense::depth_frame*>(frame))
+        {
+            auto units = df->get_units();
+            if (units > 0)
+                depth_units = std::to_string(units);
+        }
 
         std::string metadata_payload = rsutils::string::from() << FRAME_NUMBER_MD_STR << "=" << frame_number << ";" 
                                                                 << TIMESTAMP_DOMAIN_MD_STR << "=" << timestamp_domain << ";" 
                                                                 << SYSTEM_TIME_MD_STR << "=" << system_time << ";"
                                                                 << TIMESTAMP_MD_STR << "="  << ts << ";";
+        if (!depth_units.empty())
+            metadata_payload += rsutils::string::from() << DEPTH_UNITS_MD_STR << "=" << depth_units << ";";
+
         for (int i = 0; i < RS2_FRAME_METADATA_COUNT; i++)
         {
             rs2_frame_metadata_value type = static_cast<rs2_frame_metadata_value>(i);
