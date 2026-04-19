@@ -108,7 +108,7 @@ def get_roi_from_frame(frame, interpolation=cv2.INTER_LINEAR):
 SAMPLE_REGION_SIZE = 60  # Default size of the square region for depth sampling
 
 
-def get_avg_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=600):
+def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=600):
     """Sample a square region of given size around (x, y) and return the median depth value, filtering out values below min_value."""
     half = size // 2
     h, w = image.shape

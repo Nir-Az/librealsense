@@ -15,7 +15,7 @@ import pyrealsense2 as rs
 from rspy import log, test
 import numpy as np
 import cv2
-from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, get_avg_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, get_median_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -154,8 +154,8 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
                 log.d(f"Frame {i} - Background color at ({bg_x},{bg_y}) sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR}")
 
             # Sample depths using region averaging
-            raw_cube = get_avg_depth_from_region(depth_frame_roi, cube_x, cube_y)
-            raw_bg = get_avg_depth_from_region(depth_frame_roi, bg_x, bg_y)
+            raw_cube = get_median_depth_from_region(depth_frame_roi, cube_x, cube_y)
+            raw_bg = get_median_depth_from_region(depth_frame_roi, bg_x, bg_y)
 
             if not raw_bg or not raw_cube:
                 continue

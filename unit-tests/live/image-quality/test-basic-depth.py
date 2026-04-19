@@ -9,7 +9,7 @@ from rspy import log, test
 import numpy as np
 import cv2
 import time
-from iq_helper import find_roi_location, get_roi_from_frame, get_avg_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import find_roi_location, get_roi_from_frame, get_median_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
 
 NUM_FRAMES = 100  # Number of frames to check
 DEPTH_TOLERANCE = 100  # Acceptable deviation from expected depth in mm
@@ -107,9 +107,6 @@ def run_test(resolution, fps):
         profile = pipeline.start(cfg)
         time.sleep(2)
 
-        depth_sensor = profile.get_device().first_depth_sensor()
-        depth_scale = depth_sensor.get_depth_scale()
-
         # Spatial + temporal filters — same pair realsense-viewer applies by
         # default. Hole-filling is deliberately omitted: it can fill depth holes
         # on the cube face with surrounding paper depth and bias the reading.
@@ -147,8 +144,8 @@ def run_test(resolution, fps):
             # paper depths across the cube edge.
             depth_image = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
 
-            raw_cube = get_avg_depth_from_region(depth_image, cube_xy[0], cube_xy[1])
-            bg_readings = [get_avg_depth_from_region(depth_image, bx, by) for bx, by in bg_points]
+            raw_cube = get_median_depth_from_region(depth_image, cube_xy[0], cube_xy[1])
+            bg_readings = [get_median_depth_from_region(depth_image, bx, by) for bx, by in bg_points]
             bg_readings = [v for v in bg_readings if v]
             if not raw_cube or not bg_readings:
                 continue
