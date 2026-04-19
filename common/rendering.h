@@ -1265,6 +1265,7 @@ namespace rs2
             case RS2_FORMAT_XYZ32F:
             case RS2_FORMAT_MOTION_RAW:
             case RS2_FORMAT_MOTION_XYZ32F:
+            case RS2_FORMAT_COMBINED_MOTION:
             case RS2_FORMAT_GPIO_RAW:
             case RS2_FORMAT_6DOF:
                 return false;

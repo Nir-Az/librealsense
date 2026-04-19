@@ -133,6 +133,7 @@ namespace librealsense
     constexpr const char* FRAME_TIMESTAMP_MD_STR = "frame_timestamp";
     constexpr const char* TRACKER_CONFIDENCE_MD_STR = "Tracker Confidence";
     constexpr const char* TIMESTAMP_MD_STR = "timestamp";
+    constexpr const char* DEPTH_UNITS_MD_STR = "depth_units";
 
     /**
     * Incremental number of the RealSense file format version
