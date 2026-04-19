@@ -197,6 +197,7 @@ namespace librealsense
             return RS2_EXTENSION_DEPTH_FRAME;
         case RS2_STREAM_ACCEL:
         case RS2_STREAM_GYRO:
+        case RS2_STREAM_MOTION:
             return RS2_EXTENSION_MOTION_FRAME;
         case RS2_STREAM_LABELED_POINT_CLOUD:
             return RS2_EXTENSION_LABELED_POINTS;

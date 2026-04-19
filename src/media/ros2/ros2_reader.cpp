@@ -250,24 +250,6 @@ namespace librealsense
         frame_additional_data additional_data{};
         read_frame_metadata(additional_data);
 
-        // For depth frames, set depth_units from the recorded sensor options
-        if (stream_id.stream_type == RS2_STREAM_DEPTH)
-        {
-            for (auto& sensor_snap : m_initial_device_description.get_sensors_snapshots())
-            {
-                auto options_snapshot = sensor_snap.get_sensor_extensions_snapshots().find(RS2_EXTENSION_OPTIONS);
-                if (options_snapshot)
-                {
-                    auto options_api = As<options_interface>(options_snapshot);
-                    if (options_api && options_api->supports_option(RS2_OPTION_DEPTH_UNITS))
-                    {
-                        additional_data.depth_units = options_api->get_option(RS2_OPTION_DEPTH_UNITS).query();
-                        break;
-                    }
-                }
-            }
-        }
-
         bool is_imu_topic = (msg->topic_name.find("/imu/") != std::string::npos);
 
         std::vector<uint8_t> data;
@@ -537,6 +519,7 @@ namespace librealsense
         convert(get_value(kv, TIMESTAMP_DOMAIN_MD_STR), additional_data.timestamp_domain);  
         convert(get_value(kv, SYSTEM_TIME_MD_STR), additional_data.system_time);
         additional_data.timestamp = std::stod(get_value(kv, TIMESTAMP_MD_STR));
+        additional_data.depth_units = kv.count(DEPTH_UNITS_MD_STR) ? std::stof(get_value(kv, DEPTH_UNITS_MD_STR)) : 0.f;
 
         // Iterate only the keys present in the map, matching them to RS2 metadata types
         uint32_t total_md_size = 0;
@@ -811,7 +794,7 @@ namespace librealsense
         {
             if( sensor_extensions.find( RS2_EXTENSION_DEPTH_SENSOR ) == nullptr )
             {
-                float depth_units = 0.01f; // Default to 1mm for devices that don't have this option implemented
+                float depth_units = 0.001f; // Default 1mm (0.001m) for devices that don't have this option recorded
                 sensor_extensions[RS2_EXTENSION_DEPTH_SENSOR] = std::make_shared< depth_sensor_snapshot >( depth_units );
 
                 if( is_stereo_depth_sensor( sensor_name ) ) // Need both extensions
