@@ -89,25 +89,27 @@ def find_roi_location(pipeline, required_ids, DEBUG_MODE=False, timeout=5):
     cv2.destroyAllWindows()
     return M, page_pts
 
-def get_roi_from_frame(frame):
+def get_roi_from_frame(frame, interpolation=cv2.INTER_LINEAR):
     """
     Apply the previously computed transformation matrix to the given frame
-    to get the region of interest (A4 page)
+    to get the region of interest (A4 page).
+    Pass interpolation=cv2.INTER_NEAREST when warping depth data — linear
+    interpolation blends values across depth discontinuities.
     """
     global M
     if M is None:
         raise Exception("Transformation matrix not computed yet")
 
     np_frame = np.asanyarray(frame.get_data())
-    warped = cv2.warpPerspective(np_frame, M, (WIDTH, HEIGHT)) # using A4 size for its ratio
+    warped = cv2.warpPerspective(np_frame, M, (WIDTH, HEIGHT), flags=interpolation)
     return warped
 
 
-SAMPLE_REGION_SIZE = 150  # Default size of the square region for depth sampling
+SAMPLE_REGION_SIZE = 60  # Default size of the square region for depth sampling
 
 
 def get_avg_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=600):
-    """Sample a square region of given size around (x, y) and return the average depth value, filtering out values below min_value."""
+    """Sample a square region of given size around (x, y) and return the median depth value, filtering out values below min_value."""
     half = size // 2
     h, w = image.shape
     x_min = max(x - half, 0)
@@ -119,7 +121,7 @@ def get_avg_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=60
     if filtered.size == 0:
         log.w(f"No valid depth samples in region at ({x},{y})")
         return 0.0
-    return np.mean(filtered)
+    return float(np.median(filtered))
 
 
 def is_color_close(actual, expected, tolerance):

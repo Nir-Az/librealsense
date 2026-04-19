@@ -45,39 +45,42 @@ def detect_roi_with_exposure(marker_ids):
     raise Exception("Page not found")
 
 
-def draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y,
+def draw_debug(depth_frame, cube_xy, bg_points,
                depth_cube, depth_bg, measured_diff):
     # original debug visualization moved here, with added sampled-region rectangles
     colorizer = rs.colorizer()
     colorized_frame = colorizer.colorize(depth_frame)
     roi_img_disp = get_roi_from_frame(colorized_frame)
 
-    # Draw points for cube and background (cv2.circle uses (x, y) order)
-    cv2.circle(roi_img_disp, (cube_x, cube_y), 6, (0, 0, 255), -1)  # Red for cube
-    cv2.circle(roi_img_disp, (bg_x, bg_y), 6, (0, 255, 0), -1)  # Green for background
-
-    # Draw sampled region rectangles on top (requested)
     half = SAMPLE_REGION_SIZE // 2
+    cube_x, cube_y = cube_xy
+
+    # Draw cube sample (red)
+    cv2.circle(roi_img_disp, (cube_x, cube_y), 6, (0, 0, 255), -1)
     cv2.rectangle(roi_img_disp,
                   (cube_x - half, cube_y - half),
                   (cube_x + half, cube_y + half),
                   (0, 0, 255), 2)
-    cv2.rectangle(roi_img_disp,
-                  (bg_x - half, bg_y - half),
-                  (bg_x + half, bg_y + half),
-                  (0, 255, 0), 2)
+
+    # Draw each bg sample (green)
+    for (bx, by) in bg_points:
+        cv2.circle(roi_img_disp, (bx, by), 6, (0, 255, 0), -1)
+        cv2.rectangle(roi_img_disp,
+                      (bx - half, by - half),
+                      (bx + half, by + half),
+                      (0, 255, 0), 2)
 
     # Add labels for each point with their measured distance
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.5
     thickness = 1
     cube_label = f"cube: {depth_cube:.2f}mm"
-    bg_label = f"bg: {depth_bg:.2f}mm"
+    bg_label = f"bg(med): {depth_bg:.2f}mm"
     diff_label = f"diff: {measured_diff:.3f}mm (exp: {EXPECTED_DEPTH_DIFF:.2f}mm)"
 
     cv2.putText(roi_img_disp, cube_label, (cube_x + 10, cube_y - 10),
                 font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
-    cv2.putText(roi_img_disp, bg_label, (bg_x + 10, bg_y - 10),
+    cv2.putText(roi_img_disp, bg_label, (10, 50),
                 font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
     cv2.putText(roi_img_disp, diff_label, (10, 30),
                 font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
@@ -107,32 +110,50 @@ def run_test(resolution, fps):
         depth_sensor = profile.get_device().first_depth_sensor()
         depth_scale = depth_sensor.get_depth_scale()
 
+        # Spatial + temporal filters — same pair realsense-viewer applies by
+        # default. Hole-filling is deliberately omitted: it can fill depth holes
+        # on the cube face with surrounding paper depth and bias the reading.
+        spatial = rs.spatial_filter()
+        temporal = rs.temporal_filter()
+
         # find region of interest (page) and get the transformation matrix
         # markers in the lab for this test are 4,5,6,7
         detect_roi_with_exposure((4, 5, 6, 7))
 
-        # Known pixel positions - center of cube and left edge to sample background
-        cube_x, cube_y = WIDTH // 2, HEIGHT // 2
-        bg_x, bg_y = int(WIDTH * 0.1), HEIGHT // 2
+        # Cube is centered horizontally; sample bg from 4 points on the left
+        # and right columns (off the cube by construction) and take the median
+        # so a single noisy region cannot bias the result. Above/below samples
+        # are avoided because the cube can fill most of the warped vertical
+        # span depending on marker placement.
+        cube_xy = (WIDTH // 2, HEIGHT // 2)
+        bg_points = [
+            (int(WIDTH * 0.10), int(HEIGHT * 0.25)),
+            (int(WIDTH * 0.10), int(HEIGHT * 0.75)),
+            (int(WIDTH * 0.90), int(HEIGHT * 0.25)),
+            (int(WIDTH * 0.90), int(HEIGHT * 0.75)),
+        ]
 
         pass_count = 0
         for i in range(NUM_FRAMES):
             frames = pipeline.wait_for_frames()
             depth_frame = frames.get_depth_frame()
-            infrared_frame = frames.get_infrared_frame()
             if not depth_frame:
                 continue
 
-            # Get the warped ROI from the filtered depth frame
-            depth_image = get_roi_from_frame(depth_frame)
+            depth_frame = spatial.process(depth_frame)
+            depth_frame = temporal.process(depth_frame)
 
-            # Sample depths using region averaging
-            raw_cube = get_avg_depth_from_region(depth_image, cube_x, cube_y)
-            raw_bg = get_avg_depth_from_region(depth_image, bg_x, bg_y)
-            if not raw_bg or not raw_cube:
+            # Warp with nearest-neighbor — linear interpolation blends cube and
+            # paper depths across the cube edge.
+            depth_image = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
+
+            raw_cube = get_avg_depth_from_region(depth_image, cube_xy[0], cube_xy[1])
+            bg_readings = [get_avg_depth_from_region(depth_image, bx, by) for bx, by in bg_points]
+            bg_readings = [v for v in bg_readings if v]
+            if not raw_cube or not bg_readings:
                 continue
-            depth_cube = raw_cube  # * depth_scale
-            depth_bg = raw_bg  # * depth_scale
+            depth_cube = raw_cube
+            depth_bg = float(np.median(bg_readings))
             measured_diff = depth_bg - depth_cube  # background should be further than cube
 
             last_depth_frame = depth_frame
@@ -144,10 +165,11 @@ def run_test(resolution, fps):
                 pass_count += 1
             else:
                 log.d(f"Frame {i} - Depth diff: {measured_diff:.3f}mm too far from "
-                      f"{EXPECTED_DEPTH_DIFF:.3f}mm (cube: {depth_cube:.3f}mm, bg: {depth_bg:.3f}mm)")
+                      f"{EXPECTED_DEPTH_DIFF:.3f}mm (cube: {depth_cube:.3f}mm, bg: {depth_bg:.3f}mm, "
+                      f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
 
             if DEBUG_MODE:
-                dbg = draw_debug(depth_frame, cube_x, cube_y, bg_x, bg_y, depth_cube, depth_bg, measured_diff)
+                dbg = draw_debug(depth_frame, cube_xy, bg_points, depth_cube, depth_bg, measured_diff)
                 cv2.imshow("ROI with Sampled Points", dbg)
                 cv2.waitKey(1)
 
@@ -161,7 +183,7 @@ def run_test(resolution, fps):
 
         if test.test_failed and last_depth_frame:
             save_failure_snapshot(__file__, pipeline,
-                                 draw_debug(last_depth_frame, cube_x, cube_y, bg_x, bg_y,
+                                 draw_debug(last_depth_frame, cube_xy, bg_points,
                                             last_depth_cube, last_depth_bg, last_measured_diff))
 
     except Exception as e:
