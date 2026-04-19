@@ -21,7 +21,6 @@ from rspy.snippets import is_dds_dev
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
-    pytest.mark.device_exclude("D401"),
 ]
 
 
@@ -120,8 +119,8 @@ def test_first_color_frame_delay(sensor_device):
     max_delay = 1
     os_name = platform.system()
 
-    if any(model in product_name for model in ['D421', 'D405']):
-        pytest.skip(f"Device {product_name} has no color sensor")
+    if any(model in product_name for model in ['D421', 'D401', 'D405']):
+        pytest.skip(f"Device {product_name} has no color sensor support")
 
     log.info(f"Testing first color frame delay on {product_name} device - {os_name} OS")
 

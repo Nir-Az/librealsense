@@ -16,7 +16,6 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device("D400*"),
     pytest.mark.device_each("D500*"),
-    pytest.mark.device_exclude("D401"),
 ]
 
 FPS = 30
@@ -81,6 +80,10 @@ def test_depth_backend_vs_frame_timestamp(test_device):
 
 def test_color_backend_vs_frame_timestamp(test_device):
     dev, ctx = test_device
+    product_name = dev.get_info(rs.camera_info.name)
+
+    if any(model in product_name for model in ['D421', 'D401', 'D405']):
+        pytest.skip(f"Device {product_name} has no color sensor support")
 
     cs = dev.first_color_sensor()
     cp = next(p for p in cs.profiles

@@ -22,7 +22,6 @@ FRAMES_TO_CHECK = 30
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
-    pytest.mark.device_exclude("D401"),
 ]
 
 
@@ -66,6 +65,9 @@ def test_depth_laser_on(test_device):
     dev, ctx = test_device
     product_name = dev.get_info(rs.camera_info.name)
 
+    if any(model in product_name for model in ['D405', 'D401']):
+        pytest.skip(f"Device {product_name} has no laser, the test requires ammendment to check fill rate with laser off")
+    
     tw.start_wrapper(dev)
     try:
         cfg = rs.config()
