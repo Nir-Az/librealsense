@@ -33,8 +33,6 @@ set(REALSENSE_GL_CPP
     colorizer-gl.cpp
     align-gl.h
     align-gl.cpp
-    ${LZ4_DIR}/lz4.h
-    ${LZ4_DIR}/lz4.c
 )
 
 set(REALSENSE_GL_PUBLIC_HEADERS
@@ -65,8 +63,6 @@ if(BUILD_SHARED_LIBS)
     add_definitions(-DSHARED_LIBS)
 endif()
 
-include_directories(${LZ4_DIR})
-
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/..
@@ -94,6 +90,7 @@ configure_file(../../config/librealsense-gl.pc.in ../../config/realsense2-gl.pc 
 target_link_libraries( ${PROJECT_NAME}
     PRIVATE
         ${DEPENDENCIES}
+        rs_lz4
     )
 
 # CMake prior to 3.13 cannot install targets located in sub-directories.
