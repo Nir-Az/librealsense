@@ -262,16 +262,18 @@ def test_log_name(item):
         # embedding host filesystem paths in the log filename.
         rel_path = os.path.basename(normalized)
     else:
+        # Relative path with no unit-tests/ marker — only hit by infra test
+        # mocks that pass paths like "live/frames/pytest-depth.py" directly.
         rel_path = normalized
 
     dirname = os.path.dirname(rel_path)
     basename = os.path.splitext(os.path.basename(rel_path))[0]
 
     if dirname:
-        # Strip 'pytest-' prefix, prepend 'pytest-' + dir components joined by '-'
-        stripped = basename[7:] if basename.startswith('pytest-') else basename
+        # conftest sets python_files=pytest-*.py, so basename always starts with 'pytest-'.
+        # Strip the prefix, then rebuild as 'pytest-{dirs}-{short_name}'.
         dir_parts = dirname.replace('/', '-')
-        basename = f"pytest-{dir_parts}-{stripped}"
+        basename = f"pytest-{dir_parts}-{basename[len('pytest-'):]}"
 
     match = re.search(r'\[(.+)\]', item.name)
     if match:
