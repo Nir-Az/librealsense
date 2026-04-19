@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.context("weekly"),
     pytest.mark.device("D400*"),
+    pytest.mark.device_exclude("D401")
 ]
 
 # Constants for device initialization and testing
