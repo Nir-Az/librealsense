@@ -48,7 +48,6 @@ def time_to_first_frame(ctx, config):
 
 
 def test_pipeline_first_depth_frame_delay(pipeline_device):
-    assert False, "Deliberate failure to verify log file naming on Jenkins"
     dev, ctx = pipeline_device
     product_name = dev.get_info(rs.camera_info.name)
     max_delay = 1
