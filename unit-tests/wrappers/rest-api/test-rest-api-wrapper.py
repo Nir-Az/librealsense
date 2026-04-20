@@ -1,6 +1,7 @@
 #test:device D455
 #test:donotrun:!linux
 
+import os
 import pyrealsense2 as rs
 from rspy import log, repo, test
 from rspy.stopwatch import Stopwatch
@@ -10,7 +11,8 @@ from rspy.stopwatch import Stopwatch
 test.start( "Run test-rest-api-wrapper test" )
 import subprocess, sys
 run_time_stopwatch = Stopwatch()
-p = subprocess.run( [sys.executable, "-m", "pytest", "./wrappers/rest-api/tests/test_api_service.py"],
+rest_api_test = os.path.join( repo.root, "wrappers", "rest-api", "tests", "test_api_service.py" )
+p = subprocess.run( [sys.executable, "-m", "pytest", rest_api_test],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
