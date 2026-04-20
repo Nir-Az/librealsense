@@ -18,4 +18,4 @@ pytest-retry==1.7.0
 pytest-repeat==0.9.3
 pytest-check==2.8.0
 
-# REST API deps live in wrappers/rest-api/ (requirements.txt + requirements-test.txt)
+# REST API deps: wrappers/rest-api/requirements.txt + unit-tests/wrappers/rest-api/requirements.txt

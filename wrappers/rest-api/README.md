@@ -81,5 +81,5 @@ It simplifies remote control and data streaming from RealSense devices by handli
 
 1. **Install the test extras:**
     ```bash
-    pip3 install -r requirements.txt -r requirements-test.txt
+    pip3 install -r requirements.txt -r ../../unit-tests/wrappers/rest-api/requirements.txt
     ```
