@@ -1,9 +1,8 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
-# Supported on D400 USB devices with FW version 5.12.10.11 and above. https://github.com/realsenseai/librealsense/blob/development/src/ds/d400/d400-device.cpp#L1026
+# Supported on D400 devices with global shutter and FW version 5.12.10.11 and above. https://github.com/realsenseai/librealsense/blob/development/src/ds/d400/d400-device.cpp#L1026
 # test:device D400*
-# test:type USB
 
 import pyrealsense2 as rs
 import pyrsutils as rsutils
@@ -26,6 +25,12 @@ from rspy import test, log
 
 ctx = rs.context()
 device_list = ctx.query_devices()
+depth_sensor = device_list.front().first_depth_sensor()
+required_options = [rs.option.auto_exposure_limit_toggle, rs.option.auto_exposure_limit, rs.option.auto_gain_limit_toggle, rs.option.auto_gain_limit]
+for option in required_options:
+    if not depth_sensor.supports(option):
+        log.i(f"Device does not support {option}, skipping test...")
+        test.print_results_and_exit()
 
 fw_version = rsutils.version(device_list.front().get_info(rs.camera_info.firmware_version))
 if fw_version < rsutils.version(5,12,10,11):
@@ -38,7 +43,7 @@ with test.closure("Auto Exposure toggle one device"):
     device = device_list.front()
     sensor = device.first_depth_sensor()
     option_range = sensor.get_option_range(rs.option.auto_exposure_limit)
-    values = [option_range.min + 5.0, option_range.max / 4.0, option_range.max - 5.0]
+    values = [option_range.min + 5.0, option_range.max / 4.0, option_range.max * 0.75]
     for val in values:
         sensor.set_option(rs.option.auto_exposure_limit, val)
     sensor.set_option(rs.option.auto_exposure_limit_toggle, 0.0)  # off
@@ -56,7 +61,7 @@ with test.closure("Auto Exposure two devices"):
     option_range = s1.get_option_range(rs.option.auto_exposure_limit) #should be same range from both sensors
     s1.set_option(rs.option.auto_exposure_limit, option_range.max / 4.0)
     s1.set_option(rs.option.auto_exposure_limit_toggle, 0.0)  # off
-    s2.set_option(rs.option.auto_exposure_limit, option_range.max - 5.0)
+    s2.set_option(rs.option.auto_exposure_limit, option_range.max * 0.75)
     s2.set_option(rs.option.auto_exposure_limit_toggle, 0.0)  # off
 
     #2.1
@@ -70,7 +75,7 @@ with test.closure("Auto Exposure two devices"):
     # 2.2
     s2.set_option(rs.option.auto_exposure_limit_toggle, 1.0)  # on
     limit2 = s2.get_option(rs.option.auto_exposure_limit)
-    test.check_equal(limit2, option_range.max - 5.0)
+    test.check_equal(limit2, option_range.max * 0.75)
 
 #############################################################################################
 with test.closure("Gain toggle one device"):
@@ -83,7 +88,7 @@ with test.closure("Gain toggle one device"):
     # - Turn toggle off
     # - Turn toggle on
     # - Check that control limit value is the latest value
-    values = [option_range.min + 5.0, option_range.max / 4.0, option_range.max - 5.0]
+    values = [option_range.min + 5.0, option_range.max / 4.0, option_range.max * 0.75]
     for val in values:
         sensor.set_option(rs.option.auto_gain_limit, val)
     sensor.set_option(rs.option.auto_gain_limit_toggle, 0.0)  # off
@@ -101,7 +106,7 @@ with test.closure("Gain toggle two devices"):
     option_range = s1.get_option_range(rs.option.auto_gain_limit) #should be same range from both sensors
     s1.set_option(rs.option.auto_gain_limit, option_range.max / 4.0)
     s1.set_option(rs.option.auto_gain_limit_toggle, 0.0)  # off
-    s2.set_option(rs.option.auto_gain_limit, option_range.max - 5.0)
+    s2.set_option(rs.option.auto_gain_limit, option_range.max * 0.75)
     s2.set_option(rs.option.auto_gain_limit_toggle, 0.0)  # off
 
     #2.1
@@ -115,7 +120,7 @@ with test.closure("Gain toggle two devices"):
     # 2.2
     s2.set_option(rs.option.auto_gain_limit_toggle, 1.0)  # on
     limit2 = s2.get_option(rs.option.auto_gain_limit)
-    test.check_equal(limit2, option_range.max - 5.0)
+    test.check_equal(limit2, option_range.max * 0.75)
 
 #############################################################################################
 test.print_results_and_exit()
