@@ -6,10 +6,11 @@
 
 import pyrealsense2 as rs
 from rspy import log, test
-import numpy as np
 import cv2
 import time
-from iq_helper import find_roi_location, get_roi_from_frame, get_median_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import (find_roi_location, get_roi_from_frame, get_median_depth_from_region,
+                       sample_bg_depth, make_depth_filter_chain, save_failure_snapshot,
+                       SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, WIDTH, HEIGHT)
 
 NUM_FRAMES = 100  # Number of frames to check
 DEPTH_TOLERANCE = 100  # Acceptable deviation from expected depth in mm
@@ -107,28 +108,14 @@ def run_test(resolution, fps):
         profile = pipeline.start(cfg)
         time.sleep(2)
 
-        # Spatial + temporal filters — same pair realsense-viewer applies by
-        # default. Hole-filling is deliberately omitted: it can fill depth holes
-        # on the cube face with surrounding paper depth and bias the reading.
-        spatial = rs.spatial_filter()
-        temporal = rs.temporal_filter()
+        depth_filters = make_depth_filter_chain()
 
         # find region of interest (page) and get the transformation matrix
         # markers in the lab for this test are 4,5,6,7
         detect_roi_with_exposure((4, 5, 6, 7))
 
-        # Cube is centered horizontally; sample bg from 4 points on the left
-        # and right columns (off the cube by construction) and take the median
-        # so a single noisy region cannot bias the result. Above/below samples
-        # are avoided because the cube can fill most of the warped vertical
-        # span depending on marker placement.
         cube_xy = (WIDTH // 2, HEIGHT // 2)
-        bg_points = [
-            (int(WIDTH * 0.10), int(HEIGHT * 0.25)),
-            (int(WIDTH * 0.10), int(HEIGHT * 0.75)),
-            (int(WIDTH * 0.90), int(HEIGHT * 0.25)),
-            (int(WIDTH * 0.90), int(HEIGHT * 0.75)),
-        ]
+        bg_points = BG_SAMPLE_POINTS
 
         pass_count = 0
         for i in range(NUM_FRAMES):
@@ -137,20 +124,17 @@ def run_test(resolution, fps):
             if not depth_frame:
                 continue
 
-            depth_frame = spatial.process(depth_frame)
-            depth_frame = temporal.process(depth_frame)
+            depth_frame = depth_filters(depth_frame)
 
             # Warp with nearest-neighbor — linear interpolation blends cube and
             # paper depths across the cube edge.
             depth_image = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
 
             raw_cube = get_median_depth_from_region(depth_image, cube_xy[0], cube_xy[1])
-            bg_readings = [get_median_depth_from_region(depth_image, bx, by) for bx, by in bg_points]
-            bg_readings = [v for v in bg_readings if v]
+            depth_bg, bg_readings = sample_bg_depth(depth_image, bg_points)
             if not raw_cube or not bg_readings:
                 continue
             depth_cube = raw_cube
-            depth_bg = float(np.median(bg_readings))
             measured_diff = depth_bg - depth_cube  # background should be further than cube
 
             last_depth_frame = depth_frame

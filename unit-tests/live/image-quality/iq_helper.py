@@ -124,6 +124,45 @@ def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value
     return float(np.median(filtered))
 
 
+# Standard bg sample positions for an A3 target with a centered cube.
+# All four points sit on the left/right columns — horizontally off the cube
+# regardless of how tall it appears in the warped ROI.
+BG_SAMPLE_POINTS = [
+    (int(WIDTH * 0.10), int(HEIGHT * 0.25)),
+    (int(WIDTH * 0.10), int(HEIGHT * 0.75)),
+    (int(WIDTH * 0.90), int(HEIGHT * 0.25)),
+    (int(WIDTH * 0.90), int(HEIGHT * 0.75)),
+]
+
+
+def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):
+    """
+    Sample median depth at each bg point and return (median_of_medians, per_region_readings).
+    Empty regions are dropped. Returns (0.0, []) if every region is empty.
+    """
+    readings = [get_median_depth_from_region(depth_image, x, y) for x, y in points]
+    readings = [v for v in readings if v]
+    if not readings:
+        return 0.0, []
+    return float(np.median(readings)), readings
+
+
+def make_depth_filter_chain():
+    """
+    Build the spatial + temporal filter chain mirroring realsense-viewer
+    defaults. Returns a callable that applies the filters to a depth frame.
+    Hole-filling is deliberately omitted because it can fill cube-face holes
+    with surrounding paper depth and bias the reading.
+    """
+    spatial = rs.spatial_filter()
+    temporal = rs.temporal_filter()
+
+    def apply(depth_frame):
+        return temporal.process(spatial.process(depth_frame))
+
+    return apply
+
+
 def is_color_close(actual, expected, tolerance):
     return all(abs(int(a) - int(e)) <= tolerance for a, e in zip(actual, expected))
 
