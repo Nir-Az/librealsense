@@ -129,22 +129,13 @@ def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value
 CUBE_CENTER = (WIDTH // 2, HEIGHT // 2)
 
 # Standard bg sample positions for an A3 target with a centered cube.
-# All four points sit on the left/right columns — horizontally off the cube
-# regardless of how tall it appears in the warped ROI. The vertical offsets
-# (30 %/70 %) keep the sample regions clear of the corner ArUco markers,
-# which extend roughly 20–25 % into the warped image from each corner.
+# Two points on the left and right paper strips at the cube's vertical
+# midline — symmetric, horizontally off a centered cube, and vertically
+# far from the corner ArUco markers. Shared by depth and color checks.
 BG_SAMPLE_POINTS = (
-    (int(WIDTH * 0.10), int(HEIGHT * 0.30)),
-    (int(WIDTH * 0.10), int(HEIGHT * 0.70)),
-    (int(WIDTH * 0.90), int(HEIGHT * 0.30)),
-    (int(WIDTH * 0.90), int(HEIGHT * 0.70)),
+    (int(WIDTH * 0.10), HEIGHT // 2),
+    (int(WIDTH * 0.90), HEIGHT // 2),
 )
-
-# Dedicated bg point for color checks — on the left paper strip at mid-height.
-# Must land on actually-white paper; empirically the mid-height position is
-# evenly-lit, whereas the BG_SAMPLE_POINTS near the corners can fall in
-# shadowed / off-white regions of the target.
-BG_COLOR_POINT = (int(WIDTH * 0.10), HEIGHT // 2)
 
 
 def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):
@@ -157,6 +148,33 @@ def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):
     if not readings:
         return 0.0, []
     return float(np.median(readings)), readings
+
+
+def get_median_color_from_region(image, x, y, size=SAMPLE_REGION_SIZE):
+    """Sample a square region around (x, y) and return per-channel median color as (R, G, B).
+    Input image is assumed to be BGR (as produced by RealSense bgr8 frames)."""
+    half = size // 2
+    h, w = image.shape[:2]
+    x_min = max(x - half, 0)
+    x_max = min(x + half + 1, w)
+    y_min = max(y - half, 0)
+    y_max = min(y + half + 1, h)
+    region = image[y_min:y_max, x_min:x_max]
+    b = int(np.median(region[:, :, 0]))
+    g = int(np.median(region[:, :, 1]))
+    r = int(np.median(region[:, :, 2]))
+    return (r, g, b)
+
+
+def sample_bg_color(color_image, points=BG_SAMPLE_POINTS):
+    """
+    Sample median color at each bg point and return (median-of-medians (R,G,B), per-region readings).
+    """
+    readings = [get_median_color_from_region(color_image, x, y) for x, y in points]
+    r = int(np.median([c[0] for c in readings]))
+    g = int(np.median([c[1] for c in readings]))
+    b = int(np.median([c[2] for c in readings]))
+    return (r, g, b), readings
 
 
 def make_depth_filter_chain():

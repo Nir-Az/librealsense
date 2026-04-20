@@ -16,9 +16,10 @@ from rspy import log, test
 import numpy as np
 import cv2
 from iq_helper import (find_roi_location, get_roi_from_frame, is_color_close,
-                       get_median_depth_from_region, sample_bg_depth, make_depth_filter_chain,
-                       save_failure_snapshot, SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS,
-                       BG_COLOR_POINT, CUBE_CENTER, WIDTH, HEIGHT)
+                       get_median_depth_from_region, sample_bg_depth,
+                       get_median_color_from_region, sample_bg_color,
+                       make_depth_filter_chain, save_failure_snapshot,
+                       SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, CUBE_CENTER, WIDTH, HEIGHT)
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -32,12 +33,10 @@ EXPECTED_DEPTH_DIFF = 110  # Expected difference in mm between background and cu
 EXPECTED_CUBE_COLOR = (35, 35, 35)  # blackish - center cube
 EXPECTED_BG_COLOR = (150, 150, 150)  # whitish - background
 
-# Color sample points — cube at center (black), bg on the left paper strip
-# at mid-height (BG_COLOR_POINT). Color uses a different point than the
-# depth bg samples because the color check requires evenly-lit white paper,
-# while depth only requires "off the cube".
+# Cube sample is at image center. Bg sampling (both color and depth) uses
+# the shared BG_SAMPLE_POINTS — 2 points on the left/right paper strips at
+# the cube's vertical midline.
 cube_x, cube_y = CUBE_CENTER
-bg_x, bg_y = BG_COLOR_POINT
 
 
 def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
@@ -58,20 +57,13 @@ def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
                   (cube_x + half, cube_y + half),
                   (0, 0, 255), 2)
 
-    # Bg color sample (green)
-    cv2.circle(overlay, (bg_x, bg_y), 6, (0, 255, 0), -1)
-    cv2.rectangle(overlay,
-                  (bg_x - half, bg_y - half),
-                  (bg_x + half, bg_y + half),
-                  (0, 255, 0), 2)
-
-    # Bg depth samples (cyan) — multi-point median
+    # Bg samples (green) — shared by color and depth
     for (bx, by) in BG_SAMPLE_POINTS:
-        cv2.circle(overlay, (bx, by), 4, (255, 255, 0), -1)
+        cv2.circle(overlay, (bx, by), 6, (0, 255, 0), -1)
         cv2.rectangle(overlay,
                       (bx - half, by - half),
                       (bx + half, by + half),
-                      (255, 255, 0), 1)
+                      (0, 255, 0), 2)
 
     # Add labels for each point with their measured distance
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -163,24 +155,26 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             last_color_roi = color_frame_roi.copy()
             last_depth_frame = depth_frame
 
-            # Check cube color (center - should be black)
-            cube_b, cube_g, cube_r = (int(v) for v in color_frame_roi[cube_y, cube_x])
-            cube_pixel = (cube_r, cube_g, cube_b)
+            # Check cube color (center - should be black) — region median instead
+            # of a single pixel so one noisy pixel can't flake the test.
+            cube_pixel = get_median_color_from_region(color_frame_roi, cube_x, cube_y)
             if is_color_close(cube_pixel, EXPECTED_CUBE_COLOR, COLOR_TOLERANCE):
                 cube_color_passes += 1
             else:
                 log.d(f"Frame {i} - Cube color at ({cube_x},{cube_y}) sampled: {cube_pixel} too far from expected {EXPECTED_CUBE_COLOR}")
 
-            # Check background color (left side - should be white)
-            bg_b, bg_g, bg_r = (int(v) for v in color_frame_roi[bg_y, bg_x])
-            bg_pixel = (bg_r, bg_g, bg_b)
+            # Check background color — median of 2 regions on the left/right
+            # paper strips at the cube's vertical midline (same BG_SAMPLE_POINTS
+            # used for depth).
+            bg_pixel, bg_color_readings = sample_bg_color(color_frame_roi, BG_SAMPLE_POINTS)
             if is_color_close(bg_pixel, EXPECTED_BG_COLOR, COLOR_TOLERANCE):
                 bg_color_passes += 1
             else:
-                log.d(f"Frame {i} - Background color at ({bg_x},{bg_y}) sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR}")
+                log.d(f"Frame {i} - Background color sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR} "
+                      f"(per-region: {bg_color_readings})")
 
             # Cube depth: single region median at center.
-            # Bg depth: median of 4 regions on the left/right columns (see BG_SAMPLE_POINTS).
+            # Bg depth: median across BG_SAMPLE_POINTS.
             raw_cube = get_median_depth_from_region(depth_frame_roi, cube_x, cube_y)
             raw_bg, bg_readings = sample_bg_depth(depth_frame_roi, BG_SAMPLE_POINTS)
 
