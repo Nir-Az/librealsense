@@ -113,14 +113,15 @@ def test_first_depth_frame_delay(sensor_device):
         time.sleep(1)
 
 
+# D421/D401/D405 do not have a color sensor support.
+@pytest.mark.device_exclude("D421")
+@pytest.mark.device_exclude("D401")
+@pytest.mark.device_exclude("D405")
 def test_first_color_frame_delay(sensor_device):
     dev, ctx = sensor_device
     product_name = dev.get_info(rs.camera_info.name)
     max_delay = 1
     os_name = platform.system()
-
-    if any(model in product_name for model in ['D421', 'D401', 'D405']):
-        pytest.skip(f"Device {product_name} has no color sensor support")
 
     log.info(f"Testing first color frame delay on {product_name} device - {os_name} OS")
 

@@ -64,9 +64,6 @@ def is_depth_fill_rate_enough(pipeline):
 def test_depth_laser_on(test_device):
     dev, ctx = test_device
     product_name = dev.get_info(rs.camera_info.name)
-
-    if any(model in product_name for model in ['D405', 'D401']):
-        pytest.skip(f"Device {product_name} has no laser, the test requires ammendment to check fill rate with laser off")
     
     tw.start_wrapper(dev)
     try:
@@ -79,11 +76,17 @@ def test_depth_laser_on(test_device):
             pipeline.wait_for_frames()
             time.sleep(2)
 
-            # Enable laser
+            # Enable laser when supported; otherwise continue with current emitter state.
             sensor = pipeline.get_active_profile().get_device().first_depth_sensor()
             if sensor.supports(rs.option.laser_power):
                 sensor.set_option(rs.option.laser_power, sensor.get_option_range(rs.option.laser_power).max)
-            sensor.set_option(rs.option.emitter_enabled, 1)
+            else:
+                log.info(f"Device {product_name} does not support laser power; running depth fill test without forcing laser power")
+
+            if sensor.supports(rs.option.emitter_enabled):
+                sensor.set_option(rs.option.emitter_enabled, 1)
+            else:
+                log.info(f"Device {product_name} does not support emitter control; running with default emitter state")
 
             log.info(f"Testing depth frame - laser ON - {product_name}")
 
