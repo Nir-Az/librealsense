@@ -130,12 +130,14 @@ CUBE_CENTER = (WIDTH // 2, HEIGHT // 2)
 
 # Standard bg sample positions for an A3 target with a centered cube.
 # All four points sit on the left/right columns — horizontally off the cube
-# regardless of how tall it appears in the warped ROI.
+# regardless of how tall it appears in the warped ROI. The vertical offsets
+# (30 %/70 %) keep the sample regions clear of the corner ArUco markers,
+# which extend roughly 20–25 % into the warped image from each corner.
 BG_SAMPLE_POINTS = (
-    (int(WIDTH * 0.10), int(HEIGHT * 0.25)),
-    (int(WIDTH * 0.10), int(HEIGHT * 0.75)),
-    (int(WIDTH * 0.90), int(HEIGHT * 0.25)),
-    (int(WIDTH * 0.90), int(HEIGHT * 0.75)),
+    (int(WIDTH * 0.10), int(HEIGHT * 0.30)),
+    (int(WIDTH * 0.10), int(HEIGHT * 0.70)),
+    (int(WIDTH * 0.90), int(HEIGHT * 0.30)),
+    (int(WIDTH * 0.90), int(HEIGHT * 0.70)),
 )
 
 
