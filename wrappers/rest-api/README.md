@@ -79,13 +79,7 @@ It simplifies remote control and data streaming from RealSense devices by handli
 
 ## Testing
 
-1. **To enable testing add the following to the requirements.txt**
+1. **Install the test extras:**
     ```bash
-    pytest==8.3.5
-    pytest-asyncio==0.26.0
-    typeguard==4.4.4
-    jinja2==3.1.6
-    pyyaml==6.0.2
-    lark==1.2.2
-    httpx==0.28.1
+    pip3 install -r requirements.txt -r requirements-test.txt
     ```
