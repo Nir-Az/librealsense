@@ -140,6 +140,12 @@ BG_SAMPLE_POINTS = (
     (int(WIDTH * 0.90), int(HEIGHT * 0.70)),
 )
 
+# Dedicated bg point for color checks — on the left paper strip at mid-height.
+# Must land on actually-white paper; empirically the mid-height position is
+# evenly-lit, whereas the BG_SAMPLE_POINTS near the corners can fall in
+# shadowed / off-white regions of the target.
+BG_COLOR_POINT = (int(WIDTH * 0.10), HEIGHT // 2)
+
 
 def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):
     """
