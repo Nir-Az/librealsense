@@ -89,25 +89,27 @@ def find_roi_location(pipeline, required_ids, DEBUG_MODE=False, timeout=5):
     cv2.destroyAllWindows()
     return M, page_pts
 
-def get_roi_from_frame(frame):
+def get_roi_from_frame(frame, interpolation=cv2.INTER_LINEAR):
     """
     Apply the previously computed transformation matrix to the given frame
-    to get the region of interest (A4 page)
+    to get the region of interest (A4 page).
+    Pass interpolation=cv2.INTER_NEAREST when warping depth data — linear
+    interpolation blends values across depth discontinuities.
     """
     global M
     if M is None:
         raise Exception("Transformation matrix not computed yet")
 
     np_frame = np.asanyarray(frame.get_data())
-    warped = cv2.warpPerspective(np_frame, M, (WIDTH, HEIGHT)) # using A4 size for its ratio
+    warped = cv2.warpPerspective(np_frame, M, (WIDTH, HEIGHT), flags=interpolation)
     return warped
 
 
-SAMPLE_REGION_SIZE = 150  # Default size of the square region for depth sampling
+SAMPLE_REGION_SIZE = 60  # Default size of the square region for depth sampling
 
 
-def get_avg_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=600):
-    """Sample a square region of given size around (x, y) and return the average depth value, filtering out values below min_value."""
+def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=600):
+    """Sample a square region of given size around (x, y) and return the median depth value, filtering out values below min_value."""
     half = size // 2
     h, w = image.shape
     x_min = max(x - half, 0)
@@ -119,7 +121,76 @@ def get_avg_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value=60
     if filtered.size == 0:
         log.w(f"No valid depth samples in region at ({x},{y})")
         return 0.0
-    return np.mean(filtered)
+    return float(np.median(filtered))
+
+
+# Center of the cube in the warped ROI — the cube is placed at the center
+# of the A3 target so the warped image center always lands on it.
+CUBE_CENTER = (WIDTH // 2, HEIGHT // 2)
+
+# Standard bg sample positions for an A3 target with a centered cube.
+# Two points on the left and right paper strips at the cube's vertical
+# midline — symmetric, horizontally off a centered cube, and vertically
+# far from the corner ArUco markers. Shared by depth and color checks.
+BG_SAMPLE_POINTS = (
+    (int(WIDTH * 0.10), HEIGHT // 2),
+    (int(WIDTH * 0.90), HEIGHT // 2),
+)
+
+
+def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):
+    """
+    Sample median depth at each bg point and return (median_of_medians, per_region_readings).
+    Empty regions are dropped. Returns (0.0, []) if every region is empty.
+    """
+    readings = [get_median_depth_from_region(depth_image, x, y) for x, y in points]
+    readings = [v for v in readings if v]
+    if not readings:
+        return 0.0, []
+    return float(np.median(readings)), readings
+
+
+def get_median_color_from_region(image, x, y, size=SAMPLE_REGION_SIZE):
+    """Sample a square region around (x, y) and return per-channel median color as (R, G, B).
+    Input image is assumed to be BGR (as produced by RealSense bgr8 frames)."""
+    half = size // 2
+    h, w = image.shape[:2]
+    x_min = max(x - half, 0)
+    x_max = min(x + half + 1, w)
+    y_min = max(y - half, 0)
+    y_max = min(y + half + 1, h)
+    region = image[y_min:y_max, x_min:x_max]
+    b = int(np.median(region[:, :, 0]))
+    g = int(np.median(region[:, :, 1]))
+    r = int(np.median(region[:, :, 2]))
+    return (r, g, b)
+
+
+def sample_bg_color(color_image, points=BG_SAMPLE_POINTS):
+    """
+    Sample median color at each bg point and return (median-of-medians (R,G,B), per-region readings).
+    """
+    readings = [get_median_color_from_region(color_image, x, y) for x, y in points]
+    r = int(np.median([c[0] for c in readings]))
+    g = int(np.median([c[1] for c in readings]))
+    b = int(np.median([c[2] for c in readings]))
+    return (r, g, b), readings
+
+
+def make_depth_filter_chain():
+    """
+    Build the spatial + temporal filter chain mirroring realsense-viewer
+    defaults. Returns a callable that applies the filters to a depth frame.
+    Hole-filling is deliberately omitted because it can fill cube-face holes
+    with surrounding paper depth and bias the reading.
+    """
+    spatial = rs.spatial_filter()
+    temporal = rs.temporal_filter()
+
+    def apply(depth_frame):
+        return temporal.process(spatial.process(depth_frame))
+
+    return apply
 
 
 def is_color_close(actual, expected, tolerance):

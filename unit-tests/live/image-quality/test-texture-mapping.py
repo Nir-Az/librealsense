@@ -15,7 +15,11 @@ import pyrealsense2 as rs
 from rspy import log, test
 import numpy as np
 import cv2
-from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, get_avg_depth_from_region, save_failure_snapshot, SAMPLE_REGION_SIZE, WIDTH, HEIGHT
+from iq_helper import (find_roi_location, get_roi_from_frame, is_color_close,
+                       get_median_depth_from_region, sample_bg_depth,
+                       get_median_color_from_region, sample_bg_color,
+                       make_depth_filter_chain, save_failure_snapshot,
+                       SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, CUBE_CENTER, WIDTH, HEIGHT)
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -29,9 +33,10 @@ EXPECTED_DEPTH_DIFF = 110  # Expected difference in mm between background and cu
 EXPECTED_CUBE_COLOR = (35, 35, 35)  # blackish - center cube
 EXPECTED_BG_COLOR = (150, 150, 150)  # whitish - background
 
-# Sample points - center of cube and left edge for background
-cube_x, cube_y = WIDTH // 2, HEIGHT // 2
-bg_x, bg_y = int(WIDTH * 0.1), HEIGHT // 2
+# Cube sample is at image center. Bg sampling (both color and depth) uses
+# the shared BG_SAMPLE_POINTS — 2 points on the left/right paper strips at
+# the cube's vertical midline.
+cube_x, cube_y = CUBE_CENTER
 
 
 def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
@@ -39,23 +44,26 @@ def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
     Simple debug view: depth+color overlay with sampling points and depth values
     """
     colorizer = rs.colorizer()
-    depth_image = get_roi_from_frame(colorizer.colorize(depth_frame))
+    # INTER_NEAREST so the debug view reflects the exact pixels we sampled.
+    depth_image = get_roi_from_frame(colorizer.colorize(depth_frame), interpolation=cv2.INTER_NEAREST)
     overlay = cv2.addWeighted(depth_image, 0.7, color_roi, 0.3, 0)
 
-    # Draw points for cube and background
-    cv2.circle(overlay, (cube_x, cube_y), 6, (0, 0, 255), -1)  # Red for cube
-    cv2.circle(overlay, (bg_x, bg_y), 6, (0, 255, 0), -1)  # Green for background
-
-    # Draw sampled region rectangles
     half = SAMPLE_REGION_SIZE // 2
+
+    # Cube (red) — color + depth sample
+    cv2.circle(overlay, (cube_x, cube_y), 6, (0, 0, 255), -1)
     cv2.rectangle(overlay,
                   (cube_x - half, cube_y - half),
                   (cube_x + half, cube_y + half),
                   (0, 0, 255), 2)
-    cv2.rectangle(overlay,
-                  (bg_x - half, bg_y - half),
-                  (bg_x + half, bg_y + half),
-                  (0, 255, 0), 2)
+
+    # Bg samples (green) — shared by color and depth
+    for (bx, by) in BG_SAMPLE_POINTS:
+        cv2.circle(overlay, (bx, by), 6, (0, 255, 0), -1)
+        cv2.rectangle(overlay,
+                      (bx - half, by - half),
+                      (bx + half, by + half),
+                      (0, 255, 0), 2)
 
     # Add labels for each point with their measured distance
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -63,8 +71,8 @@ def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
     thickness = 1
     cv2.putText(overlay, f"cube: {depth_cube:.2f}mm", (cube_x + 10, cube_y - 10),
                 font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA)
-    cv2.putText(overlay, f"bg: {depth_bg:.2f}mm", (bg_x + 10, bg_y - 10),
-                font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
+    cv2.putText(overlay, f"bg(med): {depth_bg:.2f}mm", (10, 50),
+                font, font_scale, (255, 255, 0), thickness, cv2.LINE_AA)
     cv2.putText(overlay, f"diff: {measured_diff:.2f}mm (exp: {EXPECTED_DEPTH_DIFF:.2f}mm)", (10, 30),
                 font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
@@ -100,6 +108,8 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
 
         pipeline_profile = pipeline.start(cfg)
 
+        depth_filters = make_depth_filter_chain()
+
         depth_stream = pipeline_profile.get_stream(rs.stream.depth)
         color_stream = pipeline_profile.get_stream(rs.stream.color)
         depth_to_color_extrinsics = depth_stream.get_extrinsics_to(color_stream)
@@ -131,31 +141,42 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
                 log.d(f"Frame {i}: Missing depth or color frame, skipping")
                 continue
 
+            # Filters are applied after rs.align for simplicity — the canonical
+            # order is filter -> align, but that requires rebuilding the frameset.
+            # Filtering aligned depth is a pragmatic compromise; acceptable here
+            # since we only read region medians, not per-pixel geometry.
+            depth_frame = depth_filters(depth_frame)
+
             color_frame_roi = get_roi_from_frame(color_frame)
-            depth_frame_roi = get_roi_from_frame(depth_frame)
+            # Nearest-neighbor on depth — linear interpolation blends values
+            # across cube/paper discontinuities.
+            depth_frame_roi = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
 
             last_color_roi = color_frame_roi.copy()
             last_depth_frame = depth_frame
 
-            # Check cube color (center - should be black)
-            cube_b, cube_g, cube_r = (int(v) for v in color_frame_roi[cube_y, cube_x])
-            cube_pixel = (cube_r, cube_g, cube_b)
+            # Check cube color (center - should be black) — region median instead
+            # of a single pixel so one noisy pixel can't flake the test.
+            cube_pixel = get_median_color_from_region(color_frame_roi, cube_x, cube_y)
             if is_color_close(cube_pixel, EXPECTED_CUBE_COLOR, COLOR_TOLERANCE):
                 cube_color_passes += 1
             else:
                 log.d(f"Frame {i} - Cube color at ({cube_x},{cube_y}) sampled: {cube_pixel} too far from expected {EXPECTED_CUBE_COLOR}")
 
-            # Check background color (left side - should be white)
-            bg_b, bg_g, bg_r = (int(v) for v in color_frame_roi[bg_y, bg_x])
-            bg_pixel = (bg_r, bg_g, bg_b)
+            # Check background color — median of 2 regions on the left/right
+            # paper strips at the cube's vertical midline (same BG_SAMPLE_POINTS
+            # used for depth).
+            bg_pixel, bg_color_readings = sample_bg_color(color_frame_roi, BG_SAMPLE_POINTS)
             if is_color_close(bg_pixel, EXPECTED_BG_COLOR, COLOR_TOLERANCE):
                 bg_color_passes += 1
             else:
-                log.d(f"Frame {i} - Background color at ({bg_x},{bg_y}) sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR}")
+                log.d(f"Frame {i} - Background color sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR} "
+                      f"(per-region: {bg_color_readings})")
 
-            # Sample depths using region averaging
-            raw_cube = get_avg_depth_from_region(depth_frame_roi, cube_x, cube_y)
-            raw_bg = get_avg_depth_from_region(depth_frame_roi, bg_x, bg_y)
+            # Cube depth: single region median at center.
+            # Bg depth: median across BG_SAMPLE_POINTS.
+            raw_cube = get_median_depth_from_region(depth_frame_roi, cube_x, cube_y)
+            raw_bg, bg_readings = sample_bg_depth(depth_frame_roi, BG_SAMPLE_POINTS)
 
             if not raw_bg or not raw_cube:
                 continue
@@ -172,7 +193,8 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
                 depth_diff_passes += 1
             else:
                 log.d(f"Frame {i} - Depth diff: {measured_diff:.2f}mm too far from "
-                      f"{EXPECTED_DEPTH_DIFF:.2f}mm (cube: {depth_cube:.2f}mm, bg: {depth_bg:.2f}mm)")
+                      f"{EXPECTED_DEPTH_DIFF:.2f}mm (cube: {depth_cube:.2f}mm, bg: {depth_bg:.2f}mm, "
+                      f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
 
             if DEBUG_MODE:
                 dbg = draw_debug(depth_frame, color_frame_roi, depth_cube, depth_bg, measured_diff)
