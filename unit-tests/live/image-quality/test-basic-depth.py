@@ -49,7 +49,9 @@ def detect_roi_with_exposure(marker_ids):
 def draw_debug(depth_frame, cube_xy, depth_cube, depth_bg, measured_diff):
     colorizer = rs.colorizer()
     colorized_frame = colorizer.colorize(depth_frame)
-    roi_img_disp = get_roi_from_frame(colorized_frame)
+    # Warp the colorized depth with INTER_NEAREST too so the debug view
+    # reflects the exact pixels we sampled (no smoothing across the cube edge).
+    roi_img_disp = get_roi_from_frame(colorized_frame, interpolation=cv2.INTER_NEAREST)
 
     half = SAMPLE_REGION_SIZE // 2
     cube_x, cube_y = cube_xy
@@ -120,8 +122,12 @@ def run_test(resolution, fps):
 
             depth_frame = depth_filters(depth_frame)
 
-            # Warp with nearest-neighbor — linear interpolation blends cube and
-            # paper depths across the cube edge.
+            # Warp depth with nearest-neighbor: each output pixel takes the
+            # value of the closest source pixel rather than a weighted blend
+            # of neighbors. The default INTER_LINEAR is wrong for depth — at
+            # the cube/paper boundary it averages two physically disjoint
+            # surfaces (e.g. 1050 mm cube + 1225 mm paper -> 1137 mm ghost
+            # pixels) which then contaminate the region medians.
             depth_image = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
 
             raw_cube = get_median_depth_from_region(depth_image, cube_xy[0], cube_xy[1])

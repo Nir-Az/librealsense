@@ -42,7 +42,8 @@ def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
     Simple debug view: depth+color overlay with sampling points and depth values
     """
     colorizer = rs.colorizer()
-    depth_image = get_roi_from_frame(colorizer.colorize(depth_frame))
+    # INTER_NEAREST so the debug view reflects the exact pixels we sampled.
+    depth_image = get_roi_from_frame(colorizer.colorize(depth_frame), interpolation=cv2.INTER_NEAREST)
     overlay = cv2.addWeighted(depth_image, 0.7, color_roi, 0.3, 0)
 
     half = SAMPLE_REGION_SIZE // 2
