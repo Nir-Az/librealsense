@@ -46,9 +46,7 @@ def detect_roi_with_exposure(marker_ids):
     raise Exception("Page not found")
 
 
-def draw_debug(depth_frame, cube_xy, bg_points,
-               depth_cube, depth_bg, measured_diff):
-    # original debug visualization moved here, with added sampled-region rectangles
+def draw_debug(depth_frame, cube_xy, depth_cube, depth_bg, measured_diff):
     colorizer = rs.colorizer()
     colorized_frame = colorizer.colorize(depth_frame)
     roi_img_disp = get_roi_from_frame(colorized_frame)
@@ -56,22 +54,19 @@ def draw_debug(depth_frame, cube_xy, bg_points,
     half = SAMPLE_REGION_SIZE // 2
     cube_x, cube_y = cube_xy
 
-    # Draw cube sample (red)
     cv2.circle(roi_img_disp, (cube_x, cube_y), 6, (0, 0, 255), -1)
     cv2.rectangle(roi_img_disp,
                   (cube_x - half, cube_y - half),
                   (cube_x + half, cube_y + half),
                   (0, 0, 255), 2)
 
-    # Draw each bg sample (green)
-    for (bx, by) in bg_points:
+    for (bx, by) in BG_SAMPLE_POINTS:
         cv2.circle(roi_img_disp, (bx, by), 6, (0, 255, 0), -1)
         cv2.rectangle(roi_img_disp,
                       (bx - half, by - half),
                       (bx + half, by + half),
                       (0, 255, 0), 2)
 
-    # Add labels for each point with their measured distance
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.5
     thickness = 1
@@ -115,7 +110,6 @@ def run_test(resolution, fps):
         detect_roi_with_exposure((4, 5, 6, 7))
 
         cube_xy = (WIDTH // 2, HEIGHT // 2)
-        bg_points = BG_SAMPLE_POINTS
 
         pass_count = 0
         for i in range(NUM_FRAMES):
@@ -131,8 +125,8 @@ def run_test(resolution, fps):
             depth_image = get_roi_from_frame(depth_frame, interpolation=cv2.INTER_NEAREST)
 
             raw_cube = get_median_depth_from_region(depth_image, cube_xy[0], cube_xy[1])
-            depth_bg, bg_readings = sample_bg_depth(depth_image, bg_points)
-            if not raw_cube or not bg_readings:
+            depth_bg, bg_readings = sample_bg_depth(depth_image)
+            if not raw_cube or not depth_bg:
                 continue
             depth_cube = raw_cube
             measured_diff = depth_bg - depth_cube  # background should be further than cube
@@ -150,7 +144,7 @@ def run_test(resolution, fps):
                       f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
 
             if DEBUG_MODE:
-                dbg = draw_debug(depth_frame, cube_xy, bg_points, depth_cube, depth_bg, measured_diff)
+                dbg = draw_debug(depth_frame, cube_xy, depth_cube, depth_bg, measured_diff)
                 cv2.imshow("ROI with Sampled Points", dbg)
                 cv2.waitKey(1)
 
@@ -164,7 +158,7 @@ def run_test(resolution, fps):
 
         if test.test_failed and last_depth_frame:
             save_failure_snapshot(__file__, pipeline,
-                                 draw_debug(last_depth_frame, cube_xy, bg_points,
+                                 draw_debug(last_depth_frame, cube_xy,
                                             last_depth_cube, last_depth_bg, last_measured_diff))
 
     except Exception as e:

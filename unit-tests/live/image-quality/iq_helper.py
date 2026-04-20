@@ -127,12 +127,12 @@ def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value
 # Standard bg sample positions for an A3 target with a centered cube.
 # All four points sit on the left/right columns — horizontally off the cube
 # regardless of how tall it appears in the warped ROI.
-BG_SAMPLE_POINTS = [
+BG_SAMPLE_POINTS = (
     (int(WIDTH * 0.10), int(HEIGHT * 0.25)),
     (int(WIDTH * 0.10), int(HEIGHT * 0.75)),
     (int(WIDTH * 0.90), int(HEIGHT * 0.25)),
     (int(WIDTH * 0.90), int(HEIGHT * 0.75)),
-]
+)
 
 
 def sample_bg_depth(depth_image, points=BG_SAMPLE_POINTS):

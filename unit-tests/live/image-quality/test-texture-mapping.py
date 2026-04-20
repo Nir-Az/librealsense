@@ -145,6 +145,10 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
                 log.d(f"Frame {i}: Missing depth or color frame, skipping")
                 continue
 
+            # Filters are applied after rs.align for simplicity — the canonical
+            # order is filter -> align, but that requires rebuilding the frameset.
+            # Filtering aligned depth is a pragmatic compromise; acceptable here
+            # since we only read region medians, not per-pixel geometry.
             depth_frame = depth_filters(depth_frame)
 
             color_frame_roi = get_roi_from_frame(color_frame)
