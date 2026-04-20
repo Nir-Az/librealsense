@@ -40,7 +40,7 @@ namespace {
             char const * model = udev_device_get_property_value( dev, "ID_MODEL" );
             
             // For bind/unbind events, ID_MODEL and sysname may be null
-            if( ! model  ||  strncmp( model, "Intel", 5 ))
+            if( ! model  ||  strncmp( model, "RealSense", 5 ))
                 model = sysname;
             
             if( model )
