@@ -41,6 +41,7 @@ from rspy.pytest.logging_setup import (
 from rspy.pytest.cli import consume_legacy_flags, apply_pending_flags
 from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi, resolve_device_each_serials
 from rspy.pytest.collection import filter_and_sort_items
+from rspy.pytest.plugins import check_required_plugins
 
 log = logging.getLogger('librealsense')
 
@@ -146,6 +147,7 @@ def pytest_configure(config):
     """Early setup: register markers, configure defaults, and query connected devices."""
     global context_list
 
+    check_required_plugins()
     apply_pending_flags(config)
 
     # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)

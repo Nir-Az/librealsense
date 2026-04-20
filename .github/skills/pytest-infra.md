@@ -24,11 +24,22 @@ Both frameworks share the same device/hub infrastructure (`rspy/devices.py`, `rs
 | `rspy/pytest/device_helpers.py` | Device parametrization (`@device_each`) |
 | `rspy/pytest/collection.py` | Test filtering (nightly, context gating, `--live`) |
 | `rspy/pytest/cli.py` | Legacy CLI flag consumption |
+| `rspy/pytest/plugins.py` | Required pytest plugin registry + availability check |
 | `rspy/devices.py` | Device discovery, port tracking, `enable_only()` |
 | `rspy/combined_hub.py` | Virtual port mapping across multiple hubs |
 | `rspy/device_hub.py` | Abstract hub interface |
 | `rspy/unifi.py` | UniFi PoE switch control via SSH |
 | `rspy/acroname.py` | Acroname USB hub control |
+
+### Adding a new pytest plugin requirement
+
+When adding a pytest plugin to `unit-tests/requirements.txt`, you **must** also register it in `rspy/pytest/plugins.py` under `REQUIRED_PYTEST_PLUGINS`. `conftest.py` calls `check_required_plugins()` at `pytest_configure` time and raises `pytest.UsageError` if any listed plugin is not importable.
+
+Why: a missing plugin silently disables its CLI options (e.g. if `pytest-repeat` is absent, `--repeat N` → `--count N` mapping becomes a no-op and tests run once with no error). The registry makes the dependency explicit and fails loudly.
+
+To add one:
+1. Pin the plugin in `unit-tests/requirements.txt`.
+2. Add a `'<module_name>': '<pip-package-name>'` entry to `REQUIRED_PYTEST_PLUGINS` in `rspy/pytest/plugins.py` (module name is the Python import name, typically with underscores; pip name uses hyphens).
 
 ### Hub port management
 
