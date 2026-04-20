@@ -124,6 +124,10 @@ def get_median_depth_from_region(image, x, y, size=SAMPLE_REGION_SIZE, min_value
     return float(np.median(filtered))
 
 
+# Center of the cube in the warped ROI — the cube is placed at the center
+# of the A3 target so the warped image center always lands on it.
+CUBE_CENTER = (WIDTH // 2, HEIGHT // 2)
+
 # Standard bg sample positions for an A3 target with a centered cube.
 # All four points sit on the left/right columns — horizontally off the cube
 # regardless of how tall it appears in the warped ROI.

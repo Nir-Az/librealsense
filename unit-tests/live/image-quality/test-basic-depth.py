@@ -10,7 +10,7 @@ import cv2
 import time
 from iq_helper import (find_roi_location, get_roi_from_frame, get_median_depth_from_region,
                        sample_bg_depth, make_depth_filter_chain, save_failure_snapshot,
-                       SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, WIDTH, HEIGHT)
+                       SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, CUBE_CENTER, WIDTH, HEIGHT)
 
 NUM_FRAMES = 100  # Number of frames to check
 DEPTH_TOLERANCE = 100  # Acceptable deviation from expected depth in mm
@@ -111,7 +111,7 @@ def run_test(resolution, fps):
         # markers in the lab for this test are 4,5,6,7
         detect_roi_with_exposure((4, 5, 6, 7))
 
-        cube_xy = (WIDTH // 2, HEIGHT // 2)
+        cube_xy = CUBE_CENTER
 
         pass_count = 0
         for i in range(NUM_FRAMES):

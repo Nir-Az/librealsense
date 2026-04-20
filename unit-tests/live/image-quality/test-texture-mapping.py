@@ -17,7 +17,8 @@ import numpy as np
 import cv2
 from iq_helper import (find_roi_location, get_roi_from_frame, is_color_close,
                        get_median_depth_from_region, sample_bg_depth, make_depth_filter_chain,
-                       save_failure_snapshot, SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, WIDTH, HEIGHT)
+                       save_failure_snapshot, SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS,
+                       CUBE_CENTER, WIDTH, HEIGHT)
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -31,10 +32,11 @@ EXPECTED_DEPTH_DIFF = 110  # Expected difference in mm between background and cu
 EXPECTED_CUBE_COLOR = (35, 35, 35)  # blackish - center cube
 EXPECTED_BG_COLOR = (150, 150, 150)  # whitish - background
 
-# Color sample points — cube at center (black), bg on left edge (white paper).
-# Depth bg uses multiple points (BG_SAMPLE_POINTS) for robustness.
-cube_x, cube_y = WIDTH // 2, HEIGHT // 2
-bg_x, bg_y = int(WIDTH * 0.1), HEIGHT // 2
+# Color sample points — cube at center (black), bg on the left column
+# reusing the first shared bg point so depth and color are both anchored
+# to the same constants. Depth bg uses all 4 points via BG_SAMPLE_POINTS.
+cube_x, cube_y = CUBE_CENTER
+bg_x, bg_y = BG_SAMPLE_POINTS[0]
 
 
 def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
