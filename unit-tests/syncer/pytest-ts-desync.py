@@ -11,12 +11,17 @@ log = logging.getLogger(__name__)
 
 # The timestamp jumps are closely correlated to the FPS passed to the video streams:
 # syncer expects frames to arrive every 1000/FPS milliseconds!
+#
+# Module-scope autouse fixture: pytest runs the code before `yield` once before
+# the first test in this file, the tests run at the `yield` point, and the code
+# after `yield` runs once after the last test. autouse=True wires it into every
+# test in the module without needing to declare it as a parameter.
 @pytest.fixture(scope="module", autouse=True)
 def _sw_session():
     sw.fps_c = sw.fps_d = 30
     sw.init( syncer_matcher = rs.matchers.dic_c )
     sw.start()
-    yield
+    yield  # tests in this module run here
     sw.stop()
     sw.reset()
 
