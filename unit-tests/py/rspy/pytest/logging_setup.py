@@ -239,14 +239,41 @@ def ensure_newline():
 
 
 def test_log_name(item):
-    """Derive log filename from file basename + device param (from brackets in item.name).
+    """Derive log filename from directory path + file basename + device param.
+
+    Mirrors the legacy run-unit-tests.py naming: directory components (relative to
+    unit-tests/) are joined with '-' and prepended to the file's short name.
 
     Examples:
-      'live/frames/pytest-t2ff-pipeline.py::test_x[D455-104623060005]' -> 'pytest-t2ff-pipeline_D455-104623060005.log'
-      'live/frames/pytest-t2ff-pipeline.py::test_x'                   -> 'pytest-t2ff-pipeline.log'
+      'live/frames/pytest-t2ff-pipeline.py::test_x[D455-104623060005]' -> 'pytest-live-frames-t2ff-pipeline_D455-104623060005.log'
+      'live/frames/pytest-t2ff-pipeline.py::test_x'                   -> 'pytest-live-frames-t2ff-pipeline.log'
+      'pytest-standalone.py::test_x'                                   -> 'pytest-standalone.log'
     """
-    file_path = item.fspath
-    basename = os.path.splitext(os.path.basename(str(file_path)))[0]
+    file_path = str(item.fspath)
+
+    # Resolve relative path within the unit-tests tree
+    normalized = file_path.replace(os.sep, '/')
+    marker = 'unit-tests/'
+    idx = normalized.rfind(marker)
+    if idx >= 0:
+        rel_path = normalized[idx + len(marker):]
+    elif os.path.isabs(file_path) or normalized.startswith('/'):
+        # Absolute path outside the unit-tests tree — use basename only to avoid
+        # embedding host filesystem paths in the log filename.
+        rel_path = os.path.basename(normalized)
+    else:
+        # Relative path with no unit-tests/ marker — only hit by infra test
+        # mocks that pass paths like "live/frames/pytest-depth.py" directly.
+        rel_path = normalized
+
+    dirname = os.path.dirname(rel_path)
+    basename = os.path.splitext(os.path.basename(rel_path))[0]
+
+    if dirname:
+        # conftest sets python_files=pytest-*.py, so basename always starts with 'pytest-'.
+        # Strip the prefix, then rebuild as 'pytest-{dirs}-{short_name}'.
+        dir_parts = dirname.replace('/', '-')
+        basename = f"pytest-{dir_parts}-{basename[len('pytest-'):]}"
 
     match = re.search(r'\[(.+)\]', item.name)
     if match:

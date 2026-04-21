@@ -50,10 +50,11 @@ To add one:
 ### Log file naming
 
 Python (`logging_setup.py:test_log_name()`):
-- `pytest-t2ff-pipeline.py::test_x[D455-SN]` → `pytest-t2ff-pipeline_D455-SN.log`
-- `pytest-t2ff-pipeline.py::test_x` → `pytest-t2ff-pipeline.log`
+- `live/frames/pytest-t2ff-pipeline.py::test_x[D455-SN]` → `pytest-live-frames-t2ff-pipeline_D455-SN.log`
+- `live/frames/pytest-t2ff-pipeline.py::test_x` → `pytest-live-frames-t2ff-pipeline.log`
+- `live/hw-reset/pytest-sanity.py::test_x[D455-SN]` → `pytest-live-hw-reset-sanity_D455-SN.log`
 
-The filename uses **file basename + device param from brackets only** — never the test function name.
+The filename uses **directory path (relative to unit-tests/) + file short name + device param from brackets** — mirroring the legacy `run-unit-tests.py` naming convention. Never includes the test function name.
 
 ### Jenkins report generation
 
