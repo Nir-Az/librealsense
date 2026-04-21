@@ -596,6 +596,10 @@ def enable_only( serial_numbers, recycle = False, timeout = MAX_ENUMERATION_TIME
                     re-enabling
     :param timeout: The maximum seconds to wait to make sure the devices are indeed online
     """
+    if recycle:
+        # let the driver/device settle before we disrupt it; helps the MIPI driver in particular
+        # recover cleanly when a preceding test left it in a bad state
+        time.sleep(1)
     if hub:
         #
         ports = [ get( sn ).port for sn in serial_numbers ]
@@ -721,7 +725,12 @@ def hw_reset( serial_numbers, timeout = MAX_ENUMERATION_TIME ):
     _wait_for(serial_numbers, timeout=timeout) # make sure devices are added before doing hw reset
     for sn in serial_numbers:
         dev = get( sn ).handle
-        dev.hardware_reset()
+        try:
+            dev.hardware_reset()
+        except Exception as e:
+            # swallow so one failing SN doesn't skip reset on the others and, more importantly,
+            # doesn't skip the post-reset settle that lets the driver re-enumerate
+            log.w( f'hardware_reset() failed for {sn}: {e}' )
     #
 
     if removable_devs_sns:
