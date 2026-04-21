@@ -79,17 +79,19 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
    - `#test:flag` → check for `pytest.mark` equivalent
    - If no match exists, ask the user before proceeding
 
-4. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
+4. **Replace `rspy.test` and `rspy.log`**: Convert `test.check*` to `assert`/`pytest_check.check.*` (see table below), drop `test.start`/`finish`/`print_results_and_exit`/`unexpected_exception`, and swap `from rspy import log` → `import logging; log = logging.getLogger(__name__)` (`log.d/i/w/e` → `log.debug/info/warning/error`; note stdlib `logging` needs `%s` format strings, not space-joined args). Apply to any helper modules too.
 
-5. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
+5. **Rename colliding helper modules**: Pytest collects everything in one process, so two directory-local `sw.py` (or similarly named) helpers will clash in `sys.modules`. Rename to unique names (e.g. `sw_device.py`, `sw_syncer.py`) and use `import sw_device as sw` to keep the body diff minimal. Verify by running `pytest` across both sibling dirs together.
 
-6. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
+6. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
 
-7. **Delete the old file**: After migration is verified, the old `test-*.py` should not remain.
+7. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
 
-8. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+8. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
 
-9. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+9. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+
+10. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
 
 ## Assertions: `assert` vs `pytest-check`
 
