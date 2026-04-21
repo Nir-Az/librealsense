@@ -274,10 +274,14 @@ namespace rs2
                             }
                         }
                     }
-                    res << vid_prof.width() << " x " << vid_prof.height();
-                    push_back_if_not_exists(res_values, std::pair<int, int>(vid_prof.width(), vid_prof.height()));
-                    push_back_if_not_exists(resolutions, res.str());
-                    push_back_if_not_exists(resolutions_per_stream[profile.stream_type()], std::pair<int, int>(vid_prof.width(), vid_prof.height()));
+                    
+                    if (!hide_resolutions(profile))
+                    {
+                        res << vid_prof.width() << " x " << vid_prof.height();
+                        push_back_if_not_exists(res_values, std::pair<int, int>(vid_prof.width(), vid_prof.height()));
+                        push_back_if_not_exists(resolutions, res.str());
+                        push_back_if_not_exists(resolutions_per_stream[profile.stream_type()], std::pair<int, int>(vid_prof.width(), vid_prof.height()));
+                    }
                 }
 
                 std::stringstream fps;
@@ -1833,4 +1837,22 @@ namespace rs2
         }
     }
 
+    bool subdevice_model::hide_resolutions(const stream_profile& profile) const
+    {
+        // Check if sensor is Depth Mapping Camera with labeled point cloud at specific resolutions
+        if (s->supports(RS2_CAMERA_INFO_NAME) && 
+            s->get_info(RS2_CAMERA_INFO_NAME) == std::string("Depth Mapping Camera") &&
+            profile.stream_type() == RS2_STREAM_LABELED_POINT_CLOUD)
+        {
+            if (auto vid_prof = profile.as<video_stream_profile>())
+            {
+                int width = vid_prof.width();
+                int height = vid_prof.height();
+                
+                if ((width == 2880 && height == 32) || (width == 128 && height == 128))
+                    return true;
+            }
+        }
+        return false;
+    }
 }

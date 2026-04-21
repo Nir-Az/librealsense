@@ -241,6 +241,7 @@ namespace rs2
         void set_extrinsics_from_depth_if_needed();
         bool is_post_processing_enabled_in_config_file() const;
         void avoid_streaming_on_embedded_filters_not_matching_configuration() const;
+        bool hide_resolutions(const stream_profile& profile) const;
         // used in method get_max_resolution per stream
         std::map<rs2_stream, std::vector<std::pair<int, int>>> resolutions_per_stream;
 
