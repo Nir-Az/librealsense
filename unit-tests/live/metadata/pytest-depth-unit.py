@@ -33,5 +33,8 @@ def test_depth_units_metadata(test_device):
         check.is_true(ds.supports(rs.option.depth_units), "Depth sensor should support depth_units option")
         check.equal(ds.get_option(rs.option.depth_units), depth_units_from_metadata,
             f"Depth units option ({ds.get_option(rs.option.depth_units)}) should match metadata ({depth_units_from_metadata})")
+    except Exception as e:
+        log.error(f"test failed: {e}")
+        raise
     finally:
         pipeline.stop()
