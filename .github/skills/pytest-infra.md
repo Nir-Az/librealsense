@@ -91,7 +91,9 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 
 9. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
 
-10. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+10. **Flag bugs, don't silently fix them**: If you spot a real bug or latent issue in the legacy test while migrating (e.g. missing teardown, stale references, off-by-one), surface it to the user and let them decide whether to fix it in the migration PR or defer to a follow-up. The default is defer — bundling fixes into a migration PR makes reviews harder and bisects noisier.
+
+11. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
 
 ## Assertions: `assert` vs `pytest-check`
 
