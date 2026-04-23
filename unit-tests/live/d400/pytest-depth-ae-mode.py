@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device("D455"),
-    pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on Jetson"),
+    pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on CI Jetson"),
 ]
 
 REGULAR = 0.0
