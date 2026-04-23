@@ -1,8 +1,6 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-# test:device each(D400*)
-# test:timeout 600
 # CI timeout set to 10 minutes to accommodate comprehensive testing of all
 # supported depth profiles
 
