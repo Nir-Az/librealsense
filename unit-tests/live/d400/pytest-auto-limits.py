@@ -56,7 +56,7 @@ def test_auto_exposure_toggle_one_device(test_device):
 
 
 def test_auto_exposure_two_devices(test_device):
-    dev, _ = test_device
+    dev, ctx = test_device
     depth_sensor = dev.first_depth_sensor()
     _check_required_options(depth_sensor)
 
@@ -65,11 +65,14 @@ def test_auto_exposure_two_devices(test_device):
         pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
 
     # Scenario 2: 2 device instances (s1 and s2) pointing to the same physical sensor.
+    # Each instance has its own independent SW cache for the limit value.
     # The exposure limit value is cached in SW and is only applied to HW when the toggle
     # is turned ON. Reading the limit while the toggle is OFF returns the current HW value,
     # not the SW cached value.
-    s1 = depth_sensor
-    s2 = depth_sensor
+    device1 = ctx.query_devices().front()
+    s1 = device1.first_depth_sensor()
+    device2 = ctx.query_devices().front()
+    s2 = device2.first_depth_sensor()
 
     option_range = s1.get_option_range(rs.option.auto_exposure_limit)  # same range for both instances
     # Set distinct limit values on each instance while toggle is OFF — values stay in SW cache only
@@ -119,7 +122,7 @@ def test_gain_toggle_one_device(test_device):
 
 
 def test_gain_toggle_two_devices(test_device):
-    dev, _ = test_device
+    dev, ctx = test_device
     depth_sensor = dev.first_depth_sensor()
     _check_required_options(depth_sensor)
 
@@ -128,11 +131,14 @@ def test_gain_toggle_two_devices(test_device):
         pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
 
     # Scenario 2: 2 device instances (s1 and s2) pointing to the same physical sensor.
+    # Each instance has its own independent SW cache for the limit value.
     # The gain limit value is cached in SW and is only applied to HW when the toggle
     # is turned ON. Reading the limit while the toggle is OFF returns the current HW value,
     # not the SW cached value.
-    s1 = depth_sensor
-    s2 = depth_sensor
+    device1 = ctx.query_devices().front()
+    s1 = device1.first_depth_sensor()
+    device2 = ctx.query_devices().front()
+    s2 = device2.first_depth_sensor()
 
     option_range = s1.get_option_range(rs.option.auto_gain_limit)  # same range for both instances
     # Set distinct limit values on each instance while toggle is OFF — values stay in SW cache only
