@@ -1,65 +1,68 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
-# test:device D400*
-
+import pytest
 import pyrealsense2 as rs
-from rspy import test, log
+from pytest_check import check
+import logging
+log = logging.getLogger(__name__)
 
-with test.closure("HDR Streaming - custom config"):
-    device, ctx = test.find_first_device_or_exit()
-    depth_sensor = device.first_depth_sensor()
+pytestmark = [pytest.mark.device("D400*")]
 
-    if test.check(depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)):
-        depth_sensor.set_option(rs.option.sequence_size, 2)
-        test.check(depth_sensor.get_option(rs.option.sequence_size) == 2)
-        first_exposure = 120
-        first_gain = 90
-        depth_sensor.set_option(rs.option.sequence_id, 1)
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 1)
-        depth_sensor.set_option(rs.option.exposure, first_exposure)
-        test.check(depth_sensor.get_option(rs.option.exposure) == first_exposure)
-        depth_sensor.set_option(rs.option.gain, first_gain)
-        test.check(depth_sensor.get_option(rs.option.gain) == first_gain)
 
-        second_exposure = 1200
-        second_gain = 20
-        depth_sensor.set_option(rs.option.sequence_id, 2)
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 2)
-        depth_sensor.set_option(rs.option.exposure, second_exposure)
-        test.check(depth_sensor.get_option(rs.option.exposure) == second_exposure)
-        depth_sensor.set_option(rs.option.gain, second_gain)
-        test.check(depth_sensor.get_option(rs.option.gain) == second_gain)
+def test_hdr_streaming_custom_config(test_device):
+    dev, ctx = test_device
+    depth_sensor = dev.first_depth_sensor()
 
-        depth_sensor.set_option(rs.option.hdr_enabled, 1)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
+    assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
 
-        cfg = rs.config()
-        cfg.enable_stream(rs.stream.depth)
-        cfg.enable_stream(rs.stream.infrared, 1)
-        pipe = rs.pipeline(ctx)
-        pipe.start(cfg)
+    depth_sensor.set_option(rs.option.sequence_size, 2)
+    check.is_true(depth_sensor.get_option(rs.option.sequence_size) == 2)
+    first_exposure = 120
+    first_gain = 90
+    depth_sensor.set_option(rs.option.sequence_id, 1)
+    check.is_true(depth_sensor.get_option(rs.option.sequence_id) == 1)
+    depth_sensor.set_option(rs.option.exposure, first_exposure)
+    check.is_true(depth_sensor.get_option(rs.option.exposure) == first_exposure)
+    depth_sensor.set_option(rs.option.gain, first_gain)
+    check.is_true(depth_sensor.get_option(rs.option.gain) == first_gain)
 
-        for iteration in range(1, 100):
-            data = pipe.wait_for_frames()
+    second_exposure = 1200
+    second_gain = 20
+    depth_sensor.set_option(rs.option.sequence_id, 2)
+    check.is_true(depth_sensor.get_option(rs.option.sequence_id) == 2)
+    depth_sensor.set_option(rs.option.exposure, second_exposure)
+    check.is_true(depth_sensor.get_option(rs.option.exposure) == second_exposure)
+    depth_sensor.set_option(rs.option.gain, second_gain)
+    check.is_true(depth_sensor.get_option(rs.option.gain) == second_gain)
 
-            out_depth_frame = data.get_depth_frame()
-            if iteration < 3:
-                continue
+    depth_sensor.set_option(rs.option.hdr_enabled, 1)
+    check.is_true(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
 
-            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-                frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
-                frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
-                seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
+    cfg = rs.config()
+    cfg.enable_stream(rs.stream.depth)
+    cfg.enable_stream(rs.stream.infrared, 1)
+    pipe = rs.pipeline(ctx)
+    pipe.start(cfg)
 
-                if seq_id == 0:
-                    test.check(frame_exposure == first_exposure)
-                    test.check(frame_gain == first_gain)
-                else:
-                    test.check(frame_exposure == second_exposure)
-                    test.check(frame_gain == second_gain)
+    for iteration in range(1, 100):
+        data = pipe.wait_for_frames()
 
-        pipe.stop()
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        out_depth_frame = data.get_depth_frame()
+        if iteration < 3:
+            continue
 
-test.print_results_and_exit()
+        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+            frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
+            frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
+            seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
+
+            if seq_id == 0:
+                check.is_true(frame_exposure == first_exposure)
+                check.is_true(frame_gain == first_gain)
+            else:
+                check.is_true(frame_exposure == second_exposure)
+                check.is_true(frame_gain == second_gain)
+
+    pipe.stop()
+    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
