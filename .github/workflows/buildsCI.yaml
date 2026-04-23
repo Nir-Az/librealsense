@@ -29,7 +29,7 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - name: Install
-      run: pip3 install pytest pytest-retry pytest-timeout pytest-repeat pytest-check
+      run: pip3 install -r unit-tests/requirements.txt
 
     - name: Run infra tests
       run: cd unit-tests && python3 -m pytest infra-tests/ -v
