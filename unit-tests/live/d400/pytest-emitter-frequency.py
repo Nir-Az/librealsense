@@ -63,10 +63,9 @@ def test_set_on_off_during_streaming_mode_not_allowed(test_device):
     depth_sensor.open(depth_profile)
     depth_sensor.start(lambda x: None)
     try:
-        depth_sensor.set_option(rs.option.emitter_frequency, EMITTER_FREQUENCY_91_KHZ)
-        pytest.fail("Exception was expected while setting emitter frequency during streaming depth sensor")
-    except:
+        with pytest.raises(Exception):
+            depth_sensor.set_option(rs.option.emitter_frequency, EMITTER_FREQUENCY_91_KHZ)
         assert depth_sensor.get_option(rs.option.emitter_frequency) == EMITTER_FREQUENCY_57_KHZ
-
-    depth_sensor.stop()
-    depth_sensor.close()
+    finally:
+        depth_sensor.stop()
+        depth_sensor.close()

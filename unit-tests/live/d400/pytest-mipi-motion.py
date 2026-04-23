@@ -40,8 +40,10 @@ def test_frame_index_mipi_imu(test_device):
     motion_profile_gyro = next(p for p in sensor.profiles if p.stream_type() == rs.stream.gyro and p.fps() == 100)
     sensor.open([motion_profile_accel, motion_profile_gyro])
     sensor.start(frame_callback)
-    time.sleep(seconds_to_count_frames)  # Time to count frames
-    sensor.stop()
-    sensor.close()
+    try:
+        time.sleep(seconds_to_count_frames)  # Time to count frames
+    finally:
+        sensor.stop()
+        sensor.close()
     assert gyro_frame_count > 0
     assert accel_frame_count > 0

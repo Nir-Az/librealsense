@@ -28,22 +28,14 @@ def _skip_if_fw_unsupported(dev):
 
 
 def retry_on_exception(func, max_retries=10):
-    """
-    Runs a function and retries it up to max_retries times if an exception is caught.
-
-    :param func: The function to execute.
-    :param max_retries: Maximum number of retries in case of exceptions.
-    :param args: Positional arguments to pass to the function.
-    :param kwargs: Keyword arguments to pass to the function.
-    :return: The result of the function if successful, or None if all retries fail.
-    """
+    last_exception = None
     for attempt in range(max_retries):
         try:
             return func()
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with exception: {e}")
-    print("Failed to execute the function after maximum retries.")
-    return None
+            last_exception = e
+    raise last_exception
 
 
 # HDR CONFIGURATION TESTS
@@ -106,10 +98,6 @@ def test_hdr_config_custom_config(test_device):
 
 
 def _hdr_streaming_default_config(dev, ctx):
-    """
-    This function is used to check the default configuration of HDR streaming.
-    It enables HDR, starts the pipeline, and checks the exposure and gain values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -124,26 +112,27 @@ def _hdr_streaming_default_config(dev, ctx):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        for iteration in range(1, 100):
+            data = pipe.wait_for_frames()
+            out_depth_frame = data.get_depth_frame()
+            if iteration < 3:
+                continue
 
-    for iteration in range(1, 100):
-        data = pipe.wait_for_frames()
-        out_depth_frame = data.get_depth_frame()
-        if iteration < 3:
-            continue
+            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+                frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
+                frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
+                seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
 
-        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-            frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
-            frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
-            seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
-
-            if seq_id == 0:
-                check.is_true(frame_exposure == exposure_range.default - 1000)  # w/a
-                check.is_true(frame_gain == gain_range.default)
-            else:
-                check.is_true(frame_exposure == exposure_range.min)
-                check.is_true(frame_gain == gain_range.min)
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+                if seq_id == 0:
+                    check.is_true(frame_exposure == exposure_range.default - 1000)  # w/a
+                    check.is_true(frame_gain == gain_range.default)
+                else:
+                    check.is_true(frame_exposure == exposure_range.min)
+                    check.is_true(frame_gain == gain_range.min)
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # HDR STREAMING TEST
@@ -154,10 +143,6 @@ def test_hdr_streaming_default_config(test_device):
 
 
 def _hdr_running_restart_hdr_at_restream(dev, ctx):
-    """
-    This function is used to check the behavior of HDR after a pipe restart.
-    It enables HDR, starts the pipeline, and checks the exposure and gain values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -165,19 +150,26 @@ def _hdr_running_restart_hdr_at_restream(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        depth_sensor.set_option(rs.option.hdr_enabled, 1)
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
 
-    depth_sensor.set_option(rs.option.hdr_enabled, 1)
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
+        for i in range(10):
+            data = pipe.wait_for_frames()
 
-    for i in range(10):
-        data = pipe.wait_for_frames()
-
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
-    pipe.stop()
-    pipe.start(cfg)
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
+        pipe.stop()
+        pipe.start(cfg)
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
+        pipe.stop()
+    except Exception:
+        try:
+            pipe.stop()
+        except Exception:
+            pass
+        raise
+    finally:
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # CHECKING HDR AFTER PIPE RESTART
@@ -241,10 +233,6 @@ def _check_hdr_frame_counter(pipe, num_of_frames, merging_filter):
 
 
 def _hdr_running_hdr_merge_after_hdr_restart(dev, ctx):
-    """
-    This function is used to check the behavior of HDR merge after a pipe restart.
-    It enables HDR, starts the pipeline, and checks the exposure and gain values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -258,24 +246,24 @@ def _hdr_running_hdr_merge_after_hdr_restart(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        frames_to_stream = 10
 
-    frames_to_stream = 10
+        _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
 
-    _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 0
 
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 0
+        time.sleep(1)  # in D457, the first frame without HDR here might come too soon before the previous ones discard
+        _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
 
-    time.sleep(1)  # in D457, the first frame without HDR here might come too soon before the previous ones discard
-    _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
+        depth_sensor.set_option(rs.option.hdr_enabled, 1)
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
 
-    depth_sensor.set_option(rs.option.hdr_enabled, 1)
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
-
-    _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        _check_hdr_frame_counter(pipe, frames_to_stream, merging_filter)
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # CHECKING HDR MERGE AFTER HDR RESTART
@@ -346,10 +334,6 @@ def _check_sequence_id(pipe):
 
 
 def _hdr_streaming_checking_sequence_id(dev, ctx):
-    """
-    This function is used to check the behavior of HDR streaming and sequence ID.
-    It enables HDR, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -358,14 +342,14 @@ def _hdr_streaming_checking_sequence_id(dev, ctx):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        depth_sensor.set_option(rs.option.hdr_enabled, 1)
+        assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
 
-    depth_sensor.set_option(rs.option.hdr_enabled, 1)
-    assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
-
-    _check_sequence_id(pipe)
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        _check_sequence_id(pipe)
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
     assert depth_sensor.get_option(rs.option.hdr_enabled) == 0
 
 
@@ -377,10 +361,6 @@ def test_hdr_streaming_checking_sequence_id(test_device):
 
 
 def _emitter_on_off_check_sequence_id(dev, ctx):
-    """
-    This function is used to check the behavior of emitter on/off and sequence ID.
-    It enables the emitter, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.emitter_on_off)
@@ -389,14 +369,14 @@ def _emitter_on_off_check_sequence_id(dev, ctx):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        depth_sensor.set_option(rs.option.emitter_on_off, 1)
+        assert depth_sensor.get_option(rs.option.emitter_on_off) == 1
 
-    depth_sensor.set_option(rs.option.emitter_on_off, 1)
-    assert depth_sensor.get_option(rs.option.emitter_on_off) == 1
-
-    _check_sequence_id(pipe)
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.emitter_on_off, 0)  # disable emitter before next tests
+        _check_sequence_id(pipe)
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.emitter_on_off, 0)  # disable emitter before next tests
     assert depth_sensor.get_option(rs.option.emitter_on_off) == 0
 
 
@@ -407,10 +387,6 @@ def test_emitter_on_off_checking_sequence_id(test_device):
 
 
 def _hdr_merge_discard_merged_frame(dev, ctx):
-    """
-    This function is used to check the behavior of HDR merge and discard merged frame.
-    It enables HDR, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -420,7 +396,6 @@ def _hdr_merge_discard_merged_frame(dev, ctx):
     cfg = rs.config()
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
 
     # initializing the merging filter
     merging_filter = rs.hdr_merge()
@@ -428,42 +403,48 @@ def _hdr_merge_discard_merged_frame(dev, ctx):
     num_of_iterations_in_series = 10
     first_series_last_merged_ts = -1
     at_least_one_frame_supported_seq_id = False
-    for i in range(0, num_of_iterations_in_series):
-        data = pipe.wait_for_frames()
-        out_depth_frame = data.get_depth_frame()
 
-        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-            at_least_one_frame_supported_seq_id = True
-            # merging the frames from the different HDR sequence IDs
-            merged_frameset = merging_filter.process(data)
-            merged_depth_frame = merged_frameset.as_frameset().get_depth_frame()
+    pipe.start(cfg)
+    try:
+        for i in range(0, num_of_iterations_in_series):
+            data = pipe.wait_for_frames()
+            out_depth_frame = data.get_depth_frame()
 
-            frame_ts = merged_depth_frame.get_frame_metadata(rs.frame_metadata_value.frame_timestamp)
+            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+                at_least_one_frame_supported_seq_id = True
+                # merging the frames from the different HDR sequence IDs
+                merged_frameset = merging_filter.process(data)
+                merged_depth_frame = merged_frameset.as_frameset().get_depth_frame()
 
-            if i == (num_of_iterations_in_series - 1):
-                first_series_last_merged_ts = frame_ts
+                frame_ts = merged_depth_frame.get_frame_metadata(rs.frame_metadata_value.frame_timestamp)
 
-    pipe.stop()
+                if i == (num_of_iterations_in_series - 1):
+                    first_series_last_merged_ts = frame_ts
+    finally:
+        pipe.stop()
 
     assert at_least_one_frame_supported_seq_id
     assert first_series_last_merged_ts != -1
     assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
-    pipe.start(cfg)
 
-    for i in range(0, 10):
-        data = pipe.wait_for_frames()
-        out_depth_frame = data.get_depth_frame()
+    try:
+        pipe.start(cfg)
+        try:
+            for i in range(0, 10):
+                data = pipe.wait_for_frames()
+                out_depth_frame = data.get_depth_frame()
 
-        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-            # merging the frames from the different HDR sequence IDs
-            merged_frameset = merging_filter.process(data)
-            merged_depth_frame = merged_frameset.as_frameset().get_depth_frame()
+                if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+                    # merging the frames from the different HDR sequence IDs
+                    merged_frameset = merging_filter.process(data)
+                    merged_depth_frame = merged_frameset.as_frameset().get_depth_frame()
 
-            frame_ts = merged_depth_frame.get_frame_metadata(rs.frame_metadata_value.frame_timestamp)
-            check.is_true(frame_ts > first_series_last_merged_ts)
-    pipe.stop()
-
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+                    frame_ts = merged_depth_frame.get_frame_metadata(rs.frame_metadata_value.frame_timestamp)
+                    check.is_true(frame_ts > first_series_last_merged_ts)
+        finally:
+            pipe.stop()
+    finally:
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # This tests checks that the previously saved merged frame is discarded after a pipe restart
@@ -474,10 +455,6 @@ def test_hdr_merge_discard_merged_frame(test_device):
 
 
 def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
-    """
-    This function is used to check the behavior of HDR start/stop and recover manual exposure and gain.
-    It enables HDR, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
 
@@ -496,35 +473,35 @@ def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        iteration_for_disable = 50
+        iteration_to_check_after_disable = iteration_for_disable + 5  # Was 2, aligned to validation KPI's [DSO-18682]
+        for iteration in range(1, 70):
 
-    iteration_for_disable = 50
-    iteration_to_check_after_disable = iteration_for_disable + 5  # Was 2, aligned to validation KPI's [DSO-18682]
-    for iteration in range(1, 70):
+            data = pipe.wait_for_frames()
 
-        data = pipe.wait_for_frames()
+            out_depth_frame = data.get_depth_frame()
 
-        out_depth_frame = data.get_depth_frame()
+            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
 
-        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+                frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
+                frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
 
-            frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
-            frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
+                if iteration > iteration_for_disable and iteration < iteration_to_check_after_disable:
+                    continue
 
-            if iteration > iteration_for_disable and iteration < iteration_to_check_after_disable:
-                continue
+                if iteration == iteration_for_disable:
+                    depth_sensor.set_option(rs.option.hdr_enabled, 0)
+                    assert depth_sensor.get_option(rs.option.hdr_enabled) == 0
 
-            if iteration == iteration_for_disable:
-                depth_sensor.set_option(rs.option.hdr_enabled, 0)
-                assert depth_sensor.get_option(rs.option.hdr_enabled) == 0
+                elif iteration >= iteration_to_check_after_disable:
+                    check.is_true(frame_gain == gain_before_hdr)
 
-            elif iteration >= iteration_to_check_after_disable:
-                check.is_true(frame_gain == gain_before_hdr)
-
-                log.info(f"iteration: {iteration}")
-                log.info(f"iteration_to_check_after_disable: {iteration_to_check_after_disable}")
-                check.is_true(frame_exposure == exposure_before_hdr)
-
-    pipe.stop()
+                    log.info(f"iteration: {iteration}")
+                    log.info(f"iteration_to_check_after_disable: {iteration_to_check_after_disable}")
+                    check.is_true(frame_exposure == exposure_before_hdr)
+    finally:
+        pipe.stop()
 
 
 def test_hdr_start_stop_recover_manual_exposure_and_gain(test_device):
@@ -534,10 +511,6 @@ def test_hdr_start_stop_recover_manual_exposure_and_gain(test_device):
 
 
 def _hdr_active_set_locked_options(dev, ctx):
-    """
-    This function is used to check the behavior of HDR active set locked options.
-    It enables HDR, checks that the locked options' values do not change.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -581,10 +554,6 @@ def test_hdr_active_set_locked_options(test_device):
 
 
 def _hdr_streaming_set_locked_options(dev, ctx):
-    """
-    This function is used to check the behavior of HDR streaming and set locked options.
-    It enables HDR, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
     # setting laser ON
@@ -600,26 +569,26 @@ def _hdr_streaming_set_locked_options(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        for iteration in range(1, 50):
+            data = pipe.wait_for_frames()
 
-    for iteration in range(1, 50):
-        data = pipe.wait_for_frames()
+            if iteration == 20:
+                # the following calls should not be performed and should send a LOG_WARNING
+                depth_sensor.set_option(rs.option.enable_auto_exposure, 1)
+                assert depth_sensor.get_option(rs.option.enable_auto_exposure) == 0
 
-        if iteration == 20:
-            # the following calls should not be performed and should send a LOG_WARNING
-            depth_sensor.set_option(rs.option.enable_auto_exposure, 1)
-            assert depth_sensor.get_option(rs.option.enable_auto_exposure) == 0
+                depth_sensor.set_option(rs.option.emitter_enabled, 0)
+                assert depth_sensor.get_option(rs.option.emitter_enabled) == 1
 
-            depth_sensor.set_option(rs.option.emitter_enabled, 0)
-            assert depth_sensor.get_option(rs.option.emitter_enabled) == 1
+                depth_sensor.set_option(rs.option.emitter_on_off, 1)
+                assert depth_sensor.get_option(rs.option.emitter_on_off) == 0
 
-            depth_sensor.set_option(rs.option.emitter_on_off, 1)
-            assert depth_sensor.get_option(rs.option.emitter_on_off) == 0
-
-            depth_sensor.set_option(rs.option.laser_power, laser_power_before_hdr - 30)
-            assert depth_sensor.get_option(rs.option.laser_power) == laser_power_before_hdr
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+                depth_sensor.set_option(rs.option.laser_power, laser_power_before_hdr - 30)
+                assert depth_sensor.get_option(rs.option.laser_power) == laser_power_before_hdr
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 def test_hdr_streaming_set_locked_options(test_device):
@@ -629,10 +598,6 @@ def test_hdr_streaming_set_locked_options(test_device):
 
 
 def _hdr_streaming_enable_runtime_exposure_update(dev, ctx):
-    """
-    This function is used to check the behavior of HDR streaming and enable runtime exposure update.
-    It enables HDR, starts the pipeline, and checks the sequence ID values.
-    """
     depth_sensor = dev.first_depth_sensor()
 
     assert depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)
@@ -647,33 +612,33 @@ def _hdr_streaming_enable_runtime_exposure_update(dev, ctx):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        #change exposure and gain for seq id 1
+        depth_sensor.set_option(rs.option.sequence_id, 1)  # seq id 1 is expected to be the default value
+        assert depth_sensor.get_option(rs.option.sequence_id) == 1
+        exp = depth_sensor.get_option(rs.option.exposure)
+        assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default - 1000  # w/a
+        depth_sensor.set_option(rs.option.exposure, exposure_range.default - 2000)
+        assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default - 2000
 
-    #change exposure and gain for seq id 1
-    depth_sensor.set_option(rs.option.sequence_id, 1)  # seq id 1 is expected to be the default value
-    assert depth_sensor.get_option(rs.option.sequence_id) == 1
-    exp = depth_sensor.get_option(rs.option.exposure)
-    assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default - 1000  # w/a
-    depth_sensor.set_option(rs.option.exposure, exposure_range.default - 2000)
-    assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default - 2000
+        assert depth_sensor.get_option(rs.option.gain) == gain_range.default
+        depth_sensor.set_option(rs.option.gain, gain_range.default + 2)
+        assert depth_sensor.get_option(rs.option.gain) == gain_range.default + 2
 
-    assert depth_sensor.get_option(rs.option.gain) == gain_range.default
-    depth_sensor.set_option(rs.option.gain, gain_range.default + 2)
-    assert depth_sensor.get_option(rs.option.gain) == gain_range.default + 2
+        # change exposure and gain for seq id 2
+        depth_sensor.set_option(rs.option.sequence_id, 2)# seq id 2 is expected to be the min value
+        assert depth_sensor.get_option(rs.option.sequence_id) == 2
+        exp = depth_sensor.get_option(rs.option.exposure)
+        assert depth_sensor.get_option(rs.option.exposure) == exposure_range.min  # w/a
+        depth_sensor.set_option(rs.option.exposure, exposure_range.default)
+        assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default
 
-    # change exposure and gain for seq id 2
-    depth_sensor.set_option(rs.option.sequence_id, 2)# seq id 2 is expected to be the min value
-    assert depth_sensor.get_option(rs.option.sequence_id) == 2
-    exp = depth_sensor.get_option(rs.option.exposure)
-    assert depth_sensor.get_option(rs.option.exposure) == exposure_range.min  # w/a
-    depth_sensor.set_option(rs.option.exposure, exposure_range.default)
-    assert depth_sensor.get_option(rs.option.exposure) == exposure_range.default
-
-    assert depth_sensor.get_option(rs.option.gain) == gain_range.min
-    depth_sensor.set_option(rs.option.gain, gain_range.default + 10)
-    assert depth_sensor.get_option(rs.option.gain) == gain_range.default + 10
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+        assert depth_sensor.get_option(rs.option.gain) == gain_range.min
+        depth_sensor.set_option(rs.option.gain, gain_range.default + 10)
+        assert depth_sensor.get_option(rs.option.gain) == gain_range.default + 10
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 def test_hdr_streaming_enable_runtime_exposure_update_in_hdr_mode(test_device):

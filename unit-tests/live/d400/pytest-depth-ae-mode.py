@@ -95,12 +95,11 @@ def test_set_during_streaming_mode_not_allowed(test_device):
         depth_sensor.open(depth_profile)
         depth_sensor.start(lambda x: None)
         try:
-            depth_sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
-            pytest.fail("Exception was expected while setting depth auto exposure mode during streaming depth sensor")
-        except:
+            with pytest.raises(Exception):
+                depth_sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
             assert depth_sensor.get_option(rs.option.auto_exposure_mode) == REGULAR
-
-        depth_sensor.stop()
-        depth_sensor.close()
+        finally:
+            depth_sensor.stop()
+            depth_sensor.close()
     finally:
         tw.stop_wrapper(dev)

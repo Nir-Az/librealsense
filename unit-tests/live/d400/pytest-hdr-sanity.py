@@ -44,25 +44,25 @@ def test_hdr_streaming_custom_config(test_device):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    try:
+        for iteration in range(1, 100):
+            data = pipe.wait_for_frames()
 
-    for iteration in range(1, 100):
-        data = pipe.wait_for_frames()
+            out_depth_frame = data.get_depth_frame()
+            if iteration < 3:
+                continue
 
-        out_depth_frame = data.get_depth_frame()
-        if iteration < 3:
-            continue
+            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+                frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
+                frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
+                seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
 
-        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-            frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
-            frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
-            seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
-
-            if seq_id == 0:
-                check.is_true(frame_exposure == first_exposure)
-                check.is_true(frame_gain == first_gain)
-            else:
-                check.is_true(frame_exposure == second_exposure)
-                check.is_true(frame_gain == second_gain)
-
-    pipe.stop()
-    depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+                if seq_id == 0:
+                    check.is_true(frame_exposure == first_exposure)
+                    check.is_true(frame_gain == first_gain)
+                else:
+                    check.is_true(frame_exposure == second_exposure)
+                    check.is_true(frame_gain == second_gain)
+    finally:
+        pipe.stop()
+        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
