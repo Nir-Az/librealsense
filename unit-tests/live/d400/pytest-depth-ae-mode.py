@@ -4,13 +4,17 @@
 # AE mode is supported on D455 with FW version 5.15.0.0 and above https://github.com/realsenseai/librealsense/blob/development/src/ds/d400/d400-device.cpp#L835
 
 import pytest
+import platform
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 from rspy import tests_wrapper as tw
 import logging
 log = logging.getLogger(__name__)
 
-pytestmark = [pytest.mark.device("D455")]
+pytestmark = [
+    pytest.mark.device("D455"),
+    pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on Jetson"),
+]
 
 REGULAR = 0.0
 ACCELERATED = 1.0

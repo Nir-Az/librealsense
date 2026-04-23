@@ -4,11 +4,15 @@
 # LibCI doesn't have D435i so //test:device D435I// is disabled for now
 
 import pytest
+import platform
 import pyrealsense2 as rs
 import logging
 log = logging.getLogger(__name__)
 
-pytestmark = [pytest.mark.device("D455")]
+pytestmark = [
+    pytest.mark.device("D455"),
+    pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on Jetson"),
+]
 
 gyro_sensitivity_value = 4.0
 
