@@ -10,9 +10,8 @@ log = logging.getLogger(__name__)
 pytestmark = [pytest.mark.device_each("D405")]
 
 
-def test_d405_explicit_config_ir_color_hd(test_context):
-    ctx = test_context
-    pipeline = rs.pipeline(ctx)
+def test_d405_explicit_config_ir_color_hd(module_device_setup):
+    pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.infrared, 1, 1288, 808, rs.format.y16, 15)
     config.enable_stream(rs.stream.infrared, 2, 1288, 808, rs.format.y16, 15)
@@ -37,9 +36,8 @@ def test_d405_explicit_config_ir_color_hd(test_context):
     pipeline.stop()
 
 
-def test_d405_explicit_config_ir_color_vga(test_context):
-    ctx = test_context
-    pipeline = rs.pipeline(ctx)
+def test_d405_explicit_config_ir_color_vga(module_device_setup):
+    pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.infrared, 1, 1288, 808, rs.format.y16, 15)
     config.enable_stream(rs.stream.infrared, 2, 1288, 808, rs.format.y16, 15)
@@ -64,9 +62,8 @@ def test_d405_explicit_config_ir_color_vga(test_context):
     pipeline.stop()
 
 
-def test_d405_implicit_config_ir_color(test_context):
-    ctx = test_context
-    pipeline = rs.pipeline(ctx)
+def test_d405_implicit_config_ir_color(module_device_setup):
+    pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.infrared, rs.format.y16, 15)
     config.enable_stream(rs.stream.color)
