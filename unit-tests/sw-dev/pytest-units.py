@@ -49,7 +49,7 @@ def test_depth_units():
         df = rs.depth_frame( f )
 
         log.debug( "New frame should pick up DEPTH_UNITS" )
-        check.less_equal( abs( df.get_units() - 0.001 ), 0.00000001 )
+        check.almost_equal( df.get_units(), 0.001, abs=0.00000001 )
         # sw.py uses 0x69 to fill the buffer, and Z16 is 16-bit so the pixel value should be 0x6969
         # and the units are 0.001, so distance (pixel*units) should be 26.985:
-        check.less_equal( abs( df.get_distance( 0, 0 ) - 26.985 ), 0.000001 )
+        check.almost_equal( df.get_distance( 0, 0 ), 26.985, abs=0.000001 )
