@@ -2,16 +2,12 @@
 # Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
 
 import pytest
-import platform
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 import logging
 log = logging.getLogger(__name__)
 
-IS_JETSON = platform.machine() == "aarch64"
-DEVICE = "D457" if IS_JETSON else "D455"
-
-pytestmark = [pytest.mark.device_each(DEVICE)]
+pytestmark = [pytest.mark.device_each("D455", "D457")]
 
 EMITTER_FREQUENCY_57_KHZ = 0.0
 EMITTER_FREQUENCY_91_KHZ = 1.0
