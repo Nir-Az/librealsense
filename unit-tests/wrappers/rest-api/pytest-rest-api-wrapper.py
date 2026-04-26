@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device("D455"),
-    pytest.mark.context("linux"),
+    pytest.mark.skipif(sys.platform != "linux", reason="Linux-only test"),
 ]
 
 
