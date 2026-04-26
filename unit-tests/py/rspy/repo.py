@@ -71,9 +71,15 @@ def find_built_exe( source, name ):
         exe = os.path.join( p, name )
         if os.path.isfile( exe ):
             return exe
-    if platform.system() == 'Linux':
-        # The Linux build leaves all the executables in their source dir
-        global build
+    global build
+    if build and platform.system() == 'Linux':
+        # CMake on Linux puts executables under <build>/<CONFIG>/ (CMAKE_RUNTIME_OUTPUT_DIRECTORY
+        # in CMake/unix_config.cmake). Check the common config dirs first, then fall back to
+        # the source-mirrored layout for non-CMake build trees.
+        for cfg in ('Release', 'Debug'):
+            exe = os.path.join( build, cfg, name )
+            if os.path.isfile( exe ):
+                return exe
         exe = os.path.join( build, source, name )
         if os.path.isfile( exe ):
             return exe

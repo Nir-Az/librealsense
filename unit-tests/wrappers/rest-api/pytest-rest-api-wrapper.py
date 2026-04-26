@@ -2,6 +2,7 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import os
+import platform
 import subprocess
 import sys
 import logging
@@ -10,9 +11,14 @@ from rspy import repo
 
 log = logging.getLogger(__name__)
 
+# rest-api only supports Linux x86_64 — its requirements.txt excludes aarch64,
+# and there is no Windows port today.
 pytestmark = [
     pytest.mark.device("D455"),
-    pytest.mark.skipif(sys.platform != "linux", reason="Linux-only test"),
+    pytest.mark.skipif(
+        sys.platform != "linux" or platform.machine() == "aarch64",
+        reason="rest-api wrapper supports x86_64 Linux only",
+    ),
 ]
 
 
