@@ -1,9 +1,12 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
 
+import logging
 import pyrealsense2 as rs
-from rspy import log, test
+from pytest_check import check
 from time import time
+
+log = logging.getLogger(__name__)
 
 
 fps = 30
@@ -81,7 +84,7 @@ class sensor:
             raise RuntimeError( f'frame {frame.profile} is not part of sensor {self._profiles}' )
         self._handle.on_video_frame( frame )
         received_frame = self.receive()
-        test.check_equal( received_frame.get_frame_number(), frame.frame_number )
+        check.equal( received_frame.get_frame_number(), frame.frame_number )
         return received_frame
 
     def receive( self ):
@@ -93,7 +96,7 @@ class sensor:
         # NOTE: f will never be None
         if not f:
             raise RuntimeError( f'expected a frame but got none' )
-        log.d( "Got", f )
+        log.debug( "Got %s", f )
         return f
 
 

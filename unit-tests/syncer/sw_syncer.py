@@ -1,9 +1,12 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2021 RealSense, Inc. All Rights Reserved.
 
+import logging
 import pyrealsense2 as rs
-from rspy import log, test
+from pytest_check import check
 import time
+
+log = logging.getLogger(__name__)
 
 
 # Constants
@@ -101,7 +104,7 @@ def playback_callback( status ):
     """
     global playback_status
     playback_status = status
-    log.d( "...", status )
+    log.debug( "... %s", status )
 
 
 def playback( filename, use_syncer = True ):
@@ -201,10 +204,10 @@ def generate_depth_frame( frame_number, timestamp, next_expected=None ):
     if next_expected is not None:
         actual_fps = round( 1000000 / ( next_expected - timestamp ) )
         depth_sensor.set_metadata( rs.frame_metadata_value.actual_fps, actual_fps )
-        log.d( "-->", depth_frame, "with actual FPS", actual_fps )
+        log.debug( "--> %s with actual FPS %s", depth_frame, actual_fps )
     else:
         depth_sensor.set_metadata( rs.frame_metadata_value.actual_fps, 0 )  # force to not use
-        log.d( "-->", depth_frame )
+        log.debug( "--> %s", depth_frame )
     depth_sensor.on_video_frame( depth_frame )
 
 def generate_color_frame( frame_number, timestamp, next_expected=None ):
@@ -227,10 +230,10 @@ def generate_color_frame( frame_number, timestamp, next_expected=None ):
     if next_expected is not None:
         actual_fps = round( 1000000 / ( next_expected - timestamp ) )
         color_sensor.set_metadata( rs.frame_metadata_value.actual_fps, actual_fps )
-        log.d( "-->", color_frame, "with actual FPS", actual_fps )
+        log.debug( "--> %s with actual FPS %s", color_frame, actual_fps )
     else:
         color_sensor.set_metadata( rs.frame_metadata_value.actual_fps, 0 )  # force to not use
-        log.d( "-->", color_frame )
+        log.debug( "--> %s", color_frame )
     color_sensor.on_video_frame( color_frame )
 
 def generate_depth_and_color( frame_number, timestamp ):
@@ -254,11 +257,11 @@ def expect( depth_frame = None, color_frame = None, nothing_else = False ):
             f = syncer.poll_for_frame()
     # NOTE: f will never be None
     if not f:
-        test.check( depth_frame is None, "expected a depth frame" )
-        test.check( color_frame is None, "expected a color frame" )
+        check.is_true( depth_frame is None, "expected a depth frame" )
+        check.is_true( color_frame is None, "expected a color frame" )
         return False
 
-    log.d( "Got", f )
+    log.debug( "Got %s", f )
 
     fs = rs.composite_frame( f )
 
@@ -266,26 +269,26 @@ def expect( depth_frame = None, color_frame = None, nothing_else = False ):
         depth = fs.get_depth_frame()
     else:
         depth = rs.depth_frame( f )
-    test.info( "actual depth", depth )
-    test.check_equal( depth_frame is None, not depth )
+    log.debug( "actual depth %s", depth )
+    check.equal( depth_frame is None, not depth )
     if depth_frame is not None and depth:
-        test.check_equal( depth.get_frame_number(), depth_frame )
-    
+        check.equal( depth.get_frame_number(), depth_frame )
+
     if fs:
         color = fs.get_color_frame()
     elif not depth:
         color = rs.video_frame( f )
     else:
         color = None
-    test.info( "actual color", color )
-    test.check_equal( color_frame is None, not color )
+    log.debug( "actual color %s", color )
+    check.equal( color_frame is None, not color )
     if color_frame is not None and color:
-        test.check_equal( color.get_frame_number(), color_frame )
+        check.equal( color.get_frame_number(), color_frame )
 
     if nothing_else:
         f = syncer.poll_for_frame()
-        test.info( "Expected nothing else; actual", f )
-        test.check( not f )
+        log.debug( "Expected nothing else; actual %s", f )
+        check.is_true( not f )
 
     return True
 

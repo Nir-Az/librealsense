@@ -38,6 +38,7 @@ from rspy.pytest.logging_setup import (
     setup_test_logging, bridge_rspy_log, ensure_newline, configure_logging,
     start_test_log, stop_test_log, print_terminal_summary,
 )
+from rspy.pytest.log_live_format import install as install_live_log_format
 from rspy.pytest.cli import consume_legacy_flags, apply_pending_flags
 from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi, resolve_device_each_serials
 from rspy.pytest.collection import filter_and_sort_items
@@ -218,6 +219,13 @@ def pytest_configure(config):
 
     # Configure standard logging with format matching legacy rspy.log output
     configure_logging(config, _debug_requested)
+
+    # Live-format LogRecord args so pytest's LogCaptureHandler (which retains
+    # records for the test's captured-logs report) doesn't pin arg objects.
+    # Critical for rs.frame args: the syncer's publish pool defaults to 16
+    # slots, and retained rs.frame refs block pool reclamation -- see PR
+    # #14962 investigation.
+    install_live_log_format()
 
     # Log build environment info (printed directly — pytest log handlers aren't active yet)
     print(f"-I- {'=' * 80}")

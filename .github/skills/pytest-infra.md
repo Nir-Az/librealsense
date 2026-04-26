@@ -79,17 +79,34 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
    - `#test:flag` → check for `pytest.mark` equivalent
    - If no match exists, ask the user before proceeding
 
-4. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
+4. **Replace `rspy.test` and `rspy.log`**: Convert `test.check*` to `assert`/`pytest_check.check.*` (see table below), drop `test.start`/`finish`/`print_results_and_exit`/`unexpected_exception`, and swap `from rspy import log` → `import logging; log = logging.getLogger(__name__)` (`log.d/i/w/e` → `log.debug/info/warning/error`; note stdlib `logging` needs `%s` format strings, not space-joined args). Apply to any helper modules too.
 
-5. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
+5. **Rename colliding helper modules**: Pytest collects everything in one process, so two directory-local `sw.py` (or similarly named) helpers will clash in `sys.modules`. Rename to unique names (e.g. `sw_device.py`, `sw_syncer.py`) and use `import sw_device as sw` to keep the body diff minimal. Verify by running `pytest` across both sibling dirs together.
 
-6. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
+6. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
 
-7. **Delete the old file**: After migration is verified, the old `test-*.py` should not remain.
+7. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
 
-8. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+8. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
 
-9. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+9. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+
+10. **Flag bugs, don't silently fix them**: If you spot a real bug or latent issue in the legacy test while migrating (e.g. missing teardown, stale references, off-by-one), surface it to the user and let them decide whether to fix it in the migration PR or defer to a follow-up. The default is defer — bundling fixes into a migration PR makes reviews harder and bisects noisier.
+
+11. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+
+12. **Don't wrap test bodies in `try`/`finally` to swallow failures**: Pytest natively reports any unhandled exception as a test failure — there is no need for the legacy `try: ... except: test.unexpected_exception()` pattern. When migrating, just **delete** the `try`/`except` wrapper and let pytest handle it.
+
+    - **Cleanup belongs in a fixture**, not in `try/finally` inside the test body. Use `@pytest.fixture` with `yield`: code before `yield` is setup, code after `yield` runs even when the test fails (see the `_sw_session` autouse fixture in `unit-tests/syncer/pytest-ts-*.py` for the pattern).
+    - **If you genuinely must wrap with `try`** (e.g. to attach context to the failure message), **always re-raise or fail explicitly** — never swallow:
+      ```python
+      try:
+          do_something()
+      except Exception as e:
+          pytest.fail( f"context-specific message: {e}" )  # or: raise
+      ```
+      A bare `except: pass` or a `finally:` that does cleanup but doesn't re-raise the original exception turns a real failure into a silent pass.
+    - **Expected exceptions** (legacy `try/except RuntimeError: test.check_exception(...)`) → migrate to `with pytest.raises(RuntimeError, match="..."):` (see `unit-tests/syncer/pytest-ts-same-fps.py:63` for the pattern).
 
 ## Assertions: `assert` vs `pytest-check`
 
@@ -99,11 +116,13 @@ The `pytest-check` plugin is available for soft assertions (non-stopping checks)
 |---|---|---|
 | `test.check(expr)` | `assert expr` | `check.is_true(expr)` |
 | `test.check_equal(a, b)` | `assert a == b` | `check.equal(a, b)` |
-| `test.check_approx_abs(a, b, tol)` | `assert abs(a - b) <= tol` | `check.less_equal(abs(a - b), tol)` |
+| `test.check_approx_abs(a, b, tol)` | `assert a == pytest.approx(b, abs=tol)` | `check.almost_equal(a, b, abs=tol)` |
 
 **When to use which:**
 - Use `assert` for fatal conditions (hardware failures, setup errors, preconditions)
 - Use `check.*` from `pytest-check` when the legacy test uses `test.check()` inside loops or across multiple configurations, so all iterations run and all failures are reported
+
+**Approximate-equality note:** Prefer `check.almost_equal(a, b, abs=tol)` (or `pytest.approx`) over `check.less_equal(abs(a - b), tol)`. Both work, but `almost_equal` is shorter, reads as "approximately equal", and produces a much better failure message (e.g. `0.00099 == 0.001 ± 1e-08`) instead of `0.00001 not <= 1e-08`.
 
 Import: `from pytest_check import check`
 
