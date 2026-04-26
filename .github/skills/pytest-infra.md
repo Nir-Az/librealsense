@@ -95,6 +95,19 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 
 11. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
 
+12. **Don't wrap test bodies in `try`/`finally` to swallow failures**: Pytest natively reports any unhandled exception as a test failure — there is no need for the legacy `try: ... except: test.unexpected_exception()` pattern. When migrating, just **delete** the `try`/`except` wrapper and let pytest handle it.
+
+    - **Cleanup belongs in a fixture**, not in `try/finally` inside the test body. Use `@pytest.fixture` with `yield`: code before `yield` is setup, code after `yield` runs even when the test fails (see the `_sw_session` autouse fixture in `unit-tests/syncer/pytest-ts-*.py` for the pattern).
+    - **If you genuinely must wrap with `try`** (e.g. to attach context to the failure message), **always re-raise or fail explicitly** — never swallow:
+      ```python
+      try:
+          do_something()
+      except Exception as e:
+          pytest.fail( f"context-specific message: {e}" )  # or: raise
+      ```
+      A bare `except: pass` or a `finally:` that does cleanup but doesn't re-raise the original exception turns a real failure into a silent pass.
+    - **Expected exceptions** (legacy `try/except RuntimeError: test.check_exception(...)`) → migrate to `with pytest.raises(RuntimeError, match="..."):` (see `unit-tests/syncer/pytest-ts-same-fps.py:63` for the pattern).
+
 ## Assertions: `assert` vs `pytest-check`
 
 The `pytest-check` plugin is available for soft assertions (non-stopping checks). Use it when the legacy test uses `test.check()` in a loop where execution should continue on failure — this matches the legacy behavior where `test.check()` recorded failures but didn't abort.
