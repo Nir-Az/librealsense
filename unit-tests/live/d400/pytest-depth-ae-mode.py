@@ -28,23 +28,20 @@ def _start_stop_wrapper(test_device):
     tw.stop_wrapper(dev)
 
 
-def _require_ae_mode_support(dev):
+@pytest.fixture
+def depth_sensor(test_device):
+    dev, _ = test_device
     fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
     if fw_version < rsutils.version(5, 15, 0, 0):
         pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    return dev.first_depth_sensor()
 
 
-def test_verify_camera_ae_mode_default_is_regular(test_device):
-    dev, _ = test_device
-    _require_ae_mode_support(dev)
-    depth_sensor = dev.first_depth_sensor()
+def test_verify_camera_ae_mode_default_is_regular(depth_sensor):
     assert depth_sensor.get_option(rs.option.auto_exposure_mode) == REGULAR
 
 
-def test_verify_can_set_when_auto_exposure_on(test_device):
-    dev, _ = test_device
-    _require_ae_mode_support(dev)
-    depth_sensor = dev.first_depth_sensor()
+def test_verify_can_set_when_auto_exposure_on(depth_sensor):
     depth_sensor.set_option(rs.option.enable_auto_exposure, True)
     assert bool(depth_sensor.get_option(rs.option.enable_auto_exposure)) == True
     depth_sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
@@ -53,10 +50,7 @@ def test_verify_can_set_when_auto_exposure_on(test_device):
     assert depth_sensor.get_option(rs.option.auto_exposure_mode) == REGULAR
 
 
-def test_set_during_idle_mode(test_device):
-    dev, _ = test_device
-    _require_ae_mode_support(dev)
-    depth_sensor = dev.first_depth_sensor()
+def test_set_during_idle_mode(depth_sensor):
     depth_sensor.set_option(rs.option.enable_auto_exposure, False)
     assert bool(depth_sensor.get_option(rs.option.enable_auto_exposure)) == False
     depth_sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
@@ -65,10 +59,7 @@ def test_set_during_idle_mode(test_device):
     assert depth_sensor.get_option(rs.option.auto_exposure_mode) == REGULAR
 
 
-def test_set_during_streaming_mode_not_allowed(test_device):
-    dev, _ = test_device
-    _require_ae_mode_support(dev)
-    depth_sensor = dev.first_depth_sensor()
+def test_set_during_streaming_mode_not_allowed(depth_sensor):
     # Reset option to REGULAR
     depth_sensor.set_option(rs.option.enable_auto_exposure, False)
     assert bool(depth_sensor.get_option(rs.option.enable_auto_exposure)) == False
