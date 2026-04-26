@@ -1,8 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
-
-# test:device each(D400*) !D401
-# test:timeout 1500
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 # Texture Mapping Test
 # Verifies that depth-to-color alignment (texture mapping) works correctly.
@@ -11,15 +8,25 @@
 #   - Left edge (background): expected to be white and further from camera
 # Validates both color accuracy (per-pixel) and depth difference between the two points.
 
+import pytest
 import pyrealsense2 as rs
-from rspy import log, test
+from pytest_check import check
 import numpy as np
 import cv2
+import logging
 from iq_helper import (find_roi_location, get_roi_from_frame, is_color_close,
                        get_median_depth_from_region, sample_bg_depth,
                        get_median_color_from_region, sample_bg_color,
                        make_depth_filter_chain, save_failure_snapshot,
                        SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, CUBE_CENTER, WIDTH, HEIGHT)
+
+log = logging.getLogger(__name__)
+
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_exclude("D401"),
+    pytest.mark.timeout(1500),
+]
 
 NUM_FRAMES = 100  # Number of frames to check
 COLOR_TOLERANCE = 60  # Acceptable per-channel deviation in RGB values
@@ -82,10 +89,10 @@ def draw_debug(depth_frame, color_roi, depth_cube, depth_bg, measured_diff):
     return cv2.resize(overlay, (width, height))
 
 
-dev, ctx = test.find_first_device_or_exit()
-
-
-def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
+def run_test(dev, ctx, depth_resolution, depth_fps, color_resolution, color_fps):
+    log.info(f"Texture Mapping Test: "
+             f"Depth: {depth_resolution[0]}x{depth_resolution[1]} @ {depth_fps}fps | "
+             f"Color: {color_resolution[0]}x{color_resolution[1]} @ {color_fps}fps")
     pipeline = None
     pipeline_profile = None
     last_color_roi = None
@@ -99,8 +106,8 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
         cfg.enable_stream(rs.stream.depth, depth_resolution[0], depth_resolution[1], rs.format.z16, depth_fps)
         cfg.enable_stream(rs.stream.color, color_resolution[0], color_resolution[1], rs.format.bgr8, color_fps)
         if not cfg.can_resolve(pipeline):
-            log.i(f"Config not supported! Depth: {depth_resolution[0]}x{depth_resolution[1]}@{depth_fps}fps, "
-                  f"Color: {color_resolution[0]}x{color_resolution[1]}@{color_fps}fps")
+            log.info(f"Config not supported! Depth: {depth_resolution[0]}x{depth_resolution[1]}@{depth_fps}fps, "
+                     f"Color: {color_resolution[0]}x{color_resolution[1]}@{color_fps}fps")
             return
 
         depth_sensor = dev.first_depth_sensor()
@@ -113,8 +120,10 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
         depth_stream = pipeline_profile.get_stream(rs.stream.depth)
         color_stream = pipeline_profile.get_stream(rs.stream.color)
         depth_to_color_extrinsics = depth_stream.get_extrinsics_to(color_stream)
-        if not np.any(np.array(depth_to_color_extrinsics.rotation)) and not np.any(np.array(depth_to_color_extrinsics.translation)):
-            log.f("Extrinsics between depth and color streams are all zeros, aligned stream will show blank frames, failing test")
+        if (not np.any(np.array(depth_to_color_extrinsics.rotation))
+                and not np.any(np.array(depth_to_color_extrinsics.translation))):
+            check.fail("Extrinsics between depth and color streams are all zeros, aligned stream will show blank frames, failing test")
+            return
 
         for i in range(60):  # skip initial frames
             pipeline.wait_for_frames()
@@ -138,7 +147,7 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
 
             if not depth_frame or not color_frame:
                 # if color is missing, skip
-                log.d(f"Frame {i}: Missing depth or color frame, skipping")
+                log.debug(f"Frame {i}: Missing depth or color frame, skipping")
                 continue
 
             # Filters are applied after rs.align for simplicity — the canonical
@@ -161,7 +170,7 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             if is_color_close(cube_pixel, EXPECTED_CUBE_COLOR, COLOR_TOLERANCE):
                 cube_color_passes += 1
             else:
-                log.d(f"Frame {i} - Cube color at ({cube_x},{cube_y}) sampled: {cube_pixel} too far from expected {EXPECTED_CUBE_COLOR}")
+                log.debug(f"Frame {i} - Cube color at ({cube_x},{cube_y}) sampled: {cube_pixel} too far from expected {EXPECTED_CUBE_COLOR}")
 
             # Check background color — median of 2 regions on the left/right
             # paper strips at the cube's vertical midline (same BG_SAMPLE_POINTS
@@ -170,8 +179,8 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             if is_color_close(bg_pixel, EXPECTED_BG_COLOR, COLOR_TOLERANCE):
                 bg_color_passes += 1
             else:
-                log.d(f"Frame {i} - Background color sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR} "
-                      f"(per-region: {bg_color_readings})")
+                log.debug(f"Frame {i} - Background color sampled: {bg_pixel} too far from expected {EXPECTED_BG_COLOR} "
+                          f"(per-region: {bg_color_readings})")
 
             # Cube depth: single region median at center.
             # Bg depth: median across BG_SAMPLE_POINTS.
@@ -192,9 +201,9 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
             if abs(measured_diff - EXPECTED_DEPTH_DIFF) <= DEPTH_TOLERANCE:
                 depth_diff_passes += 1
             else:
-                log.d(f"Frame {i} - Depth diff: {measured_diff:.2f}mm too far from "
-                      f"{EXPECTED_DEPTH_DIFF:.2f}mm (cube: {depth_cube:.2f}mm, bg: {depth_bg:.2f}mm, "
-                      f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
+                log.debug(f"Frame {i} - Depth diff: {measured_diff:.2f}mm too far from "
+                          f"{EXPECTED_DEPTH_DIFF:.2f}mm (cube: {depth_cube:.2f}mm, bg: {depth_bg:.2f}mm, "
+                          f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
 
             if DEBUG_MODE:
                 dbg = draw_debug(depth_frame, color_frame_roi, depth_cube, depth_bg, measured_diff)
@@ -206,60 +215,56 @@ def run_test(depth_resolution, depth_fps, color_resolution, color_fps):
 
         min_passes = int(NUM_FRAMES * FRAMES_PASS_THRESHOLD)
 
-        log.i("\n--- Color Results ---")
-        log.i(f"Cube color passed in {cube_color_passes}/{NUM_FRAMES} frames")
-        test.check(cube_color_passes >= min_passes, "Cube color failed in too many frames")
+        log.info("\n--- Color Results ---")
+        log.info(f"Cube color passed in {cube_color_passes}/{NUM_FRAMES} frames")
+        cube_ok = check.is_true(cube_color_passes >= min_passes, "Cube color failed in too many frames")
 
-        log.i(f"Background color passed in {bg_color_passes}/{NUM_FRAMES} frames")
-        test.check(bg_color_passes >= min_passes, "Background color failed in too many frames")
+        log.info(f"Background color passed in {bg_color_passes}/{NUM_FRAMES} frames")
+        bg_ok = check.is_true(bg_color_passes >= min_passes, "Background color failed in too many frames")
 
-        log.i("\n--- Depth Results ---")
-        log.i(f"Depth difference passed in {depth_diff_passes}/{NUM_FRAMES} frames")
-        test.check(depth_diff_passes >= min_passes, "Depth difference failed in too many frames")
+        log.info("\n--- Depth Results ---")
+        log.info(f"Depth difference passed in {depth_diff_passes}/{NUM_FRAMES} frames")
+        depth_ok = check.is_true(depth_diff_passes >= min_passes, "Depth difference failed in too many frames")
 
-        if test.test_failed and last_color_roi is not None and last_depth_frame:
+        if (not (cube_ok and bg_ok and depth_ok)) and last_color_roi is not None and last_depth_frame:
             save_failure_snapshot(__file__, pipeline,
                                  draw_debug(last_depth_frame, last_color_roi,
                                             last_depth_cube, last_depth_bg, last_measured_diff))
 
     except Exception as e:
         save_failure_snapshot(__file__, pipeline)
-        test.unexpected_exception()
+        log.exception("Unexpected exception")
+        check.fail(f"Unexpected exception: {e}")
     finally:
         cv2.destroyAllWindows()
         if pipeline_profile:
             pipeline.stop()
 
-log.d("context:", test.context)
 
-configurations = [((1280, 720), 30)]
-# on nightly we check additional arbitrary configurations
-if "nightly" in test.context or "weekly" in test.context:
-    configurations += [
-        ((640, 480), 15),
-        ((640, 480), 30),
-        ((640, 480), 60),
-        ((848, 480), 15),
-        ((848, 480), 30),
-        ((848, 480), 60),
-        ((1280, 720), 5),
-        ((1280, 720), 10),
-        ((1280, 720), 15),
-    ]
+def test_texture_mapping(test_device, test_context_var):
+    dev, ctx = test_device
 
+    configurations = [((1280, 720), 30)]
+    # on nightly we check additional arbitrary configurations
+    if "nightly" in test_context_var or "weekly" in test_context_var:
+        configurations += [
+            ((640, 480), 15),
+            ((640, 480), 30),
+            ((640, 480), 60),
+            ((848, 480), 15),
+            ((848, 480), 30),
+            ((848, 480), 60),
+            ((1280, 720), 5),
+            ((1280, 720), 10),
+            ((1280, 720), 15),
+        ]
 
-for (depth_resolution, depth_fps) in configurations:
-    for (color_resolution, color_fps) in configurations:
-        if "weekly" not in test.context:
-            # in nightly we test only matching resolutions and fps
-            if depth_resolution != color_resolution or depth_fps != color_fps:
-                continue
+    for (depth_resolution, depth_fps) in configurations:
+        for (color_resolution, color_fps) in configurations:
+            if "weekly" not in test_context_var:
+                # in nightly we test only matching resolutions and fps
+                if depth_resolution != color_resolution or depth_fps != color_fps:
+                    continue
 
-        test.start("Texture Mapping Test",
-                    f"Depth: {depth_resolution[0]}x{depth_resolution[1]} @ {depth_fps}fps | "
-                    f"Color: {color_resolution[0]}x{color_resolution[1]} @ {color_fps}fps")
-        run_test(depth_resolution, depth_fps, color_resolution, color_fps)
-        test.finish()
+            run_test(dev, ctx, depth_resolution, depth_fps, color_resolution, color_fps)
 
-
-test.print_results_and_exit()

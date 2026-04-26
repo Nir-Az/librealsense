@@ -1,13 +1,20 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-# test:device each(D400*) !D401
-
+import pytest
 import pyrealsense2 as rs
-from rspy import log, test
+from pytest_check import check
 import numpy as np
 import cv2
+import logging
 from iq_helper import find_roi_location, get_roi_from_frame, is_color_close, save_failure_snapshot, WIDTH, HEIGHT
+
+log = logging.getLogger(__name__)
+
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_exclude("D401"),
+]
 
 NUM_FRAMES = 100 # Number of frames to check
 COLOR_TOLERANCE = 60 # Acceptable per-channel deviation in RGB values
@@ -36,7 +43,6 @@ xs = [1.5 * WIDTH / 6.0, WIDTH / 2.0, 4.5 * WIDTH / 6.0]
 ys = [1.5 * HEIGHT / 6.0, HEIGHT / 2.0, 4.5 * HEIGHT / 6.0]
 centers = [(x, y) for y in ys for x in xs]
 
-dev, ctx = test.find_first_device_or_exit()
 
 def draw_debug(frame_bgr, a4_page_bgr):
     """
@@ -73,14 +79,15 @@ def draw_debug(frame_bgr, a4_page_bgr):
     return np.hstack([left, right])
 
 
-def run_test(resolution, fps):
+def run_test(ctx, resolution, fps):
+    log.info(f"Basic Color Image Quality Test: {resolution[0]}x{resolution[1]} @ {fps}fps")
     color_match_count = {color: 0 for color in expected_colors.keys()}
     color_sums = {color: np.zeros(3, dtype=int) for color in expected_colors.keys()}
     pipeline = rs.pipeline(ctx)
     cfg = rs.config()
     cfg.enable_stream(rs.stream.color, resolution[0], resolution[1], rs.format.bgr8, fps)
     if not cfg.can_resolve(pipeline):
-        log.i(f"Configuration {resolution[0]}x{resolution[1]}@{fps}fps is not supported by the device")
+        log.info(f"Configuration {resolution[0]}x{resolution[1]}@{fps}fps is not supported by the device")
         return
     pipeline_profile = pipeline.start(cfg)
     for i in range(60):  # skip initial frames
@@ -114,7 +121,7 @@ def run_test(resolution, fps):
                 if is_color_close(pixel, expected_rgb, COLOR_TOLERANCE):
                     color_match_count[color] += 1
                 else:
-                    log.d(f"Frame {i} - {color} at ({x},{y}) sampled: {pixel} too far from expected {expected_rgb}")
+                    log.debug(f"Frame {i} - {color} at ({x},{y}) sampled: {pixel} too far from expected {expected_rgb}")
 
             if DEBUG_MODE:
                 dbg = draw_debug(img_bgr, color_frame_roi)
@@ -129,41 +136,37 @@ def run_test(resolution, fps):
         min_passes = int(NUM_FRAMES * FRAMES_PASS_THRESHOLD)
         for name, count in color_match_count.items():
             avg = tuple(int(v) for v in color_sums[name] // NUM_FRAMES)
-            log.i(f"{name.title()} passed in {count}/{NUM_FRAMES} frames  avg={avg} expected={expected_colors[name]}")
-            test.check(count >= min_passes)
+            log.info(f"{name.title()} passed in {count}/{NUM_FRAMES} frames  avg={avg} expected={expected_colors[name]}")
+            check.is_true(count >= min_passes)
 
-        if test.test_failed and last_frame_bgr is not None:
+        if any(c < min_passes for c in color_match_count.values()) and last_frame_bgr is not None:
             save_failure_snapshot(__file__, pipeline, draw_debug(last_frame_bgr, last_roi))
 
     except Exception as e:
         save_failure_snapshot(__file__, pipeline)
-        test.fail()
         raise e
     finally:
         cv2.destroyAllWindows()
         pipeline.stop()
 
 
-log.d("context:", test.context)
+def test_basic_color(test_device, test_context_var):
+    dev, ctx = test_device
 
-configurations = [((1280, 720), 30)]
-# on nightly we check additional arbitrary configurations
-if "nightly" in test.context:
-    configurations += [
-        ((640,480), 15),
-        ((640,480), 30),
-        ((640,480), 60),
-        ((848,480), 15),
-        ((848,480), 30),
-        ((848,480), 60),
-        ((1280,720), 5),
-        ((1280,720), 10),
-        ((1280,720), 15),
-    ]
+    configurations = [((1280, 720), 30)]
+    # on nightly we check additional arbitrary configurations
+    if "nightly" in test_context_var:
+        configurations += [
+            ((640,480), 15),
+            ((640,480), 30),
+            ((640,480), 60),
+            ((848,480), 15),
+            ((848,480), 30),
+            ((848,480), 60),
+            ((1280,720), 5),
+            ((1280,720), 10),
+            ((1280,720), 15),
+        ]
 
-for resolution, fps in configurations:
-    test.start("Basic Color Image Quality Test:", f"{resolution[0]}x{resolution[1]} @ {fps}fps")
-    run_test(resolution, fps)
-    test.finish()
-
-test.print_results_and_exit()
+    for resolution, fps in configurations:
+        run_test(ctx, resolution, fps)

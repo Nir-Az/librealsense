@@ -1,16 +1,23 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2025 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-# test:device each(D400*) !D401
-# test:timeout 400  # extra time for page detection
-
+import pytest
 import pyrealsense2 as rs
-from rspy import log, test
+from pytest_check import check
 import cv2
 import time
+import logging
 from iq_helper import (find_roi_location, get_roi_from_frame, get_median_depth_from_region,
                        sample_bg_depth, make_depth_filter_chain, save_failure_snapshot,
                        SAMPLE_REGION_SIZE, BG_SAMPLE_POINTS, CUBE_CENTER, WIDTH, HEIGHT)
+
+log = logging.getLogger(__name__)
+
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_exclude("D401"),
+    pytest.mark.timeout(400),  # extra time for page detection
+]
 
 NUM_FRAMES = 100  # Number of frames to check
 DEPTH_TOLERANCE = 100  # Acceptable deviation from expected depth in mm
@@ -19,13 +26,9 @@ DEBUG_MODE = False
 
 EXPECTED_DEPTH_DIFF = 120  # Expected difference in mm between background and cube
 
-dev, ctx = test.find_first_device_or_exit()
-depth_sensor = dev.first_depth_sensor()
 
-
-def detect_roi_with_exposure(marker_ids):
+def detect_roi_with_exposure(pipeline, depth_sensor, marker_ids):
     # Set increasingly high exposure to be able to detect ArUco markers
-    global pipeline, depth_sensor
     exposure = 10000
     max_exposure = 30000
     step = 10000
@@ -35,13 +38,13 @@ def detect_roi_with_exposure(marker_ids):
         try:
             find_roi_location(pipeline, marker_ids, DEBUG_MODE,
                               timeout=15)  # extended timeout for some cases like low fps
-            log.d("Page found within ", time.time() - start_time)
+            log.debug(f"Page found within {time.time() - start_time}")
             return True
         except Exception as e:
-            log.d("Got an exception:", str(e), "within", time.time() - start_time)
+            log.debug(f"Got an exception: {e} within {time.time() - start_time}")
             exposure += step
-            log.d("Failed to detect markers with exposure", exposure - step,
-                  ", trying with exposure", exposure)
+            log.debug(f"Failed to detect markers with exposure {exposure - step}"
+                      f", trying with exposure {exposure}")
 
     raise Exception("Page not found")
 
@@ -86,21 +89,22 @@ def draw_debug(depth_frame, cube_xy, depth_cube, depth_bg, measured_diff):
     return roi_img_disp
 
 
-def run_test(resolution, fps):
+def run_test(dev, ctx, resolution, fps):
+    log.info(f"Basic Depth Image Quality Test: {resolution[0]}x{resolution[1]} @ {fps}fps")
+    depth_sensor = dev.first_depth_sensor()
     last_depth_frame = None
     last_depth_cube = 0
     last_depth_bg = 0
     last_measured_diff = 0
+    pipeline = rs.pipeline(ctx)
+    profile = None
     try:
-        global pipeline
-        pipeline = rs.pipeline(ctx)
-        profile = None
         cfg = rs.config()
         cfg.enable_stream(rs.stream.depth, resolution[0], resolution[1], rs.format.z16, fps)
         cfg.enable_stream(rs.stream.infrared, 1, resolution[0], resolution[1], rs.format.y8,
                           fps)  # needed for finding the ArUco markers
         if not cfg.can_resolve(pipeline):
-            log.i(f"Configuration {resolution[0]}x{resolution[1]} @ {fps}fps is not supported by the device")
+            log.info(f"Configuration {resolution[0]}x{resolution[1]} @ {fps}fps is not supported by the device")
             return
         profile = pipeline.start(cfg)
         time.sleep(2)
@@ -109,7 +113,7 @@ def run_test(resolution, fps):
 
         # find region of interest (page) and get the transformation matrix
         # markers in the lab for this test are 4,5,6,7
-        detect_roi_with_exposure((4, 5, 6, 7))
+        detect_roi_with_exposure(pipeline, depth_sensor, (4, 5, 6, 7))
 
         cube_xy = CUBE_CENTER
 
@@ -145,9 +149,9 @@ def run_test(resolution, fps):
             if abs(measured_diff - EXPECTED_DEPTH_DIFF) <= DEPTH_TOLERANCE:
                 pass_count += 1
             else:
-                log.d(f"Frame {i} - Depth diff: {measured_diff:.3f}mm too far from "
-                      f"{EXPECTED_DEPTH_DIFF:.3f}mm (cube: {depth_cube:.3f}mm, bg: {depth_bg:.3f}mm, "
-                      f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
+                log.debug(f"Frame {i} - Depth diff: {measured_diff:.3f}mm too far from "
+                          f"{EXPECTED_DEPTH_DIFF:.3f}mm (cube: {depth_cube:.3f}mm, bg: {depth_bg:.3f}mm, "
+                          f"bg_samples: {[f'{v:.1f}' for v in bg_readings]})")
 
             if DEBUG_MODE:
                 dbg = draw_debug(depth_frame, cube_xy, depth_cube, depth_bg, measured_diff)
@@ -159,17 +163,16 @@ def run_test(resolution, fps):
         #     cv2.waitKey(0)
 
         min_passes = int(NUM_FRAMES * FRAMES_PASS_THRESHOLD)
-        log.i(f"Depth diff passed in {pass_count}/{NUM_FRAMES} frames")
-        test.check(pass_count >= min_passes)
+        log.info(f"Depth diff passed in {pass_count}/{NUM_FRAMES} frames")
+        check_ok = check.is_true(pass_count >= min_passes)
 
-        if test.test_failed and last_depth_frame:
+        if not check_ok and last_depth_frame:
             save_failure_snapshot(__file__, pipeline,
                                  draw_debug(last_depth_frame, cube_xy,
                                             last_depth_cube, last_depth_bg, last_measured_diff))
 
     except Exception as e:
         save_failure_snapshot(__file__, pipeline)
-        test.fail()
         raise e
     finally:
         cv2.destroyAllWindows()
@@ -177,26 +180,23 @@ def run_test(resolution, fps):
             pipeline.stop()
 
 
-log.d("context:", test.context)
+def test_basic_depth(test_device, test_context_var):
+    dev, ctx = test_device
 
-configurations = [((1280, 720), 30)]
-# on nightly we check additional arbitrary configurations
-if "nightly" in test.context:
-    configurations += [
-        ((640, 480), 15),
-        ((640, 480), 30),
-        ((640, 480), 60),
-        ((848, 480), 15),
-        ((848, 480), 30),
-        ((848, 480), 60),
-        ((1280, 720), 5),
-        ((1280, 720), 10),
-        ((1280, 720), 15),
-    ]
+    configurations = [((1280, 720), 30)]
+    # on nightly we check additional arbitrary configurations
+    if "nightly" in test_context_var:
+        configurations += [
+            ((640, 480), 15),
+            ((640, 480), 30),
+            ((640, 480), 60),
+            ((848, 480), 15),
+            ((848, 480), 30),
+            ((848, 480), 60),
+            ((1280, 720), 5),
+            ((1280, 720), 10),
+            ((1280, 720), 15),
+        ]
 
-for resolution, fps in configurations:
-    test.start("Basic Depth Image Quality Test", f"{resolution[0]}x{resolution[1]} @ {fps}fps")
-    run_test(resolution, fps)
-    test.finish()
-
-test.print_results_and_exit()
+    for resolution, fps in configurations:
+        run_test(dev, ctx, resolution, fps)
