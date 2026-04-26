@@ -49,23 +49,19 @@ pytestmark = [
 _contrast_cache = {}
 
 
-@pytest.fixture
-def contrast_calibration(test_device, request):
-    """Return (contrast_threshold, contrast_diff), calibrating only once per device per module."""
-    dev, _ = test_device
+def measure_emitter_contrast(dev, depth_sensor):
+    """Return (contrast_threshold, contrast_diff), calibrating only once per device."""
     serial = dev.get_info(rs.camera_info.serial_number) if dev.supports(rs.camera_info.serial_number) else str(id(dev))
-    cache_key = (request.module.__name__, serial)
-    if cache_key not in _contrast_cache:
-        depth_sensor = dev.first_depth_sensor()
+    if serial not in _contrast_cache:
         if not depth_sensor.supports(rs.option.emitter_enabled):
             pytest.skip("Device does not support emitter_enabled option")
         _, contrast_on, _, _, _ = capture_and_analyze_frames(depth_sensor, expected_emitter_state=1, num_frames=10)
         _, contrast_off, _, _, _ = capture_and_analyze_frames(depth_sensor, expected_emitter_state=0, num_frames=10)
-        _contrast_cache[cache_key] = (
+        _contrast_cache[serial] = (
             (contrast_on + contrast_off) / 2.0,
             abs(contrast_on - contrast_off),
         )
-    return _contrast_cache[cache_key]
+    return _contrast_cache[serial]
 
 # Flag to use auto exposure (default is manual exposure at 1/6 frame time)
 USE_AUTO_EXPOSURE = False
@@ -357,7 +353,7 @@ def test_calibrate_emitter_on_off_contrast_threshold(test_device):
         check.is_true(False, "Could not calibrate contrast threshold")
 
 
-def test_verify_emitter_state_using_calibrated_threshold(test_device, contrast_calibration):
+def test_verify_emitter_state_using_calibrated_threshold(test_device):
     # Test 4: Apply calibrated threshold to verify emitter state detection
     # Uses the threshold from test 3 to validate emitter ON and OFF states
     # can be reliably distinguished via IR frame analysis.
@@ -367,7 +363,7 @@ def test_verify_emitter_state_using_calibrated_threshold(test_device, contrast_c
     if not depth_sensor.supports(rs.option.emitter_enabled):
         pytest.skip("Device does not support emitter_enabled option, skipping test...")
 
-    contrast_threshold, _ = contrast_calibration
+    contrast_threshold, _ = measure_emitter_contrast(dev, depth_sensor)
 
     # Test ON state
     _, contrast_test_on, _, md_matches_test_on, md_frac_test_on = capture_and_analyze_frames(depth_sensor, expected_emitter_state=1, num_frames=10)
@@ -384,7 +380,7 @@ def test_verify_emitter_state_using_calibrated_threshold(test_device, contrast_c
         check.is_true(not md_matches_test_off, "Frame metadata should indicate emitter OFF for OFF verification")
 
 
-def test_toggle_emitter_while_streaming_camera_stability(test_device, contrast_calibration):
+def test_toggle_emitter_while_streaming_camera_stability(test_device):
     # Test 5: Rapid emitter toggling during streaming - verify no frame drops or stalls
     #
     # This test validates that:
@@ -399,7 +395,7 @@ def test_toggle_emitter_while_streaming_camera_stability(test_device, contrast_c
     if not depth_sensor.supports(rs.option.emitter_enabled):
         pytest.skip("Device does not support emitter_enabled option, skipping test...")
 
-    contrast_threshold, _ = contrast_calibration
+    contrast_threshold, _ = measure_emitter_contrast(dev, depth_sensor)
 
     # Select 30fps IR profile for consistent timing
     ir_profile = next((p for p in depth_sensor.profiles
@@ -577,14 +573,14 @@ def test_emitter_state_persists_across_stream_start_stop(test_device):
         "Emitter state should persist after streaming"
 
 
-def test_emitter_on_off_alternates_emitter_state_while_streaming(test_device, contrast_calibration):
+def test_emitter_on_off_alternates_emitter_state_while_streaming(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
 
     if not depth_sensor.supports(rs.option.emitter_enabled):
         pytest.skip("Device does not support emitter_enabled option, skipping test...")
 
-    contrast_threshold, contrast_diff = contrast_calibration
+    contrast_threshold, contrast_diff = measure_emitter_contrast(dev, depth_sensor)
 
     if depth_sensor.supports(rs.option.emitter_on_off):
         # Open IR profile and stream

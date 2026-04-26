@@ -4,6 +4,7 @@
 import pytest
 import platform
 import pyrealsense2 as rs
+from pytest_check import check
 import logging
 log = logging.getLogger(__name__)
 import time
@@ -28,10 +29,10 @@ def test_frame_index_mipi_imu(test_device):
         stream_type = f.get_profile().stream_type()
         if stream_type == rs.stream.gyro:
             gyro_frame_count += 1
-            assert f.get_frame_number() == gyro_frame_count
+            check.equal(f.get_frame_number(), gyro_frame_count)
         elif stream_type == rs.stream.accel:
             accel_frame_count += 1
-            assert f.get_frame_number() == accel_frame_count
+            check.equal(f.get_frame_number(), accel_frame_count)
 
     seconds_to_count_frames = 10
     dev, _ = test_device

@@ -11,6 +11,23 @@ log = logging.getLogger(__name__)
 
 pytestmark = [pytest.mark.device("D400*")]
 
+_auto_limit_checked: set = set()
+
+
+@pytest.fixture(autouse=True)
+def _require_auto_limit_support(test_device, request):
+    """Check required options and FW version once per module."""
+    module_name = request.module.__name__
+    if module_name in _auto_limit_checked:
+        return
+    dev, _ = test_device
+    depth_sensor = dev.first_depth_sensor()
+    _check_required_options(depth_sensor)
+    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
+    if fw_version < rsutils.version(5, 12, 10, 11):
+        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
+    _auto_limit_checked.add(module_name)
+
 # 1. Scenario 1:
     #          - Change control value few times
     #         - Turn toggle off
@@ -37,11 +54,6 @@ def _check_required_options(depth_sensor):
 def test_auto_exposure_toggle_one_device(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    _check_required_options(depth_sensor)
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 12, 10, 11):
-        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
 
     # Scenario 1:
     sensor = depth_sensor
@@ -56,13 +68,7 @@ def test_auto_exposure_toggle_one_device(test_device):
 
 
 def test_auto_exposure_two_devices(test_device):
-    dev, ctx = test_device
-    depth_sensor = dev.first_depth_sensor()
-    _check_required_options(depth_sensor)
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 12, 10, 11):
-        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
+    _, ctx = test_device
 
     # Scenario 2: 2 device instances (s1 and s2) pointing to the same physical sensor.
     # Each instance has its own independent SW cache for the limit value.
@@ -98,11 +104,6 @@ def test_auto_exposure_two_devices(test_device):
 def test_gain_toggle_one_device(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    _check_required_options(depth_sensor)
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 12, 10, 11):
-        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
 
     # Scenario 1:
     sensor = depth_sensor
@@ -122,13 +123,7 @@ def test_gain_toggle_one_device(test_device):
 
 
 def test_gain_toggle_two_devices(test_device):
-    dev, ctx = test_device
-    depth_sensor = dev.first_depth_sensor()
-    _check_required_options(depth_sensor)
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 12, 10, 11):
-        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
+    _, ctx = test_device
 
     # Scenario 2: 2 device instances (s1 and s2) pointing to the same physical sensor.
     # Each instance has its own independent SW cache for the limit value.

@@ -3,6 +3,7 @@
 
 import pytest
 import pyrealsense2 as rs
+from pytest_check import check
 import logging
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ def test_d405_explicit_config_ir_color_hd(test_context):
     try:
         for _ in range(10):
             frames = pipeline.wait_for_frames()
-            assert frames.size() == 3
+            check.is_true(frames.size() == 3)
             ir_1_stream_found = False
             ir_2_stream_found = False
             color_stream_found = False
@@ -34,7 +35,7 @@ def test_d405_explicit_config_ir_color_hd(test_context):
                         ir_2_stream_found = True
                 elif profile.stream_type() == rs.stream.color:
                     color_stream_found = True
-            assert ir_1_stream_found and ir_2_stream_found and color_stream_found
+            check.is_true(ir_1_stream_found and ir_2_stream_found and color_stream_found)
     finally:
         pipeline.stop()
 
@@ -51,7 +52,7 @@ def test_d405_explicit_config_ir_color_vga(test_context):
     try:
         for _ in range(10):
             frames = pipeline.wait_for_frames()
-            assert frames.size() == 3
+            check.is_true(frames.size() == 3)
             ir_1_stream_found = False
             ir_2_stream_found = False
             color_stream_found = False
@@ -64,7 +65,7 @@ def test_d405_explicit_config_ir_color_vga(test_context):
                         ir_2_stream_found = True
                 elif profile.stream_type() == rs.stream.color:
                     color_stream_found = True
-            assert ir_1_stream_found and ir_2_stream_found and color_stream_found
+            check.is_true(ir_1_stream_found and ir_2_stream_found and color_stream_found)
     finally:
         pipeline.stop()
 
@@ -80,7 +81,7 @@ def test_d405_implicit_config_ir_color(test_context):
     try:
         for _ in range(10):
             frames = pipeline.wait_for_frames()
-            assert frames.size() == 2
+            check.is_true(frames.size() == 2)
             ir_1_stream_found = False
             color_stream_found = False
             for f in frames:
@@ -90,6 +91,6 @@ def test_d405_implicit_config_ir_color(test_context):
                         ir_1_stream_found = True
                 elif profile.stream_type() == rs.stream.color:
                     color_stream_found = True
-            assert ir_1_stream_found and color_stream_found
+            check.is_true(ir_1_stream_found and color_stream_found)
     finally:
         pipeline.stop()
