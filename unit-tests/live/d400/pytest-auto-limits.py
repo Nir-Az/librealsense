@@ -11,22 +11,21 @@ log = logging.getLogger(__name__)
 
 pytestmark = [pytest.mark.device("D400*")]
 
-_auto_limit_checked: set = set()
+_depth_sensor = None
 
 
 @pytest.fixture(autouse=True)
-def _require_auto_limit_support(test_device, request):
-    """Check required options and FW version once per module."""
-    module_name = request.module.__name__
-    if module_name in _auto_limit_checked:
+def _require_auto_limit_support(test_device):
+    global _depth_sensor
+    if _depth_sensor is not None:
         return
     dev, _ = test_device
-    depth_sensor = dev.first_depth_sensor()
-    _check_required_options(depth_sensor)
+    sensor = dev.first_depth_sensor()
+    _check_required_options(sensor)
     fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
     if fw_version < rsutils.version(5, 12, 10, 11):
         pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
-    _auto_limit_checked.add(module_name)
+    _depth_sensor = sensor  # set only after all checks pass
 
 # 1. Scenario 1:
     #          - Change control value few times
