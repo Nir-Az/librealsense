@@ -103,11 +103,13 @@ The `pytest-check` plugin is available for soft assertions (non-stopping checks)
 |---|---|---|
 | `test.check(expr)` | `assert expr` | `check.is_true(expr)` |
 | `test.check_equal(a, b)` | `assert a == b` | `check.equal(a, b)` |
-| `test.check_approx_abs(a, b, tol)` | `assert abs(a - b) <= tol` | `check.less_equal(abs(a - b), tol)` |
+| `test.check_approx_abs(a, b, tol)` | `assert a == pytest.approx(b, abs=tol)` | `check.almost_equal(a, b, abs=tol)` |
 
 **When to use which:**
 - Use `assert` for fatal conditions (hardware failures, setup errors, preconditions)
 - Use `check.*` from `pytest-check` when the legacy test uses `test.check()` inside loops or across multiple configurations, so all iterations run and all failures are reported
+
+**Approximate-equality note:** Prefer `check.almost_equal(a, b, abs=tol)` (or `pytest.approx`) over `check.less_equal(abs(a - b), tol)`. Both work, but `almost_equal` is shorter, reads as "approximately equal", and produces a much better failure message (e.g. `0.00099 == 0.001 ± 1e-08`) instead of `0.00001 not <= 1e-08`.
 
 Import: `from pytest_check import check`
 
