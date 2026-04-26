@@ -18,8 +18,9 @@ def test_rs_dds_config_runs(module_device_setup):
     exe_path = repo.find_built_exe('tools/dds/dds-config', 'rs-dds-config')
     assert exe_path, "rs-dds-config not found"
 
+    # No args: enables DDS by default and checks if it can connect to a supporting device
     p = subprocess.run(
-        [exe_path, ""],  # Enables DDS by default, checks if can connect to a supporting device
+        [exe_path],
         stdout=None,
         stderr=subprocess.STDOUT,
         universal_newlines=True,

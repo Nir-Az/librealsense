@@ -53,11 +53,25 @@ def test_realsense_viewer_gui(module_device_setup):
 
     cmd += [viewer_tests, '--auto']
     log.debug( 'running: %s', ' '.join( cmd ) )
+    # Cap the child below the global pytest-timeout (200s default in conftest.py) so the
+    # subprocess is reaped here rather than leaked when the outer test thread is killed.
+    child_timeout = 180
     p = subprocess.Popen( cmd,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
                           env=env )
-    stdout, stderr = p.communicate()
+    try:
+        stdout, stderr = p.communicate( timeout=child_timeout )
+    except subprocess.TimeoutExpired:
+        p.kill()
+        stdout, stderr = p.communicate()
+        # Strip ANSI / frame prefix before logging so the failure message is readable
+        stdout = ansi_escape.sub( b'', stdout )
+        stdout = frame_prefix.sub( b'', stdout )
+        sys.stdout.buffer.write( stdout )
+        sys.stderr.buffer.write( stderr )
+        pytest.fail( f'realsense-viewer-tests did not complete within {child_timeout}s' )
+
     # Strip ANSI color codes and imgui test engine frame-count prefix
     stdout = ansi_escape.sub( b'', stdout )
     stdout = frame_prefix.sub( b'', stdout )
@@ -68,4 +82,4 @@ def test_realsense_viewer_gui(module_device_setup):
             sys.stderr.buffer.write( line + b'\n' )
     if p.returncode != 0:
         log.error( 'realsense-viewer-tests exited with code %s', p.returncode )
-    assert p.returncode == 0
+    assert p.returncode == 0, f'realsense-viewer-tests exited with code {p.returncode}'

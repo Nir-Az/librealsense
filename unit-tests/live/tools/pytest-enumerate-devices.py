@@ -24,9 +24,12 @@ def test_rs_enumerate_devices(test_device):
 
     is_dds = is_dds_dev(dev)
     run_time_threshold = 5 if is_dds else 2  # currently, DDS devices take longer time to complete rs_enumerate_devices
+    cmd = [rs_enumerate_devices]
+    if not is_dds:
+        cmd.append("--no-dds")
     run_time_stopwatch = Stopwatch()
     p = subprocess.run(
-        [rs_enumerate_devices, "--no-dds" if not is_dds else ""],
+        cmd,
         stdout=None,
         stderr=subprocess.STDOUT,
         universal_newlines=True,
