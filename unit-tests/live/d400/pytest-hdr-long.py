@@ -19,6 +19,13 @@ pytestmark = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _disable_hdr(test_device):
+    yield
+    dev, _ = test_device
+    dev.first_depth_sensor().set_option(rs.option.hdr_enabled, 0)
+
+
 def _skip_if_fw_unsupported(dev):
     if not dev.supports(rs.camera_info.firmware_version):
         pytest.skip("Device does not support firmware version info")
@@ -112,27 +119,24 @@ def _hdr_streaming_default_config(dev, ctx):
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
-    try:
-        for iteration in range(1, 100):
-            data = pipe.wait_for_frames()
-            out_depth_frame = data.get_depth_frame()
-            if iteration < 3:
-                continue
+    for iteration in range(1, 100):
+        data = pipe.wait_for_frames()
+        out_depth_frame = data.get_depth_frame()
+        if iteration < 3:
+            continue
 
-            if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
-                frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
-                frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
-                seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
+        if out_depth_frame.supports_frame_metadata(rs.frame_metadata_value.sequence_id):
+            frame_exposure = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.actual_exposure)
+            frame_gain = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.gain_level)
+            seq_id = out_depth_frame.get_frame_metadata(rs.frame_metadata_value.sequence_id)
 
-                if seq_id == 0:
-                    check.is_true(frame_exposure == exposure_range.default - 1000)  # w/a
-                    check.is_true(frame_gain == gain_range.default)
-                else:
-                    check.is_true(frame_exposure == exposure_range.min)
-                    check.is_true(frame_gain == gain_range.min)
-    finally:
-        pipe.stop()
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
+            if seq_id == 0:
+                check.is_true(frame_exposure == exposure_range.default - 1000)  # w/a
+                check.is_true(frame_gain == gain_range.default)
+            else:
+                check.is_true(frame_exposure == exposure_range.min)
+                check.is_true(frame_gain == gain_range.min)
+    pipe.stop()
 
 
 # HDR STREAMING TEST
@@ -168,8 +172,6 @@ def _hdr_running_restart_hdr_at_restream(dev, ctx):
         except Exception:
             pass
         raise
-    finally:
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
 # CHECKING HDR AFTER PIPE RESTART

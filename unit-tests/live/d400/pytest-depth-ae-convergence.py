@@ -46,6 +46,14 @@ pytestmark = [
     pytest.mark.timeout(600),
 ]
 
+
+@pytest.fixture(autouse=True)
+def _start_stop_wrapper(test_device):
+    dev, _ = test_device
+    tw.start_wrapper(dev)
+    yield
+    tw.stop_wrapper(dev)
+
 # -----------------------------------------------------------------------------------------------
 # Configuration (with environment overrides)
 REGULAR_MAX = float(2.5)
@@ -258,12 +266,10 @@ def check_metadata_availability(sensor, profile, timeout=2.0):
 
 def test_depth_ae_convergence(test_device):
     dev, _ = test_device
-    tw.start_wrapper(dev)
-    try:
-        # Check firmware version
-        fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-        if fw_version <= rsutils.version(5, 17, 0, 10):
-            pytest.skip(f"Firmware version {fw_version} <= 5.17.0.10, skipping test...")
+    # Check firmware version
+    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
+    if fw_version <= rsutils.version(5, 17, 0, 10):
+        pytest.skip(f"Firmware version {fw_version} <= 5.17.0.10, skipping test...")
 
         sensor = dev.first_depth_sensor()
         if not sensor.supports(rs.option.enable_auto_exposure):
@@ -407,6 +413,3 @@ def test_depth_ae_convergence(test_device):
                 f"Failure rate {failure_rate:.1f}% exceeds {FAILURE_THRESHOLD}% threshold ({failure_count}/{total_configs} configs failed)"
         else:
             log.warning("No configurations were tested")
-
-    finally:
-        tw.stop_wrapper(dev)
