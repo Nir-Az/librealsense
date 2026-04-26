@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_exclude("D401"),
+    pytest.mark.timeout(400),  # extra time for page detection
 ]
 
 NUM_FRAMES = 100  # Number of frames to check
@@ -179,7 +180,6 @@ def run_test(dev, ctx, resolution, fps):
             pipeline.stop()
 
 
-@pytest.mark.timeout(400)  # extra time for page detection
 def test_basic_depth(test_device, test_context_var):
     dev, ctx = test_device
 

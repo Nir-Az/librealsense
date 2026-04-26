@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_exclude("D401"),
+    pytest.mark.timeout(1500),
 ]
 
 NUM_FRAMES = 100  # Number of frames to check
@@ -240,7 +241,6 @@ def run_test(dev, ctx, depth_resolution, depth_fps, color_resolution, color_fps)
             pipeline.stop()
 
 
-@pytest.mark.timeout(1500)
 def test_texture_mapping(test_device, test_context_var):
     dev, ctx = test_device
 
