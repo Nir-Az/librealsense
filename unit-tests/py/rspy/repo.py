@@ -72,14 +72,15 @@ def find_built_exe( source, name ):
         if os.path.isfile( exe ):
             return exe
     global build
-    if build and platform.system() == 'Linux':
-        # CMake on Linux puts executables under <build>/<CONFIG>/ (CMAKE_RUNTIME_OUTPUT_DIRECTORY
-        # in CMake/unix_config.cmake). Check the common config dirs first, then fall back to
-        # the source-mirrored layout for non-CMake build trees.
+    if build:
+        # CMake puts executables under <build>/<CONFIG>/ — on Linux via
+        # CMAKE_RUNTIME_OUTPUT_DIRECTORY in CMake/unix_config.cmake, on Windows via the
+        # Visual Studio multi-config generator appending the config name automatically.
         for cfg in ('Release', 'Debug'):
             exe = os.path.join( build, cfg, name )
             if os.path.isfile( exe ):
                 return exe
+        # Fall back to source-mirrored layout for non-CMake build trees.
         exe = os.path.join( build, source, name )
         if os.path.isfile( exe ):
             return exe
