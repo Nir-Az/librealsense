@@ -37,6 +37,7 @@ pytestmark = [
 # Configuration: acceptable spike rate percentage
 # A "spike" is a gap exceeding 110% of expected frame time
 MAX_ACCEPTABLE_SPIKE_RATE_PERCENT = float(4.0)      # Maximum acceptable percentage of frames with timing spikes
+_baseline_spike_count = None
 
 # Configuration: test iterations
 NUM_MANUAL_TO_AE_ITERATIONS = 20                    # Number of manual->AE toggle iterations in third test
@@ -357,6 +358,9 @@ def test_baseline_streaming_measure_frame_gap(test_device):
         check.is_true(baseline_spike_rate < MAX_ACCEPTABLE_SPIKE_RATE_PERCENT,
                       f"Baseline spike rate {baseline_spike_rate:.1f}% should be < {MAX_ACCEPTABLE_SPIKE_RATE_PERCENT}%")
 
+        global _baseline_spike_count
+        _baseline_spike_count = baseline_spike_count
+
 
 def test_rapid_ae_toggle_camera_stability(test_device):
     # Toggle AE on/off 10 times with 10 frames per state, allowing 30 frames between toggles.
@@ -378,6 +382,9 @@ def test_rapid_ae_toggle_camera_stability(test_device):
     # Check spike rate
     check.is_true(spike_rate < MAX_ACCEPTABLE_SPIKE_RATE_PERCENT,
                   f"Spike rate should be < {MAX_ACCEPTABLE_SPIKE_RATE_PERCENT}%; got {spike_rate:.1f}%")
+
+    if _baseline_spike_count is not None:
+        log.info(f"Comparison: Baseline spikes: {_baseline_spike_count} vs AE toggle spikes: {spike_count}")
 
 
 def test_switch_manual_to_auto_exposure(test_device):
