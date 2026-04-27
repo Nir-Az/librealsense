@@ -38,6 +38,7 @@ from pprint import pformat
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 from rspy import tests_wrapper as tw
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 log = logging.getLogger(__name__)
 
@@ -266,150 +267,147 @@ def check_metadata_availability(sensor, profile, timeout=2.0):
 
 def test_depth_ae_convergence(test_device):
     dev, _ = test_device
-    # Check firmware version
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version <= rsutils.version(5, 17, 0, 10):
-        pytest.skip(f"Firmware version {fw_version} <= 5.17.0.10, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 17, 0, 10), "AE convergence", inclusive=False)
 
-        sensor = dev.first_depth_sensor()
-        if not sensor.supports(rs.option.enable_auto_exposure):
-            pytest.skip("Depth sensor does not support auto exposure - skipping test")
+    sensor = dev.first_depth_sensor()
+    if not sensor.supports(rs.option.enable_auto_exposure):
+        pytest.skip("Depth sensor does not support auto exposure - skipping test")
 
-        # Check AE mode support
-        supports_mode = sensor.supports(rs.option.auto_exposure_mode)
-        log.info(f"Depth AE mode: [{supports_mode}]")
+    # Check AE mode support
+    supports_mode = sensor.supports(rs.option.auto_exposure_mode)
+    log.info(f"Depth AE mode: [{supports_mode}]")
 
-        # Track all test results
-        test_results = []  # List of (config_name, passed: bool)
+    # Track all test results
+    test_results = []  # List of (config_name, passed: bool)
 
-        # Run AE convergence for all supported depth profiles (resolution + fps)
-        # Exclude profiles with frame rates lower than 15 fps from testing
-        depth_profiles = [p for p in sensor.profiles if p.stream_type() == rs.stream.depth and p.fps() >= 15]
-        if not depth_profiles:
-            pytest.skip('Requested depth profile 640x480@30 not found - exiting')
+    # Run AE convergence for all supported depth profiles (resolution + fps)
+    # Exclude profiles with frame rates lower than 15 fps from testing
+    depth_profiles = [p for p in sensor.profiles if p.stream_type() == rs.stream.depth and p.fps() >= 15]
+    if not depth_profiles:
+        pytest.skip('Requested depth profile 640x480@30 not found - exiting')
 
-        for prof in depth_profiles:
-            fmt = f"{prof.as_video_stream_profile().width()}x{prof.as_video_stream_profile().height()}@{prof.fps()}"
-            # Skip 60, 90 fps and 300 fps test cases
-            if prof.fps() == 60 or prof.fps() == 90 or prof.fps() == 300:
-                log.info(f"Skipping 60,90,300 fps test case: {fmt}")
-                continue
-            # Verify metadata is available for this profile before running the test
-            if not check_metadata_availability(sensor, prof):
-                log.info(f"Depth frames for profile {fmt} do not expose ACTUAL_EXPOSURE metadata - skipping profile")
-                continue
-            # Regular
-            # Adjust allowed convergence time for low frame-rate profiles (e.g., 6fps)
-            fps = prof.fps()
-            # Scale factor relative to 30fps (don't reduce for higher fps)
-            fps_scale = max(1.0, 30.0 / float(fps))
-            per_allowed = REGULAR_MAX * fps_scale
-            per_timeout = TIMEOUT_REGULAR * fps_scale
-            if fps_scale != 1.0:
-                log.info(f"Adjusting convergence thresholds for {fps}fps: max_allowed={per_allowed:.3f}s, timeout={per_timeout:.3f}s")
+    for prof in depth_profiles:
+        fmt = f"{prof.as_video_stream_profile().width()}x{prof.as_video_stream_profile().height()}@{prof.fps()}"
+        # Skip 60, 90 fps and 300 fps test cases
+        if prof.fps() == 60 or prof.fps() == 90 or prof.fps() == 300:
+            log.info(f"Skipping 60,90,300 fps test case: {fmt}")
+            continue
+        # Verify metadata is available for this profile before running the test
+        if not check_metadata_availability(sensor, prof):
+            log.info(f"Depth frames for profile {fmt} do not expose ACTUAL_EXPOSURE metadata - skipping profile")
+            continue
+        # Regular
+        # Adjust allowed convergence time for low frame-rate profiles (e.g., 6fps)
+        fps = prof.fps()
+        # Scale factor relative to 30fps (don't reduce for higher fps)
+        fps_scale = max(1.0, 30.0 / float(fps))
+        per_allowed = REGULAR_MAX * fps_scale
+        per_timeout = TIMEOUT_REGULAR * fps_scale
+        if fps_scale != 1.0:
+            log.info(f"Adjusting convergence thresholds for {fps}fps: max_allowed={per_allowed:.3f}s, timeout={per_timeout:.3f}s")
 
-            status, details = measure_convergence(
-                sensor,
-                profile=prof,
-                max_allowed=per_allowed,
-                timeout=per_timeout
-            )
+        status, details = measure_convergence(
+            sensor,
+            profile=prof,
+            max_allowed=per_allowed,
+            timeout=per_timeout
+        )
 
-            if status == 'skipped':
-                log.info(f"AE convergence skipped [{fmt}]: {details.get('reason', '')}")
-            else:
-                log.info(f"Depth AE convergence (REGULAR) [{fmt}]")
-                measured = details.get('measured_convergence_time') if isinstance(details, dict) else None
-                passed = (status == 'passed')
-                test_results.append((f"REGULAR [{fmt}]", passed))
-
-                if passed:
-                    log.info(f"REGULAR [{fmt}] convergence duration: {details['duration']:.3f}s (frames={details['frames']}, threshold={details['max_allowed']}s)")
-                else:
-                    if measured is not None:
-                        log.info(f"REGULAR [{fmt}] FAILED - measured convergence time: {measured:.3f}s (frames={details['frames']}, threshold={details['max_allowed']}s)")
-                    else:
-                        log.info(f"REGULAR [{fmt}] FAILED - no convergence observed within timeout ({details.get('duration', 0):.3f}s); frames collected={details.get('frames')}, variation_last_window={details.get('variation_last_window')}")
-                # Don't fail immediately - just log the result. Individual results are not checked; only overall threshold matters.
-
-                # Report samples
-                log.info(f"REGULAR [{fmt}] AE samples={details.get('samples')}")
-                log.info(f"REGULAR [{fmt}] exposures: {format_list_abbrev(details.get('exposures', []))}")
-                log.info(f"REGULAR [{fmt}] gains: {format_list_abbrev(details.get('gains', []))}")
-                log.info(f"REGULAR AE exposures [{fmt}]: {format_list_abbrev(details.get('exposures', []))}")
-                log.info(f"REGULAR AE gains [{fmt}]: {format_list_abbrev(details.get('gains', []))}")
-
-                # ACCELERATED AE mode test (if supported)
-                if supports_mode:
-                    try:
-                        # set accelerated mode while not streaming
-                        sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
-                    except Exception:
-                        log.info(f"Device does not allow setting auto_exposure_mode - skipping accelerated [{fmt}]")
-                    else:
-                        per_allowed_accel = ACCEL_MAX * fps_scale
-                        per_timeout_accel = TIMEOUT_ACCEL * fps_scale
-                        if fps_scale != 1.0:
-                            log.info(f"Adjusting accelerated thresholds for {fps}fps: max_allowed={per_allowed_accel:.3f}s, timeout={per_timeout_accel:.3f}s")
-
-                        accel_status, accel_details = measure_convergence(
-                            sensor,
-                            profile=prof,
-                            max_allowed=per_allowed_accel,
-                            timeout=per_timeout_accel
-                        )
-
-                        if accel_status == 'skipped':
-                            log.info(f"ACCELERATED AE convergence skipped [{fmt}]: {accel_details.get('reason', '')}")
-                        else:
-                            log.info(f"Depth AE convergence (ACCELERATED) [{fmt}]")
-                            measured_a = accel_details.get('measured_convergence_time') if isinstance(accel_details, dict) else None
-                            passed_a = (accel_status == 'passed')
-                            test_results.append((f"ACCELERATED [{fmt}]", passed_a))
-
-                            if passed_a:
-                                log.info(f"ACCELERATED [{fmt}] convergence duration: {accel_details['duration']:.3f}s (frames={accel_details['frames']}, threshold={accel_details['max_allowed']}s)")
-                            else:
-                                if measured_a is not None:
-                                    log.info(f"ACCELERATED [{fmt}] FAILED - measured convergence time: {measured_a:.3f}s (frames={accel_details['frames']}, threshold={accel_details['max_allowed']}s)")
-                                else:
-                                    log.info(f"ACCELERATED [{fmt}] FAILED - no convergence observed within timeout ({accel_details.get('duration', 0):.3f}s); frames collected={accel_details.get('frames')}, variation_last_window={accel_details.get('variation_last_window')}")
-                            # Don't fail immediately - just log the result. Individual results are not checked; only overall threshold matters.
-                            # Compare speed-up if both passed
-                            # ACCELERATED mode is faster in certain cases (not all), so skip this test for now
-                            #if status == 'passed' and accel_status == 'passed':
-                            #    expected = details['duration'] / SPEED_FACTOR
-                            #    assert accel_details['duration'] <= expected, \
-                            #        f"Accelerated AE should be at least {SPEED_FACTOR}x faster (regular={details['duration']:.3f}s; accelerated={accel_details['duration']:.3f}s) for {fmt}"
-
-                            # Report accel samples
-                            log.info(f"ACCELERATED [{fmt}] AE samples={accel_details.get('samples')}")
-                            log.info(f"ACCELERATED [{fmt}] exposures: {format_list_abbrev(accel_details.get('exposures', []))}")
-                            log.info(f"ACCELERATED [{fmt}] gains: {format_list_abbrev(accel_details.get('gains', []))}")
-                            log.info(f"ACCELERATED AE exposures [{fmt}]: {format_list_abbrev(accel_details.get('exposures', []))}")
-                            log.info(f"ACCELERATED AE gains [{fmt}]: {format_list_abbrev(accel_details.get('gains', []))}")
-
-        # -----------------------------------------------------------------------------------------------
-        # Evaluate Overall Test Results (10% failure threshold)
-
-        total_configs = len(test_results)
-        failed_configs = [name for name, passed in test_results if not passed]
-        failure_count = len(failed_configs)
-
-        if total_configs > 0:
-            failure_rate = (failure_count / total_configs) * 100
-            log.info(f"\n{'='*80}")
-            log.info(f"OVERALL RESULTS: {failure_count} of {total_configs} configurations failed ({failure_rate:.1f}%)")
-            log.info(f"{'='*80}")
-
-            if failure_count > 0:
-                log.info(f"Failed configurations:")
-                for name in failed_configs:
-                    log.info(f"  - {name}")
-
-            # Apply 10% threshold: only fail if more than 10% of configs failed
-            FAILURE_THRESHOLD = 10.0  # 10%
-            assert failure_rate <= FAILURE_THRESHOLD, \
-                f"Failure rate {failure_rate:.1f}% exceeds {FAILURE_THRESHOLD}% threshold ({failure_count}/{total_configs} configs failed)"
+        if status == 'skipped':
+            log.info(f"AE convergence skipped [{fmt}]: {details.get('reason', '')}")
         else:
-            log.warning("No configurations were tested")
+            log.info(f"Depth AE convergence (REGULAR) [{fmt}]")
+            measured = details.get('measured_convergence_time') if isinstance(details, dict) else None
+            passed = (status == 'passed')
+            test_results.append((f"REGULAR [{fmt}]", passed))
+
+            if passed:
+                log.info(f"REGULAR [{fmt}] convergence duration: {details['duration']:.3f}s (frames={details['frames']}, threshold={details['max_allowed']}s)")
+            else:
+                if measured is not None:
+                    log.info(f"REGULAR [{fmt}] FAILED - measured convergence time: {measured:.3f}s (frames={details['frames']}, threshold={details['max_allowed']}s)")
+                else:
+                    log.info(f"REGULAR [{fmt}] FAILED - no convergence observed within timeout ({details.get('duration', 0):.3f}s); frames collected={details.get('frames')}, variation_last_window={details.get('variation_last_window')}")
+            # Don't fail immediately - just log the result. Individual results are not checked; only overall threshold matters.
+
+            # Report samples
+            log.info(f"REGULAR [{fmt}] AE samples={details.get('samples')}")
+            log.info(f"REGULAR [{fmt}] exposures: {format_list_abbrev(details.get('exposures', []))}")
+            log.info(f"REGULAR [{fmt}] gains: {format_list_abbrev(details.get('gains', []))}")
+            log.info(f"REGULAR AE exposures [{fmt}]: {format_list_abbrev(details.get('exposures', []))}")
+            log.info(f"REGULAR AE gains [{fmt}]: {format_list_abbrev(details.get('gains', []))}")
+
+            # ACCELERATED AE mode test (if supported)
+            if supports_mode:
+                try:
+                    # set accelerated mode while not streaming
+                    sensor.set_option(rs.option.auto_exposure_mode, ACCELERATED)
+                except Exception:
+                    log.info(f"Device does not allow setting auto_exposure_mode - skipping accelerated [{fmt}]")
+                else:
+                    per_allowed_accel = ACCEL_MAX * fps_scale
+                    per_timeout_accel = TIMEOUT_ACCEL * fps_scale
+                    if fps_scale != 1.0:
+                        log.info(f"Adjusting accelerated thresholds for {fps}fps: max_allowed={per_allowed_accel:.3f}s, timeout={per_timeout_accel:.3f}s")
+
+                    accel_status, accel_details = measure_convergence(
+                        sensor,
+                        profile=prof,
+                        max_allowed=per_allowed_accel,
+                        timeout=per_timeout_accel
+                    )
+
+                    if accel_status == 'skipped':
+                        log.info(f"ACCELERATED AE convergence skipped [{fmt}]: {accel_details.get('reason', '')}")
+                    else:
+                        log.info(f"Depth AE convergence (ACCELERATED) [{fmt}]")
+                        measured_a = accel_details.get('measured_convergence_time') if isinstance(accel_details, dict) else None
+                        passed_a = (accel_status == 'passed')
+                        test_results.append((f"ACCELERATED [{fmt}]", passed_a))
+
+                        if passed_a:
+                            log.info(f"ACCELERATED [{fmt}] convergence duration: {accel_details['duration']:.3f}s (frames={accel_details['frames']}, threshold={accel_details['max_allowed']}s)")
+                        else:
+                            if measured_a is not None:
+                                log.info(f"ACCELERATED [{fmt}] FAILED - measured convergence time: {measured_a:.3f}s (frames={accel_details['frames']}, threshold={accel_details['max_allowed']}s)")
+                            else:
+                                log.info(f"ACCELERATED [{fmt}] FAILED - no convergence observed within timeout ({accel_details.get('duration', 0):.3f}s); frames collected={accel_details.get('frames')}, variation_last_window={accel_details.get('variation_last_window')}")
+                        # Don't fail immediately - just log the result. Individual results are not checked; only overall threshold matters.
+                        # Compare speed-up if both passed
+                        # ACCELERATED mode is faster in certain cases (not all), so skip this test for now
+                        #if status == 'passed' and accel_status == 'passed':
+                        #    expected = details['duration'] / SPEED_FACTOR
+                        #    assert accel_details['duration'] <= expected, \
+                        #        f"Accelerated AE should be at least {SPEED_FACTOR}x faster (regular={details['duration']:.3f}s; accelerated={accel_details['duration']:.3f}s) for {fmt}"
+
+                        # Report accel samples
+                        log.info(f"ACCELERATED [{fmt}] AE samples={accel_details.get('samples')}")
+                        log.info(f"ACCELERATED [{fmt}] exposures: {format_list_abbrev(accel_details.get('exposures', []))}")
+                        log.info(f"ACCELERATED [{fmt}] gains: {format_list_abbrev(accel_details.get('gains', []))}")
+                        log.info(f"ACCELERATED AE exposures [{fmt}]: {format_list_abbrev(accel_details.get('exposures', []))}")
+                        log.info(f"ACCELERATED AE gains [{fmt}]: {format_list_abbrev(accel_details.get('gains', []))}")
+
+    # -----------------------------------------------------------------------------------------------
+    # Evaluate Overall Test Results (10% failure threshold)
+
+    total_configs = len(test_results)
+    failed_configs = [name for name, passed in test_results if not passed]
+    failure_count = len(failed_configs)
+
+    if total_configs > 0:
+        failure_rate = (failure_count / total_configs) * 100
+        log.info(f"\n{'='*80}")
+        log.info(f"OVERALL RESULTS: {failure_count} of {total_configs} configurations failed ({failure_rate:.1f}%)")
+        log.info(f"{'='*80}")
+
+        if failure_count > 0:
+            log.info(f"Failed configurations:")
+            for name in failed_configs:
+                log.info(f"  - {name}")
+
+        # Apply 10% threshold: only fail if more than 10% of configs failed
+        FAILURE_THRESHOLD = 10.0  # 10%
+        assert failure_rate <= FAILURE_THRESHOLD, \
+            f"Failure rate {failure_rate:.1f}% exceeds {FAILURE_THRESHOLD}% threshold ({failure_count}/{total_configs} configs failed)"
+    else:
+        log.warning("No configurations were tested")

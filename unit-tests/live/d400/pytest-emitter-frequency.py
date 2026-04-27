@@ -4,6 +4,7 @@
 import pytest
 import pyrealsense2 as rs
 import pyrsutils as rsutils
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 log = logging.getLogger(__name__)
 
@@ -16,10 +17,7 @@ EMITTER_FREQUENCY_91_KHZ = 1.0
 def test_verify_camera_defaults(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version <= rsutils.version(5, 14, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support EMITTER_FREQUENCY option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 14, 0, 0), "EMITTER_FREQUENCY", inclusive=False)
 
     device_name = dev.get_info(rs.camera_info.name)
     if "D455" in device_name:
@@ -33,10 +31,7 @@ def test_verify_camera_defaults(test_device):
 def test_set_on_off_during_idle_mode(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version <= rsutils.version(5, 14, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support EMITTER_FREQUENCY option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 14, 0, 0), "EMITTER_FREQUENCY", inclusive=False)
 
     depth_sensor.set_option(rs.option.emitter_frequency, EMITTER_FREQUENCY_57_KHZ)
     assert depth_sensor.get_option(rs.option.emitter_frequency) == EMITTER_FREQUENCY_57_KHZ
@@ -47,10 +42,7 @@ def test_set_on_off_during_idle_mode(test_device):
 def test_set_on_off_during_streaming_mode_not_allowed(test_device):
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version <= rsutils.version(5, 14, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support EMITTER_FREQUENCY option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 14, 0, 0), "EMITTER_FREQUENCY", inclusive=False)
 
     # Reset option to 57 [KHZ]
     depth_sensor.set_option(rs.option.emitter_frequency, EMITTER_FREQUENCY_57_KHZ)

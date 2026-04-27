@@ -6,6 +6,7 @@
 import pytest
 import pyrealsense2 as rs
 import pyrsutils as rsutils
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 log = logging.getLogger(__name__)
 
@@ -22,9 +23,7 @@ def _require_auto_limit_support(test_device):
     dev, _ = test_device
     sensor = dev.first_depth_sensor()
     _check_required_options(sensor)
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 12, 10, 11):
-        pytest.skip(f"FW version {fw_version} does not support AUTO EXPOSURE LIMIT option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 12, 10, 11), "AUTO EXPOSURE LIMIT")
     _depth_sensor = sensor  # set only after all checks pass
 
 # 1. Scenario 1:

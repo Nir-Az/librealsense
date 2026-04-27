@@ -21,6 +21,7 @@ import pytest
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 from pytest_check import check
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 log = logging.getLogger(__name__)
 import time
@@ -305,10 +306,7 @@ def test_ae_metadata_with_ae_enabled(test_device):
     # This validates that metadata correctly reports AE as active.
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     ae_mode_supported = depth_sensor.supports(rs.option.auto_exposure_mode)
 
@@ -336,10 +334,7 @@ def test_ae_metadata_with_ae_disabled(test_device):
     # This validates that metadata correctly reports AE as inactive.
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     # Disable auto-exposure and verify the option is set
     depth_sensor.set_option(rs.option.enable_auto_exposure, False)
@@ -361,10 +356,7 @@ def test_rapid_ae_toggle_metadata_correctness(test_device):
     # metadata accuracy across different AE algorithm implementations.
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     ae_mode_supported = depth_sensor.supports(rs.option.auto_exposure_mode)
 

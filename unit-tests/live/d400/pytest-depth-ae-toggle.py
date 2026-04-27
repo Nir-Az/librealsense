@@ -23,6 +23,7 @@ import pytest
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 from pytest_check import check
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 log = logging.getLogger(__name__)
 import time
@@ -301,10 +302,7 @@ def test_baseline_streaming_measure_frame_gap(test_device):
     # This provides a reference for comparison with the AE toggle tests.
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     # Select 30fps depth profile
     depth_profile = next(
@@ -367,10 +365,7 @@ def test_rapid_ae_toggle_camera_stability(test_device):
     # Verifies camera maintains stable frame timing during aggressive AE mode switching.
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     success, total_frames, metadata_errors, spike_count, spike_rate = toggle_ae_while_streaming(depth_sensor, num_toggles=10, frames_per_state=10, frames_between_toggles=30)
 
@@ -395,10 +390,7 @@ def test_switch_manual_to_auto_exposure(test_device):
     # that are still captured at manual exposure rate before AE takes effect).
     dev, _ = test_device
     depth_sensor = dev.first_depth_sensor()
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-
-    if fw_version < rsutils.version(5, 15, 0, 0):
-        pytest.skip(f"FW version {fw_version} does not support DEPTH_AUTO_EXPOSURE_MODE option, skipping test...")
+    require_min_fw_version(dev, rsutils.version(5, 15, 0, 0), "DEPTH_AUTO_EXPOSURE_MODE")
 
     # Select 30fps depth profile
     depth_profile = next(

@@ -9,6 +9,7 @@ import pytest
 import pyrealsense2 as rs
 import pyrsutils as rsutils
 from pytest_check import check
+from rspy.pytest.device_helpers import require_min_fw_version
 import logging
 import time
 log = logging.getLogger(__name__)
@@ -27,11 +28,7 @@ def _disable_hdr(test_device):
 
 
 def _skip_if_fw_unsupported(dev):
-    if not dev.supports(rs.camera_info.firmware_version):
-        pytest.skip("Device does not support firmware version info")
-    fw_version = rsutils.version(dev.get_info(rs.camera_info.firmware_version))
-    if fw_version < rsutils.version(5, 17, 2, 11):
-        pytest.skip(f"FW version {fw_version} is below required 5.17.2.11")
+    require_min_fw_version(dev, rsutils.version(5, 17, 2, 11))
 
 
 def retry_on_exception(func, max_retries=10):
