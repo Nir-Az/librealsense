@@ -24,6 +24,11 @@ def test_frame_index_mipi_imu(test_device):
     gyro_frame_count = 0
     accel_frame_count = 0
 
+    dev, _ = test_device
+    device_name = dev.get_info(rs.camera_info.name)
+    if "D457" not in device_name:
+        pytest.skip(f"Test requires D457, connected device is {device_name}")
+
     def frame_callback(f):
         global gyro_frame_count, accel_frame_count
         stream_type = f.get_profile().stream_type()
@@ -35,7 +40,6 @@ def test_frame_index_mipi_imu(test_device):
             check.equal(f.get_frame_number(), accel_frame_count)
 
     seconds_to_count_frames = 10
-    dev, _ = test_device
     sensor = dev.first_motion_sensor()
     motion_profile_accel = next(p for p in sensor.profiles if p.stream_type() == rs.stream.accel and p.fps() == 100)
     motion_profile_gyro = next(p for p in sensor.profiles if p.stream_type() == rs.stream.gyro and p.fps() == 100)
