@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 import time
 
 pytestmark = [
-    pytest.mark.device("D457"),
+    pytest.mark.device_each("D457"),
     pytest.mark.skipif(platform.machine() != "aarch64", reason="Jetson only"),
     pytest.mark.flaky(retries=3),
 ]
@@ -25,9 +25,6 @@ def test_frame_index_mipi_imu(test_device):
     accel_frame_count = 0
 
     dev, _ = test_device
-    device_name = dev.get_info(rs.camera_info.name)
-    if "D457" not in device_name:
-        pytest.skip(f"Test requires D457, connected device is {device_name}")
 
     def frame_callback(f):
         global gyro_frame_count, accel_frame_count
