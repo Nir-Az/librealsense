@@ -9,7 +9,9 @@ from rspy import repo
 log = logging.getLogger(__name__)
 
 pytestmark = [
-    pytest.mark.device("D555"),
+    # device_each (not device) so hosts without a D555 skip silently, matching the legacy
+    # `#test:device D555` behavior of "ignore configuration when no match".
+    pytest.mark.device_each("D555"),
     pytest.mark.context("nightly"),
 ]
 
