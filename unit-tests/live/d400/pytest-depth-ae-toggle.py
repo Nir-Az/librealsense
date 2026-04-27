@@ -508,6 +508,9 @@ def test_switch_manual_to_auto_exposure(test_device):
             f"Adjusted spike rate should be < {MAX_ACCEPTABLE_SPIKE_RATE_PERCENT}%; got {adjusted_spike_rate:.1f}%"
         )
 
+        if _baseline_spike_count is not None:
+            log.info(f"Comparison: Baseline spikes: {_baseline_spike_count} vs Manual-to-AE spikes: {unexpected_spikes}")
+
     finally:
         try:
             depth_sensor.stop()
