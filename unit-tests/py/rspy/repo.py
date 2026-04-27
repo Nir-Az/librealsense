@@ -66,9 +66,11 @@ def find_built_exe( source, name ):
     """
     if platform.system() != 'Linux':
         name += '.exe'
+    tried = []
     import sys
     for p in sys.path:
         exe = os.path.join( p, name )
+        tried.append( exe )
         if os.path.isfile( exe ):
             return exe
     global build
@@ -78,11 +80,14 @@ def find_built_exe( source, name ):
         # Visual Studio multi-config generator appending the config name automatically.
         for cfg in ('Release', 'Debug'):
             exe = os.path.join( build, cfg, name )
+            tried.append( exe )
             if os.path.isfile( exe ):
                 return exe
         # Fall back to source-mirrored layout for non-CMake build trees.
         exe = os.path.join( build, source, name )
+        tried.append( exe )
         if os.path.isfile( exe ):
             return exe
+    log.d( f'find_built_exe: {name!r} not found; tried:\n    ' + '\n    '.join( tried ) )
     return None
 
