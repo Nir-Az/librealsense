@@ -2,6 +2,7 @@
 # Copyright(c) 2024 RealSense, Inc. All Rights Reserved.
 
 # test:device D585S
+#test:donotrun  # until fw issue resolved
 # Currently testing with D585S because this is the only module supporting some of the features like module verbosity and version verification.
 # When more D500 models will be available most of the test cases can be generelized, but D585S version verification should still be checked specifically. 
 
