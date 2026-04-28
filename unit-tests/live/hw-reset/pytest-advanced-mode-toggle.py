@@ -13,9 +13,12 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
+    pytest.mark.context("nightly"),
+    pytest.mark.timeout(360),
 ]
 
-TOGGLE_WAIT_TIME = 30  # [sec] max wait for device to reconnect after advanced mode toggle
+TOGGLE_WAIT_TIME  = 30  # [sec] max wait for device to reconnect after advanced mode toggle
+TOGGLE_ITERATIONS =  3  # number of ON→OFF→ON cycles
 
 dev = None
 target_sn = None   # cached before toggle — the removed dev handle cannot be queried safely
@@ -61,23 +64,42 @@ def test_advanced_mode_toggle( test_device ):
 
     initial_state = am_dev.is_enabled()
     toggled_state = not initial_state
-    log.info( "Device: %s | Initial advanced mode: %s", name, "ON" if initial_state else "OFF" )
+    log.info( "Device: %s | Initial advanced mode: %s | Iterations: %d",
+              name, "ON" if initial_state else "OFF", TOGGLE_ITERATIONS )
 
-    # --- Toggle to opposite state ---
-    # Clear the flag before toggling so a fast reconnect cannot be missed
-    device_added = False
-    log.info( "Toggling advanced mode to %s", "ON" if toggled_state else "OFF" )
-    am_dev.toggle_advanced_mode( toggled_state )
-
-    log.info( "Waiting up to %d sec for device to reconnect after toggle...", TOGGLE_WAIT_TIME )
     try:
-        assert _wait_for_reconnect( TOGGLE_WAIT_TIME ), \
-            f"Device did not reconnect within {TOGGLE_WAIT_TIME} sec after toggling advanced mode"
+        for i in range( 1, TOGGLE_ITERATIONS + 1 ):
+            log.info( "[%d/%d] Toggling advanced mode to %s",
+                      i, TOGGLE_ITERATIONS, "ON" if toggled_state else "OFF" )
+            device_added = False
+            am_dev.toggle_advanced_mode( toggled_state )
 
-        toggled_enabled = rs.rs400_advanced_mode( dev ).is_enabled()
-        assert toggled_enabled == toggled_state, \
-            f"Expected advanced mode {'ON' if toggled_state else 'OFF'} after toggle but got {'ON' if toggled_enabled else 'OFF'}"
-        log.info( "Device reconnected; advanced mode is %s", "ON" if toggled_state else "OFF" )
+            log.info( "[%d/%d] Waiting up to %d sec for device to reconnect...",
+                      i, TOGGLE_ITERATIONS, TOGGLE_WAIT_TIME )
+            assert _wait_for_reconnect( TOGGLE_WAIT_TIME ), \
+                f"[{i}/{TOGGLE_ITERATIONS}] Device did not reconnect within {TOGGLE_WAIT_TIME} sec after toggling advanced mode"
+
+            toggled_enabled = rs.rs400_advanced_mode( dev ).is_enabled()
+            assert toggled_enabled == toggled_state, \
+                f"[{i}/{TOGGLE_ITERATIONS}] Expected advanced mode {'ON' if toggled_state else 'OFF'} after toggle but got {'ON' if toggled_enabled else 'OFF'}"
+            log.info( "[%d/%d] Device reconnected; advanced mode is %s",
+                      i, TOGGLE_ITERATIONS, "ON" if toggled_state else "OFF" )
+
+            log.info( "[%d/%d] Toggling advanced mode back to %s",
+                      i, TOGGLE_ITERATIONS, "ON" if initial_state else "OFF" )
+            device_added = False
+            rs.rs400_advanced_mode( dev ).toggle_advanced_mode( initial_state )
+
+            log.info( "[%d/%d] Waiting up to %d sec for device to reconnect after restore...",
+                      i, TOGGLE_ITERATIONS, TOGGLE_WAIT_TIME )
+            assert _wait_for_reconnect( TOGGLE_WAIT_TIME ), \
+                f"[{i}/{TOGGLE_ITERATIONS}] Device did not reconnect within {TOGGLE_WAIT_TIME} sec after restoring advanced mode"
+
+            am_dev = rs.rs400_advanced_mode( dev )
+            restored_enabled = am_dev.is_enabled()
+            assert restored_enabled == initial_state, \
+                f"[{i}/{TOGGLE_ITERATIONS}] Expected advanced mode {'ON' if initial_state else 'OFF'} after restore but got {'ON' if restored_enabled else 'OFF'}"
+            log.info( "[%d/%d] Advanced mode restored to %s", i, TOGGLE_ITERATIONS, "ON" if initial_state else "OFF" )
 
     finally:
         # Best-effort restore initial state so later tests in the session are not affected
@@ -96,6 +118,6 @@ def test_advanced_mode_toggle( test_device ):
                         log.warning( "Advanced mode restore: expected %s but got %s",
                                      "ON" if initial_state else "OFF", "ON" if restored_enabled else "OFF" )
                     else:
-                        log.info( "Advanced mode restored to %s; test passed", "ON" if initial_state else "OFF" )
+                        log.info( "Advanced mode restored to %s", "ON" if initial_state else "OFF" )
         except Exception as e:
             log.warning( "Best-effort advanced mode restore failed for %s: %s", name, e )
