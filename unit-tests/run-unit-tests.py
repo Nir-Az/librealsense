@@ -21,12 +21,14 @@ from rspy.signals import register_signal_handlers
 from site import getusersitepackages   # not the other stuff, like quit(), exit(), etc.!
 _user_site = getusersitepackages()
 _compiled_pkg_names = { 'pyrealsense2', 'pyrealdds', 'pyrsutils' }
-#log.d( 'site packages=', _user_site )
-#log.d( 'sys.path=', sys.path )
+log.d( 'SYSPATH-PROBE user_site=', _user_site, 'exists?', os.path.isdir(_user_site) )
+log.d( 'SYSPATH-PROBE compiled-pkgs in user_site:',
+       { pkg: os.path.exists( os.path.join( _user_site, pkg ) ) for pkg in _compiled_pkg_names } )
+log.d( 'SYSPATH-PROBE PRE-filter sys.path:', sys.path )
 sys.path = [p for p in sys.path
             if not file.is_inside( p, _user_site )
             or not any( os.path.exists( os.path.join( p, pkg ) ) for pkg in _compiled_pkg_names )]
-#log.d( 'modified=', sys.path )
+log.d( 'SYSPATH-PROBE POST-filter sys.path:', sys.path )
 
 
 def usage():
