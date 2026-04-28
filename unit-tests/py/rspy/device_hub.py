@@ -200,25 +200,36 @@ def _create_acroname():
 def _create_ykush():
     try:
         from rspy import ykush
-        return ykush.Ykush()
     except ModuleNotFoundError:
+        return None  # package not installed
+    except BaseException as e:
+        log.w(f"ykush import failed: {e}")
         return None
+    try:
+        return ykush.Ykush()
     except ykush.NoneFoundError:
-        return None
-    except BaseException:
+        return None  # no hub connected
+    except BaseException as e:
+        log.w(f"ykush hub init failed: {e}")
         return None
 
 def _create_unifi():
     try:
         from rspy import unifi
-        return unifi.UniFiSwitch()
     except ModuleNotFoundError:
+        return None  # package not installed
+    except BaseException as e:
+        log.w(f"unifi import failed: {e}")
         return None
-    except EnvironmentError:
-        return None
+    try:
+        return unifi.UniFiSwitch()
     except unifi.NoneFoundError:
+        return None  # no hub connected
+    except EnvironmentError as e:
+        log.w(f"unifi hub init failed: {e}")
         return None
     except BaseException as e:
+        log.w(f"unifi hub init failed: {e}")
         return None
 
 def _create_combined_hubs(hub_list):
