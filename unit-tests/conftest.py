@@ -32,6 +32,12 @@ if py_dir not in sys.path:
 # Consume --debug before any rspy imports (rspy.log also consumes it from sys.argv)
 _debug_requested = '--debug' in sys.argv
 
+# Make sure the freshly-built pyrealsense2/pyrealdds/pyrsutils win over any copy
+# pip may have left in the user site (~/.local/...). Must run before any rspy import
+# that may pull pyrealsense2 transitively.
+from rspy import python_path
+python_path.block_user_site_for({'pyrealsense2', 'pyrealdds', 'pyrsutils'})
+
 from rspy import devices, repo
 from rspy.signals import register_signal_handlers
 from rspy.pytest.logging_setup import (
