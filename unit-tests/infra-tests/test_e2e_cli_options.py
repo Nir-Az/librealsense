@@ -127,3 +127,8 @@ class TestCliOptionsRegistered:
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_combined",
                                "--device", "D455", "--device", "D435", "--exclude-device", "D435")
         assert_outcomes(out, passed=1)  # only D455 remains
+
+    def test_not_live(self):
+        """--not-live is accepted and skips device tests."""
+        rc, out, *_ = run_e2e("pytest-live.py", "--not-live")
+        assert_outcomes(out, passed=1, skipped=1)

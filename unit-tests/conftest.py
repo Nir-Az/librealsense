@@ -132,6 +132,13 @@ def pytest_addoption(parser):
         help="Only run tests that require a live device (have at least one device/device_each marker)."
     )
     group.addoption(
+        "--not-live",
+        action="store_true",
+        default=False,
+        help="Only run tests that don't require a live device (skip tests with device/device_each markers). "
+             "Mutually exclusive with --live."
+    )
+    group.addoption(
         "--repeat",
         action="store",
         default=0,
@@ -148,6 +155,7 @@ def pytest_addoption(parser):
         help="Pre-parsed flags (no need for --rs-help): "
              "--debug (enable -D- debug logs), "
              "-r/--regex <pattern> (filter tests by name, maps to -k), "
+             "--tag <name> (run only tests with marker, maps to -m), "
              "--retries N (retry failed tests N times)."
     )
 
@@ -162,6 +170,9 @@ def pytest_configure(config):
 
     check_required_plugins()
     apply_pending_flags(config)
+
+    if config.getoption("--live", default=False) and config.getoption("--not-live", default=False):
+        raise pytest.UsageError("--live and --not-live are mutually exclusive")
 
     # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)
     repeat_val = config.getoption('repeat_count', default=0)

@@ -105,10 +105,10 @@ def make_mock_item(name="test_example", markers=None, module_name="fake_module",
     return item
 
 
-def make_mock_config(context="", live=False, markexpr=""):
+def make_mock_config(context="", live=False, not_live=False, markexpr=""):
     """Build a mock pytest Config for unit-testing collection/filter logic."""
     config = MagicMock()
-    opts = {"--context": context, "--live": live, "-m": markexpr}
+    opts = {"--context": context, "--live": live, "--not-live": not_live, "-m": markexpr}
     config.getoption = lambda key, default=None: opts.get(key, default)
     return config
 

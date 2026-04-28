@@ -6,8 +6,9 @@ Tests for rspy/pytest/cli.py (consume_legacy_flags, apply_pending_flags).
 
 Verifies translation of legacy run-unit-tests.py flags to pytest equivalents:
 - -r/--regex pattern → -k pattern (keyword filter)
-- apply_pending_flags applies the translated -k to pytest config
-- Existing -k values are not overridden
+- --tag name → -m name (marker filter)
+- apply_pending_flags applies the translated -k / -m to pytest config
+- Existing -k / -m values are not overridden
 """
 
 import sys
@@ -60,3 +61,29 @@ class TestLegacyCliFlags:
             config.option.keyword = "already_set"
             apply_pending_flags(config)
             assert config.option.keyword == "already_set"
+
+    def test_tag_flag(self):
+        """--tag <name> should be consumed and translated to -m <name>."""
+        with self._with_argv(['pytest', '--tag', 'dds', 'file.py']):
+            result = _consume_flag_with_arg(['--tag'], '-m')
+            assert result == 'dds'
+            assert '--tag' not in sys.argv and '-m' in sys.argv
+            assert sys.argv[sys.argv.index('-m') + 1] == 'dds'
+
+    def test_apply_pending_flags_marker(self):
+        """apply_pending_flags should set markexpr from injected -m."""
+        with self._with_argv(['pytest', '-m', 'dds']):
+            config = MagicMock()
+            config.option.keyword = ""
+            config.option.markexpr = ""
+            apply_pending_flags(config)
+            assert config.option.markexpr == 'dds'
+
+    def test_apply_pending_flags_marker_no_override(self):
+        """Should NOT override an existing -m value."""
+        with self._with_argv(['pytest', '-m', 'dds']):
+            config = MagicMock()
+            config.option.keyword = ""
+            config.option.markexpr = "already_set"
+            apply_pending_flags(config)
+            assert config.option.markexpr == "already_set"
