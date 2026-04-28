@@ -127,7 +127,7 @@ def run_env_log_level_child( env_overrides, expected ):
 
     me = pathlib.Path( __file__ )
     result = subprocess.run( [sys.executable, str(me), str(expected)],
-                             env=env, capture_output=True, text=True )
+                             env=env, capture_output=True, text=True, timeout=30 )
     assert result.returncode == 0, \
         f'child failed:\nstdout: {result.stdout}\nstderr: {result.stderr}'
 
