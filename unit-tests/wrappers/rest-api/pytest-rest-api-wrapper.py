@@ -30,7 +30,8 @@ def test_rest_api_wrapper(module_device_setup):
     env = os.environ.copy()
     pyrs_dir = repo.find_pyrs_dir()
     if pyrs_dir:
-        env["PYTHONPATH"] = pyrs_dir + os.pathsep + env.get("PYTHONPATH", "")
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = pyrs_dir + os.pathsep + existing if existing else pyrs_dir
     p = subprocess.run(
         [sys.executable, "-m", "pytest", rest_api_test],
         stdout=subprocess.PIPE,
