@@ -9,26 +9,12 @@ import sys, os, subprocess, re, platform, getopt, time
 current_dir = os.path.dirname( os.path.abspath( __file__ ) )
 sys.path.append( os.path.join( current_dir, 'py' ))
 
-from rspy import log, file, repo, libci
+from rspy import log, file, repo, libci, python_path
 from rspy.signals import register_signal_handlers
 
-# Python's default list of paths to look for modules includes user-installed. We want
-# to avoid those to take only the pyrealsense2/pyrealdds/pyrsutils we actually compiled!
-#
-# Rather than rebuilding the whole sys.path, we instead remove only the user site-packages
-# directories that actually contain our compiled packages. This preserves other user-installed
-# packages (e.g. paramiko, pykush) that tests depend on.
-from site import getusersitepackages   # not the other stuff, like quit(), exit(), etc.!
-_user_site = getusersitepackages()
-_compiled_pkg_names = { 'pyrealsense2', 'pyrealdds', 'pyrsutils' }
-log.d( 'SYSPATH-PROBE user_site=', _user_site, 'exists?', os.path.isdir(_user_site) )
-log.d( 'SYSPATH-PROBE compiled-pkgs in user_site:',
-       { pkg: os.path.exists( os.path.join( _user_site, pkg ) ) for pkg in _compiled_pkg_names } )
-log.d( 'SYSPATH-PROBE PRE-filter sys.path:', sys.path )
-sys.path = [p for p in sys.path
-            if not file.is_inside( p, _user_site )
-            or not any( os.path.exists( os.path.join( p, pkg ) ) for pkg in _compiled_pkg_names )]
-log.d( 'SYSPATH-PROBE POST-filter sys.path:', sys.path )
+# Make sure the freshly-built pyrealsense2/pyrealdds/pyrsutils win over any copy
+# pip may have left in the user site (~/.local/...).
+python_path.block_user_site_for( { 'pyrealsense2', 'pyrealdds', 'pyrsutils' } )
 
 
 def usage():
