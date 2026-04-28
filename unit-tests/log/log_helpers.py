@@ -1,9 +1,10 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2022 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-from rspy import log, test
+import logging
 import pyrealsense2 as rs
-import os
+
+log = logging.getLogger(__name__)
 
 
 def log_all():
@@ -20,17 +21,17 @@ n_messages = 0
 def message_counter( severity, message ):
     global n_messages
     n_messages += 1
-    log.d( message.full() )
+    log.debug( message.full() )
     #
-    test.check_equal( str(message), message.raw() )
-    test.check_equal( repr(message), message.full() )
+    assert str(message) == message.raw()
+    assert repr(message) == message.full()
 
 
 n_messages_2 = 0
 def message_counter_2( severity, message ):
     global n_messages_2
     n_messages_2 += 1
-    log.d( message.full() )
+    log.debug( message.full() )
 
 
 def count_lines( filename ):
