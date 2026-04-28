@@ -596,6 +596,37 @@ namespace rs2
                     if (ImGui::Checkbox(label.c_str(), &stream_enabled[f.first]))
                     {
                         prev_stream_enabled = tmp;
+                        res = true;
+
+                        if (stream_enabled[f.first])
+                        {
+                            // Find the stream type for this unique_id
+                            rs2_stream stream_type = RS2_STREAM_ANY;
+                            for (auto& p : profiles)
+                            {
+                                if (p.unique_id() == f.first)
+                                {
+                                    stream_type = p.stream_type();
+                                    break;
+                                }
+                            }
+
+                            // If the currently selected resolution is not valid for the newly
+                            // enabled stream, auto-select the first resolution that is
+                            if (stream_type != RS2_STREAM_ANY)
+                            {
+                                auto it = resolutions_per_stream.find(stream_type);
+                                if (it != resolutions_per_stream.end() && !it->second.empty())
+                                {
+                                    auto& valid_res = it->second;
+                                    auto current_res = res_values[ui.selected_res_id];
+                                    bool valid = std::any_of(valid_res.begin(), valid_res.end(),
+                                        [&](const std::pair<int, int>& r) { return r == current_res; });
+                                    if (!valid)
+                                        select_resolution(valid_res[0].first, valid_res[0].second);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1839,16 +1870,14 @@ namespace rs2
 
     bool subdevice_model::hide_resolutions(const stream_profile& profile) const
     {
-        // Check if sensor is Depth Mapping Camera with labeled point cloud at specific resolutions
-        if (s->supports(RS2_CAMERA_INFO_NAME) && 
-            s->get_info(RS2_CAMERA_INFO_NAME) == std::string("Depth Mapping Camera") &&
-            profile.stream_type() == RS2_STREAM_LABELED_POINT_CLOUD)
+        if (s->supports(RS2_CAMERA_INFO_NAME) &&
+            s->get_info(RS2_CAMERA_INFO_NAME) == std::string("Depth Mapping Camera"))
         {
             if (auto vid_prof = profile.as<video_stream_profile>())
             {
                 int width = vid_prof.width();
                 int height = vid_prof.height();
-                
+
                 if ((width == 2880 && height == 32) || (width == 128 && height == 128))
                     return true;
             }
