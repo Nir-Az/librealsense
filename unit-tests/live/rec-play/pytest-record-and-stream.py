@@ -1,13 +1,20 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2023 RealSense, Inc. All Rights Reserved.
-
-# test:device each(D400*)
-# test:device each(D500*)
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #The test flow is a result of a fixed bug - viewer crashed when starting stream after finishing record session
 
+import pytest
 import pyrealsense2 as rs, os, time, tempfile
-from rspy import test
+from pytest_check import check
+import logging
+
+log = logging.getLogger(__name__)
+
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.device_each("D500*"),
+]
+
 
 def find_default_profile():
     default_profile = next(p for p in depth_sensor.profiles if p.is_default() and p.stream_type() == rs.stream.depth)
@@ -64,13 +71,15 @@ def play_recording(file_name, default_profile):
     depth_sensor = playback.first_depth_sensor()
     frame_queue = try_streaming(default_profile)
 
-    test.check(frame_queue.poll_for_frame())
+    check.is_true(frame_queue.poll_for_frame())
 ################################################################################################
-with test.closure("Record, stream and playback using sensor interface with frame queue"):
+def test_record_and_stream(test_device):
+    global dev, ctx, depth_sensor
+    log.info("Record, stream and playback using sensor interface with frame queue")
     temp_dir = tempfile.mkdtemp()
     file_name = os.path.join(temp_dir, "recording.db3")
 
-    dev, ctx = test.find_first_device_or_exit()
+    dev, ctx = test_device
     depth_sensor = dev.first_depth_sensor()
     default_profile = find_default_profile()
     record(file_name, default_profile)
@@ -80,4 +89,3 @@ with test.closure("Record, stream and playback using sensor interface with frame
 
     play_recording(file_name, default_profile)
 ################################################################################################
-test.print_results_and_exit()
