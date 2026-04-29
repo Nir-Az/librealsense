@@ -132,3 +132,8 @@ class TestCliOptionsRegistered:
         """--not-live is accepted and skips device tests."""
         rc, out, *_ = run_e2e("pytest-live.py", "--not-live")
         assert_outcomes(out, passed=1, skipped=1)
+
+    def test_tag_filters_by_marker(self):
+        """--tag <name> should run only tests with pytest.mark.<name> (alias for -m)."""
+        rc, out, *_ = run_e2e("pytest-priority.py", "--tag", "priority")
+        assert_outcomes(out, passed=3, deselected=1)

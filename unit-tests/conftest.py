@@ -139,6 +139,13 @@ def pytest_addoption(parser):
              "Mutually exclusive with --live."
     )
     group.addoption(
+        "--tag",
+        action="store",
+        default="",
+        help="Run only tests with the given marker (alias for pytest's -m). "
+             "Legacy run-unit-tests.py compatibility."
+    )
+    group.addoption(
         "--repeat",
         action="store",
         default=0,
@@ -173,6 +180,10 @@ def pytest_configure(config):
 
     if config.getoption("--live", default=False) and config.getoption("--not-live", default=False):
         raise pytest.UsageError("--live and --not-live are mutually exclusive")
+
+    tag_value = config.getoption("--tag", default="")
+    if tag_value and not config.option.markexpr:
+        config.option.markexpr = tag_value
 
     # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)
     repeat_val = config.getoption('repeat_count', default=0)
