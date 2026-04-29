@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.context("nightly"),
-    pytest.mark.timeout(360),
 ]
 
 TOGGLE_WAIT_TIME  = 30  # [sec] max wait for device to reconnect after advanced mode toggle
