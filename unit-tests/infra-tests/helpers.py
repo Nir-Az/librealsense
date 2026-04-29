@@ -160,10 +160,10 @@ def run_e2e(test_filename, *extra_pytest_args):
             timeout=30,
         )
 
-        if p.returncode != 0 and 'no tests ran' not in p.stdout and 'passed' not in p.stdout \
-                and 'skipped' not in p.stdout and 'error' not in p.stdout \
-                and 'failed' not in p.stdout:
-            pytest.fail(f"Subprocess crashed (rc={p.returncode}):\n{p.stdout}")
+        if p.returncode != 0:
+            out_lower = p.stdout.lower()
+            if not any(kw in out_lower for kw in ('no tests ran', 'passed', 'skipped', 'error', 'failed')):
+                pytest.fail(f"Subprocess crashed (rc={p.returncode}):\n{p.stdout}")
 
         tracking_file = os.path.join(tmpdir, '_tracking.json')
         tracking = json.loads(open(tracking_file).read()) if os.path.exists(tracking_file) else {
