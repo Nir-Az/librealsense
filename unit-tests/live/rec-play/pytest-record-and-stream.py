@@ -15,9 +15,6 @@ pytestmark = [
     pytest.mark.device_each("D500*"),
 ]
 
-dev = ctx = None
-depth_sensor = None
-
 
 def find_default_profile():
     default_profile = next(p for p in depth_sensor.profiles if p.is_default() and p.stream_type() == rs.stream.depth)
