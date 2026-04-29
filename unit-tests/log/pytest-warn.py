@@ -5,7 +5,7 @@ import pyrealsense2 as rs
 import log_helpers as common
 
 
-def test_log_warn():
+def test_log_warn(reset_logger):
     rs.log_to_callback( rs.log_severity.warn, common.message_counter )
     assert common.n_messages == 0
     common.log_all()

@@ -8,7 +8,7 @@ import log_helpers as common
 log = logging.getLogger(__name__)
 
 
-def test_mixed_file_and_console_logging(tmp_path):
+def test_mixed_file_and_console_logging(reset_logger, tmp_path):
     filename = str( tmp_path / "mixed-file-console.log" )
     log.debug( 'Filename logging to: %s', filename )
     rs.log_to_file( rs.log_severity.error, filename )

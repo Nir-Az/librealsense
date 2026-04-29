@@ -6,7 +6,7 @@ import pyrealsense2 as rs
 import log_helpers as common
 
 
-def test_logging_with_invalid_enum():
+def test_logging_with_invalid_enum(reset_logger):
     rs.log_to_callback( rs.log_severity.debug, common.message_counter )
     assert common.n_messages == 0
     # Following will throw a recoverable_exception, which will issue a log by itself!

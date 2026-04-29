@@ -84,12 +84,12 @@ def count_lines( filename ):
 #
 # rs.log_to_callback / log_to_file register handlers on a global C++ singleton
 # and the message-counter globals above persist across tests in a single pytest
-# session. Reset both before and after every test in this directory so the
-# tests look as close as possible to the legacy ones (which got isolation for
-# free by running each in its own subprocess).
+# session. Tests opt in by naming `reset_logger` in their signature (same shape
+# as `test_device` in the parent conftest); the legacy framework got equivalent
+# isolation for free by running each test in its own subprocess.
 
-@pytest.fixture(autouse=True)
-def _reset_logger_state():
+@pytest.fixture
+def reset_logger():
     global n_messages, n_messages_2
     rs.reset_logger()
     n_messages = 0

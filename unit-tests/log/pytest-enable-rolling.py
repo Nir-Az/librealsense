@@ -8,7 +8,7 @@ import log_helpers as common
 log = logging.getLogger(__name__)
 
 
-def test_rolling_logger_max_1m(tmp_path):
+def test_rolling_logger_max_1m(reset_logger, tmp_path):
     log_filename = str( tmp_path / 'rolling.log' )
     rs.log_to_file( rs.log_severity.info, log_filename )
 

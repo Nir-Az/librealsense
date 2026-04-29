@@ -8,7 +8,7 @@ import log_helpers as common
 log = logging.getLogger(__name__)
 
 
-def test_double_file_logging(tmp_path):
+def test_double_file_logging(reset_logger, tmp_path):
     filename1 = str( tmp_path / "two-files-1.log" )
     filename2 = str( tmp_path / "two-files-2.log" )
     log.debug( 'Filename1 logging to: %s', filename1 )
