@@ -24,6 +24,14 @@ pytestmark = [
 
 def test_rest_api_wrapper(module_device_setup):
     rest_api_test = os.path.join(repo.root, "wrappers", "rest-api", "tests", "test_api_service.py")
+    # The subprocess starts a fresh interpreter, so the parent's sys.path
+    # injection of the locally-built pyrealsense2 (unit-tests/conftest.py)
+    # is not inherited. Forward it via PYTHONPATH.
+    env = os.environ.copy()
+    pyrs_dir = repo.find_pyrs_dir()
+    if pyrs_dir:
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = pyrs_dir + os.pathsep + existing if existing else pyrs_dir
     p = subprocess.run(
         [sys.executable, "-m", "pytest", rest_api_test],
         stdout=subprocess.PIPE,
@@ -31,6 +39,7 @@ def test_rest_api_wrapper(module_device_setup):
         universal_newlines=True,
         timeout=10,
         check=False,
+        env=env,
     )
     if p.returncode != 0:
         log.error("Subprocess failed (rc=%s):\n%s", p.returncode, p.stdout)
