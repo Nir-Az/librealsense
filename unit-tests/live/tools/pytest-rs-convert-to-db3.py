@@ -23,7 +23,8 @@ def start_pipeline( filename ):
 
 def test_rs_convert_bag_to_db3():
     rs_convert = repo.find_built_exe( 'tools/convert', 'rs-convert' )
-    assert rs_convert, "rs-convert not found"
+    if not rs_convert:
+        pytest.skip( "rs-convert not built (BUILD_TOOLS off?)" )
 
     bag_file = os.path.join( repo.build, 'unit-tests', 'recordings', 'recording_deadlock.bag' )
     if not os.path.isfile( bag_file ):
