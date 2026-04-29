@@ -4,6 +4,7 @@
 import subprocess, os, tempfile
 import logging
 import numpy as np
+import pytest
 import pyrealsense2 as rs
 from rspy import repo
 
@@ -25,6 +26,9 @@ def test_rs_convert_bag_to_db3():
     assert rs_convert, "rs-convert not found"
 
     bag_file = os.path.join( repo.build, 'unit-tests', 'recordings', 'recording_deadlock.bag' )
+    if not os.path.isfile( bag_file ):
+        pytest.skip( f"recording not built (BUILD_UNIT_TESTS off?): {bag_file}" )
+
     temp_dir = tempfile.mkdtemp( prefix='bag_to_db3_' )
     db3_file = os.path.join( temp_dir, 'converted.db3' )
     try:
