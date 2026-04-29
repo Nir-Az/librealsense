@@ -79,23 +79,31 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
    - `#test:flag` → check for `pytest.mark` equivalent
    - If no match exists, ask the user before proceeding
 
-4. **Replace `rspy.test` and `rspy.log`**: Convert `test.check*` to `assert`/`pytest_check.check.*` (see table below), drop `test.start`/`finish`/`print_results_and_exit`/`unexpected_exception`, and swap `from rspy import log` → `import logging; log = logging.getLogger(__name__)` (`log.d/i/w/e` → `log.debug/info/warning/error`; note stdlib `logging` needs `%s` format strings, not space-joined args). Apply to any helper modules too.
+4. **Tests under `unit-tests/dds/` need an explicit `@pytest.mark.dds`**: `run-unit-tests.py` auto-tags every test by its parent directories (`unit-tests/py/rspy/libci.py:derive_tags_from_path`), so anything under `unit-tests/dds/` got the `dds` tag for free. Pytest doesn't auto-derive tags from path, so when migrating a test out of that directory you must add the marker explicitly:
+   ```python
+   pytestmark = [pytest.mark.dds, ...]   # alongside any device_each markers
+   ```
+   Also register the marker once in `conftest.py:pytest_configure` (`config.addinivalue_line("markers", "dds: ...")`) to silence `PytestUnknownMarkWarning`. Without this, the GHA Linux DDS jobs and Jenkins runs that pass `--tag dds` will silently skip the migrated test.
 
-5. **Rename colliding helper modules**: Pytest collects everything in one process, so two directory-local `sw.py` (or similarly named) helpers will clash in `sys.modules`. Rename to unique names (e.g. `sw_device.py`, `sw_syncer.py`) and use `import sw_device as sw` to keep the body diff minimal. Verify by running `pytest` across both sibling dirs together.
+   **First-migration cleanup**: `unit-tests/dds/pytest-dds-placeholder.py` exists only so that `--tag dds` collects a non-empty set in the meantime (otherwise pytest exits with rc=5 and the GHA job fails). **Delete that placeholder file in the same PR as the first real dds test migration.**
 
-6. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
+5. **Replace `rspy.test` and `rspy.log`**: Convert `test.check*` to `assert`/`pytest_check.check.*` (see table below), drop `test.start`/`finish`/`print_results_and_exit`/`unexpected_exception`, and swap `from rspy import log` → `import logging; log = logging.getLogger(__name__)` (`log.d/i/w/e` → `log.debug/info/warning/error`; note stdlib `logging` needs `%s` format strings, not space-joined args). Apply to any helper modules too.
 
-7. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
+6. **Rename colliding helper modules**: Pytest collects everything in one process, so two directory-local `sw.py` (or similarly named) helpers will clash in `sys.modules`. Rename to unique names (e.g. `sw_device.py`, `sw_syncer.py`) and use `import sw_device as sw` to keep the body diff minimal. Verify by running `pytest` across both sibling dirs together.
 
-8. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
+7. **Prefer native pytest**: Native pytest features first → pytest plugins → custom implementation (last resort)
 
-9. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
+8. **No `pytest.mark.live`**: The `--live` CLI flag filters based on `device`/`device_each` markers automatically. `pytest.mark.live` is redundant.
 
-10. **Flag bugs, don't silently fix them**: If you spot a real bug or latent issue in the legacy test while migrating (e.g. missing teardown, stale references, off-by-one), surface it to the user and let them decide whether to fix it in the migration PR or defer to a follow-up. The default is defer — bundling fixes into a migration PR makes reviews harder and bisects noisier.
+9. **Test locally**: Run the new pytest test locally and verify it passes before considering done. Use `pytest -v unit-tests/live/.../pytest-foo.py` (without `-s` if checking log files — `-s` disables file logging).
 
-11. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+10. **Minimal diff**: Keep original function names, variable names, docstrings, and code order. Only change what's required for the migration (imports, assertions, fixtures, markers, globals→params). Don't rename variables for style, reorder functions, or rewrite docstrings. Migration PRs should show minimal diff to reduce review burden and risk.
 
-12. **FW version gating — use `require_min_fw_version`**: When a test requires a minimum firmware version, do **not** write inline `fw_version = ... / if fw_version < ...: pytest.skip(...)` blocks in each function. Use the shared helper from `rspy.pytest.device_helpers` instead:
+11. **Flag bugs, don't silently fix them**: If you spot a real bug or latent issue in the legacy test while migrating (e.g. missing teardown, stale references, off-by-one), surface it to the user and let them decide whether to fix it in the migration PR or defer to a follow-up. The default is defer — bundling fixes into a migration PR makes reviews harder and bisects noisier.
+
+12. **Common code snippets**: Common short code snippets can be replaced with convenience helper functions, e.g `rspy.snippets.is_dds_dev`.
+
+13. **FW version gating — use `require_min_fw_version`**: When a test requires a minimum firmware version, do **not** write inline `fw_version = ... / if fw_version < ...: pytest.skip(...)` blocks in each function. Use the shared helper from `rspy.pytest.device_helpers` instead:
 
     ```python
     from rspy.pytest.device_helpers import require_min_fw_version
@@ -112,7 +120,7 @@ When migrating a legacy `test-*.py` to `pytest-*.py`:
 
     The helper caches the result per `(device serial, min_version, inclusive)` — the check runs at most once per device/version combination. On pass the result is cached and subsequent calls are no-ops. On fail `pytest.skip()` is raised (cache never written), so every test that calls it will also skip. It also handles devices that don't expose firmware version info.
 
-13. **Don't wrap test bodies in `try`/`finally` to swallow failures**: Pytest natively reports any unhandled exception as a test failure — there is no need for the legacy `try: ... except: test.unexpected_exception()` pattern. When migrating, just **delete** the `try`/`except` wrapper and let pytest handle it.
+14. **Don't wrap test bodies in `try`/`finally` to swallow failures**: Pytest natively reports any unhandled exception as a test failure — there is no need for the legacy `try: ... except: test.unexpected_exception()` pattern. When migrating, just **delete** the `try`/`except` wrapper and let pytest handle it.
 
     - **Cleanup belongs in a fixture**, not in `try/finally` inside the test body. Use `@pytest.fixture` with `yield`: code before `yield` is setup, code after `yield` runs even when the test fails (see the `_sw_session` autouse fixture in `unit-tests/syncer/pytest-ts-*.py` for the pattern).
     - **If you genuinely must wrap with `try`** (e.g. to attach context to the failure message), **always re-raise or fail explicitly** — never swallow:
