@@ -49,6 +49,7 @@ from rspy.pytest.cli import consume_legacy_flags, apply_pending_flags
 from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi, resolve_device_each_serials
 from rspy.pytest.collection import filter_and_sort_items
 from rspy.pytest.plugins import check_required_plugins
+from rspy.pytest import subprocess_isolation
 
 log = logging.getLogger('librealsense')
 
@@ -163,6 +164,12 @@ def pytest_configure(config):
     check_required_plugins()
     apply_pending_flags(config)
 
+    # Register the subprocess-isolation hook so every test runs in a child pytest
+    # process — a native crash in any test fails only that test, not the session.
+    # The child invocation passes "-p no:rs_subprocess_isolation" so the wrapping
+    # is disabled there and the test runs normally.
+    config.pluginmanager.register(subprocess_isolation, name="rs_subprocess_isolation")
+
     # --repeat N → pytest-repeat's --count N (only if --count wasn't explicitly set)
     repeat_val = config.getoption('repeat_count', default=0)
     if repeat_val and config.getoption('count', default=1) <= 1:
@@ -174,8 +181,11 @@ def pytest_configure(config):
         context_list = context_str.split()
         log.info(f"Test context: {context_list}")
 
-    # Set up test log directory
-    setup_test_logging(config)
+    # Set up test log directory. Skip in subprocess children — the parent owns
+    # the per-test .log file and would have its content truncated by the child's
+    # FileHandler(mode='w') if both opened it.
+    if not config.pluginmanager.is_blocked("rs_subprocess_isolation"):
+        setup_test_logging(config)
 
     # Enable LibRS debug logging if --rslog (once, globally)
     if rs and config.getoption("--rslog", default=False):
