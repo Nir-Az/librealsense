@@ -188,12 +188,17 @@ def _find_active_hub():
 def _create_acroname():
     try:
         from rspy import acroname
-        return acroname.Acroname()
     except ModuleNotFoundError:
+        return None  # package not installed
+    except Exception as e:
+        log.w(f"acroname import failed: {e}")
         return None
+    try:
+        return acroname.Acroname()
     except acroname.NoneFoundError:
-        return None
-    except BaseException:
+        return None  # no hub connected
+    except Exception as e:
+        log.w(f"acroname hub init failed: {e}")
         return None
 
 
@@ -202,14 +207,14 @@ def _create_ykush():
         from rspy import ykush
     except ModuleNotFoundError:
         return None  # package not installed
-    except BaseException as e:
+    except Exception as e:
         log.w(f"ykush import failed: {e}")
         return None
     try:
         return ykush.Ykush()
     except ykush.NoneFoundError:
         return None  # no hub connected
-    except BaseException as e:
+    except Exception as e:
         log.w(f"ykush hub init failed: {e}")
         return None
 
@@ -218,17 +223,14 @@ def _create_unifi():
         from rspy import unifi
     except ModuleNotFoundError:
         return None  # package not installed
-    except BaseException as e:
+    except Exception as e:
         log.w(f"unifi import failed: {e}")
         return None
     try:
         return unifi.UniFiSwitch()
     except unifi.NoneFoundError:
         return None  # no hub connected
-    except EnvironmentError as e:
-        log.w(f"unifi hub init failed: {e}")
-        return None
-    except BaseException as e:
+    except Exception as e:
         log.w(f"unifi hub init failed: {e}")
         return None
 
