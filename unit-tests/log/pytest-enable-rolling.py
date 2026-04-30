@@ -23,14 +23,14 @@ def test_rolling_logger_max_1m(reset_logger, tmp_path):
         log_file.seek( 0, 2 )  # 0 bytes from end
         log_size = log_file.tell()
     del log_file
-    log.debug( '%s size: %s', log_filename, log_size )
+    log.debug( f'{log_filename} size: {log_size}' )
 
     old_filename = log_filename + ".old"
     with open( old_filename, "rb" ) as old_file:
         old_file.seek( 0, 2 )  # 0 bytes from end
         old_size = old_file.tell()
     del old_file
-    log.debug( '%s size: %s', old_filename, old_size )
+    log.debug( f'{old_filename} size: {old_size}' )
 
     max_size_in_bytes = max_size * 1024 * 1024
     size = log_size + old_size

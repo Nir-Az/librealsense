@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 def test_mixed_file_and_console_logging(reset_logger, tmp_path):
     filename = str( tmp_path / "mixed-file-console.log" )
-    log.debug( 'Filename logging to: %s', filename )
+    log.debug( f'Filename logging to: {filename}' )
     rs.log_to_file( rs.log_severity.error, filename )
     rs.log_to_console( rs.log_severity.error )
 
