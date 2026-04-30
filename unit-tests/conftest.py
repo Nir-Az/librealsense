@@ -257,8 +257,16 @@ def pytest_configure(config):
         print(f"-I- Build directory: {repo.build}")
     print(f"-I- {'=' * 80}")
 
-    # Create hub after logging is configured so discovery prints are visible
-    devices.init_hub()
+    # Create hub after logging is configured so discovery prints are visible.
+    # Subprocess child skips hub init: BrainStem/UniFi don't support concurrent
+    # connections from multiple processes — parent owns the hub. Mark
+    # _hub_attempted so devices.query() (which would otherwise call init_hub)
+    # also skips the `if hub:` connect/recycle block.
+    if config.pluginmanager.is_blocked("rs_subprocess_isolation"):
+        devices._hub_attempted = True
+        devices.hub = None
+    else:
+        devices.init_hub()
 
     # Echo CLI device filters once (' '.join handles both repeated-flag and space-separated forms)
     exclude_list = config.getoption("--exclude-device", default=[])

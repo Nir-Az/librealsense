@@ -33,7 +33,7 @@ import tempfile
 import pytest
 from _pytest.reports import TestReport
 
-from rspy import repo
+from rspy import devices, repo
 from rspy.pytest import logging_setup
 
 log = logging.getLogger(__name__)
@@ -62,6 +62,11 @@ _DEFAULT_TEST_TIMEOUT = 200
 # nodeid -> list[TestReport] for items already covered by an earlier group's
 # subprocess. The protocol hook drains this for every item it's called for.
 _pending_reports = {}
+
+# Set of device serials enabled for the previous group; lets us recycle the
+# hub only when the target device set actually changes between groups (matches
+# the legacy module_device_setup per-module recycling cadence).
+_last_target_serials = None
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -267,6 +272,84 @@ def _forward_child_output(child_output, log_path):
             log.debug("Could not forward child stdout to terminal: %s", e)
 
 
+def _resolve_group_serials(items, config):
+    """Determine which device serial(s) the items in this group will need.
+
+    Mirrors module_device_setup's resolution: parametrized via @device_each →
+    take the bracketed serial; otherwise resolve @device markers (single or
+    multi-device) against the parent's currently-known devices.
+    """
+    from rspy.pytest.device_helpers import find_matching_devices, find_matching_devices_multi
+
+    serials = set()
+    cli_includes = config.getoption("--device", default=[])
+    cli_excludes = config.getoption("--exclude-device", default=[])
+
+    for item in items:
+        callspec = getattr(item, "callspec", None)
+        if callspec and "_test_device_serial" in getattr(callspec, "params", {}):
+            serials.add(callspec.params["_test_device_serial"])
+            continue
+
+        device_markers = [
+            m for m in item.iter_markers()
+            if m.name in ("device", "device_each", "device_exclude")
+        ]
+        if not device_markers:
+            continue
+
+        multi = next(
+            (m for m in device_markers if m.name == "device" and len(m.args) > 1),
+            None,
+        )
+        if multi:
+            sns, _ = find_matching_devices_multi(
+                device_markers, cli_includes=cli_includes, cli_excludes=cli_excludes
+            )
+            serials.update(sns)
+            continue
+
+        sns, _ = find_matching_devices(
+            device_markers, each=False,
+            cli_includes=cli_includes, cli_excludes=cli_excludes,
+        )
+        serials.update(sns)
+
+    return serials
+
+
+def _enable_target_devices_for_group(items, config):
+    """Restrict the hub to the group's target device(s) before launching the child.
+
+    Matches the legacy run-unit-tests.py pattern: parent owns the hub and
+    enables only the device(s) the next test needs, then the child trusts the
+    state with --no-reset. Recycle only when the target set changes between
+    groups (same cadence as module_device_setup's per-module recycling).
+    Group-key granularity ((fspath, device-id)) means items in one group
+    always want the same device.
+    """
+    global _last_target_serials
+
+    if devices.hub is None:
+        return  # No hub on this machine — devices are statically connected.
+    if config.getoption("--no-reset", default=False):
+        return  # Caller asked us not to touch hub state.
+
+    target = _resolve_group_serials(items, config)
+    if not target:
+        return  # No device markers / parametrization → leave hub state as-is.
+
+    recycle = (_last_target_serials != target)
+    try:
+        devices.enable_only(list(target), recycle=recycle)
+    except Exception as e:
+        log.warning(
+            "Could not enable target devices %s for group %s: %s",
+            sorted(target), items[0].nodeid, e,
+        )
+    _last_target_serials = target
+
+
 def _run_group_in_subprocess(config, items):
     """Run *items* in a fresh pytest child process and return {nodeid: [TestReports]}.
 
@@ -275,6 +358,8 @@ def _run_group_in_subprocess(config, items):
     get a fabricated failed TestReport so each nodeid produces a terminal
     outcome and longrepr pointing at the per-test log file.
     """
+    _enable_target_devices_for_group(items, config)
+
     nodeids = [it.nodeid for it in items]
     # Sum of per-test timeouts as the parent-side budget; pytest-timeout in the
     # child still enforces individual test timeouts. +60s slack covers startup +
