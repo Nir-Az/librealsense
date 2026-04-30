@@ -30,6 +30,7 @@ Both frameworks share the same device/hub infrastructure (`rspy/devices.py`, `rs
 | `rspy/device_hub.py` | Abstract hub interface |
 | `rspy/unifi.py` | UniFi PoE switch control via SSH |
 | `rspy/acroname.py` | Acroname USB hub control |
+| `rspy/pytest/subprocess_isolation.py` | Wraps every test in a child pytest process for crash isolation |
 
 ### Adding a new pytest plugin requirement
 
@@ -40,6 +41,65 @@ Why: a missing plugin silently disables its CLI options (e.g. if `pytest-repeat`
 To add one:
 1. Pin the plugin in `unit-tests/requirements.txt`.
 2. Add a `'<module_name>': '<pip-package-name>'` entry to `REQUIRED_PYTEST_PLUGINS` in `rspy/pytest/plugins.py` (module name is the Python import name, typically with underscores; pip name uses hyphens).
+
+### Subprocess isolation (every test runs in a child pytest)
+
+Every collected pytest item runs in a child `pytest` process — a native crash
+(SIGSEGV / SIGABRT / Windows access violation) only fails its group instead
+of killing the whole session. Implemented in `rspy/pytest/subprocess_isolation.py`,
+registered as the named plugin `rs_subprocess_isolation` from `conftest.py`.
+
+**Granularity** is per `(fspath, device-id-from-brackets)` — the same key the
+per-test log file uses (see *Log file naming* below). So:
+- All non-parametrized tests in one file → **one** subprocess
+- `@pytest.mark.device_each("D400*")` with N matching devices → **N** subprocesses
+
+A crash in one group still kills *every* test in that group (the rest of the
+group's nodeids get a synthesized failed `TestReport` with `longrepr =
+"did not run; earlier test in group crashed; see <log_path>"`). Other groups
+run independently.
+
+**Child detection** is `-p no:rs_subprocess_isolation` on the child's cmdline.
+No env var, no user-visible CLI flag. The same flag also makes
+`conftest.py` skip `setup_test_logging` so the child doesn't truncate the
+parent's per-test `.log`.
+
+**Adding a new CLI option in `pytest_addoption`** — if the option affects test
+behavior in the child (filters, context, mode toggles like `--rslog`), add it
+to `_forwarded_args(config)` in `rspy/pytest/subprocess_isolation.py`:
+
+```python
+if config.getoption("--my-flag", default=False):
+    args.append("--my-flag")
+# or for an option with a value:
+value = config.getoption("--my-value", default="")
+if value:
+    args.extend(["--my-value", value])
+```
+
+If the option is parent-only orchestration (doesn't affect what the child
+should do), don't forward it. Always-on flags currently forwarded: `--device`,
+`--exclude-device`, `--context`, `--rslog`, `--debug`, plus a hard-coded
+`--no-reset` (parent owns hub recycling). `--hub-reset` is intentionally
+*never* forwarded.
+
+**Writing a test that itself spawns pytest via `subprocess.run`** — if the
+inner pytest will load `unit-tests/conftest.py` (i.e. the test file is under
+`unit-tests/` or your test copies/exec()s the real conftest), pass
+`-p no:rs_subprocess_isolation` to your inner invocation, otherwise the inner
+tests get re-wrapped and shared-state expectations break. Examples already
+doing this:
+- `unit-tests/infra-tests/helpers.py` `run_e2e()` — the e2e_conftest exec()s
+  the real conftest, so the inner pytest must disable the wrapper plugin.
+- `unit-tests/wrappers/rest-api/pytest-rest-api-wrapper.py` does *not* need
+  this — its inner pytest target is outside `unit-tests/`, so the real
+  conftest never loads.
+
+**Reports back from the child** come via `pytest-reportlog` (JSONL TestReport
+entries). Skip-report `longrepr` tuples turn into JSON arrays; the parser in
+`subprocess_isolation.py` restores the tuple type before forwarding via
+`pytest_runtest_logreport`. Don't bypass that conversion if you ever extend
+the parser.
 
 ### Hub port management
 
