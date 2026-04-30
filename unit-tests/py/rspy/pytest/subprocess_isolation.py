@@ -21,6 +21,7 @@ user-visible CLI flag is involved.
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -47,6 +48,9 @@ _CRASH_SIGNALS = {
     3221225477:   "access violation",
 }
 
+# Sentinel returncode meaning subprocess.TimeoutExpired (child was killed by us).
+_TIMED_OUT = "__rs_timed_out__"
+
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_protocol(item, nextitem):
@@ -67,9 +71,11 @@ def pytest_runtest_protocol(item, nextitem):
 def _forwarded_args(config):
     """Mirror parent-side librealsense flags onto the child pytest invocation.
 
-    --no-reset is always forwarded: the parent has already enabled the device
-    via the hub, and the child must not recycle it. --hub-reset is never
-    forwarded for the same reason.
+    Device selection and context options are forwarded so the child sees the
+    same target device set as the parent invocation. --no-reset is always
+    forwarded because device setup happens in the child's own fixtures and the
+    child should not perform an extra hub recycle. --hub-reset is intentionally
+    not forwarded.
     """
     args = []
     for value in config.getoption("--device", default=[]) or []:
@@ -115,12 +121,17 @@ def _location(item):
     return (str(getattr(item, "fspath", "")), 0, item.nodeid)
 
 
-def _fabricate_crash_report(item, returncode, log_path):
-    label = _CRASH_SIGNALS.get(returncode, f"exit code {returncode}")
-    if log_path:
-        longrepr = f"child pytest crashed ({label}); see {log_path} for full output"
-    else:
-        longrepr = f"child pytest crashed ({label})"
+def _summary_for(returncode):
+    if returncode == _TIMED_OUT:
+        return "child pytest timed out and was killed"
+    if returncode in _CRASH_SIGNALS:
+        return f"child pytest crashed ({_CRASH_SIGNALS[returncode]})"
+    return f"child pytest exited with code {returncode}"
+
+
+def _fabricate_failed_report(item, returncode, log_path):
+    summary = _summary_for(returncode)
+    longrepr = f"{summary}; see {log_path} for full output" if log_path else summary
     return TestReport(
         nodeid=item.nodeid,
         location=_location(item),
@@ -153,58 +164,66 @@ def _parse_reportlog(path, item_nodeid):
             if data.get("nodeid") != item_nodeid:
                 continue
             try:
-                reports.append(TestReport._from_json(data))
+                report = TestReport._from_json(data)
             except Exception as e:
                 log.warning("Failed to deserialize TestReport for %s: %s", item_nodeid, e)
+                continue
+            # Skip-report longrepr is a (filename, lineno, reason) tuple in pytest;
+            # JSON round-trip turns it into a list and the terminal reporter then
+            # asserts isinstance(longrepr, tuple). Restore the tuple type.
+            if report.outcome == "skipped" and isinstance(report.longrepr, list):
+                report.longrepr = tuple(report.longrepr)
+            reports.append(report)
     return reports
 
 
-def _emit_to_test_log(text):
-    """Append the child's captured stdout to the parent's per-test log file.
+def _forward_child_output(child_output, log_path):
+    """Stream the child's captured output into the parent's per-test log file.
 
-    Returns the log file path (for the fabricated-crash longrepr), or None when
-    logging is off (-s). The FileHandler's TextIOWrapper buffers writes and
-    re-translates "\\n", which corrupts child output that already contains
-    "\\r\\n" on Windows. Open a fresh binary append fd to dodge both issues,
-    flush the FileHandler before so its own buffered separators are on disk,
-    then seek it to end so subsequent parent log writes stay sequential.
+    Streams in chunks rather than reading the full child output into memory —
+    pytest crash backtraces can be sizable.
+
+    When no per-test FileHandler is active (e.g. -s / capture=no), or when live
+    logging is on, also write to sys.stdout so interactive runs still show
+    subprocess output. Returns the path of the file the child output landed
+    in (per-test log) so the fabricated-crash longrepr can point at it.
     """
+    child_output.seek(0)
     handler = logging_setup._current_file_handler
-    if handler is None:
-        return None
-    log_path = getattr(handler, "baseFilename", None)
-    if not text or not log_path:
-        return log_path
-    try:
-        handler.stream.flush()
-        data = text.encode("utf-8", errors="replace")
-        with open(log_path, "ab") as f:
-            f.write(data)
-            if not data.endswith(b"\n"):
-                f.write(b"\n")
-        handler.stream.seek(0, os.SEEK_END)
-    except Exception as e:
-        log.debug("Could not append child stdout to per-test log: %s", e)
+    forward_to_terminal = handler is None or getattr(logging_setup, "live_logging", False)
+
+    if log_path:
+        try:
+            handler.stream.flush()
+            with open(log_path, "ab") as f:
+                shutil.copyfileobj(child_output, f)
+            handler.stream.seek(0, os.SEEK_END)
+        except Exception as e:
+            log.debug("Could not append child stdout to per-test log: %s", e)
+            forward_to_terminal = True  # at least show it somewhere
+
+    if forward_to_terminal:
+        try:
+            child_output.seek(0)
+            data = child_output.read()
+            sys.stdout.buffer.write(data)
+            sys.stdout.flush()
+        except Exception as e:
+            log.debug("Could not forward child stdout to terminal: %s", e)
+
     return log_path
 
 
 def _run_test_in_subprocess(item):
-    """Run *item* in a fresh pytest child process and return its TestReport list.
-
-    Child stdout/stderr is captured to a temp file (not piped via PIPE — pytest's
-    own crash backtrace can be large, and PIPE blocks if the child fills the OS
-    buffer) then forwarded into the parent's per-test log file. Reports cover
-    setup/call/teardown via pytest-reportlog. If the child crashes natively
-    (SIGSEGV/SIGABRT) the reportlog may be empty or partial — fabricate a single
-    failed TestReport in that case so the failure surfaces in the terminal
-    summary and JUnit XML.
-    """
+    """Run *item* in a fresh pytest child process and return its TestReport list."""
     timeout = _marker_timeout(item)
     child_timeout = (timeout + 30) if timeout else None
 
     fd, report_log_path = tempfile.mkstemp(prefix="rs-subproc-", suffix=".jsonl")
     os.close(fd)
     child_output = tempfile.TemporaryFile(mode="w+b")
+    handler = logging_setup._current_file_handler
+    log_path = getattr(handler, "baseFilename", None) if handler else None
 
     try:
         cmd = [
@@ -230,7 +249,7 @@ def _run_test_in_subprocess(item):
             )
             returncode = p.returncode
         except subprocess.TimeoutExpired:
-            returncode = -1
+            returncode = _TIMED_OUT
             try:
                 child_output.write(
                     f"\nchild pytest exceeded timeout {child_timeout}s and was killed\n".encode()
@@ -238,19 +257,17 @@ def _run_test_in_subprocess(item):
             except Exception:
                 pass
 
-        child_output.seek(0)
-        stdout = child_output.read().decode("utf-8", errors="replace")
-        log_path = _emit_to_test_log(stdout)
+        _forward_child_output(child_output, log_path)
 
         reports = _parse_reportlog(report_log_path, item.nodeid)
         if reports:
-            if returncode != 0 and not any(r.failed for r in reports):
+            if returncode != 0 and returncode != _TIMED_OUT and not any(r.failed for r in reports):
                 # Child exited non-zero but reportlog says everything passed —
                 # likely a late crash after the call report was flushed.
-                reports.append(_fabricate_crash_report(item, returncode, log_path))
+                reports.append(_fabricate_failed_report(item, returncode, log_path))
             return reports
 
-        return [_fabricate_crash_report(item, returncode, log_path)]
+        return [_fabricate_failed_report(item, returncode, log_path)]
     finally:
         try:
             child_output.close()

@@ -150,8 +150,13 @@ def run_e2e(test_filename, *extra_pytest_args):
         env = os.environ.copy()
         env['INFRA_UNIT_TESTS_DIR'] = os.path.normpath(os.path.join(_E2E_DIR, '..', '..'))  # unit-tests/
 
+        # The e2e_conftest.py exec()s the real conftest, which would re-register
+        # the rs_subprocess_isolation plugin. The e2e tests count outcomes and
+        # rely on shared module state, neither of which survives that wrapping.
+        # Disable it for the inner pytest run.
         p = subprocess.run(
-            [sys.executable, "-m", "pytest", test_filename, "-v", *extra_pytest_args],
+            [sys.executable, "-m", "pytest", test_filename, "-v",
+             "-p", "no:rs_subprocess_isolation", *extra_pytest_args],
             cwd=tmpdir,
             env=env,
             stdout=subprocess.PIPE,
