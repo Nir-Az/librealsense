@@ -155,9 +155,8 @@ def test_synchronized_frames(test_device):
     """Verify that timestamps of depth, infrared and color frames are consistent across configurations"""
     device, ctx = test_device
 
+    time.sleep(1)  # let device settle after hub power-cycle, before first pipeline.start
     for resolution, fps in CONFIGURATIONS:
         log.info(f"Timestamp Synchronization Test {resolution[0]}x{resolution[1]} @ {fps}fps")
-        device.hardware_reset()
-        time.sleep(5)
-        device = ctx.query_devices()[0]
         run_test(device, ctx, resolution, fps)
+        time.sleep(2)  # let hardware settle between configurations after pipeline.stop
