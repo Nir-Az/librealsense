@@ -1,26 +1,30 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Run every pytest item in an isolated child pytest process.
+"""Run each (file, device) group of pytest items in an isolated child pytest process.
 
-A native crash (SIGSEGV / SIGABRT) in the child terminates only that test instead
-of the whole pytest session, so subsequent tests still run.
+A native crash (SIGSEGV / SIGABRT) in the child terminates only that group instead
+of the whole pytest session, so subsequent groups still run. Group key matches the
+per-test log file's (fspath, device-id-from-brackets) so the granularity lines up
+with the existing log file naming: parametrized device-each tests still get one
+subprocess per device; non-parametrized tests in the same file share one subprocess.
 
-Same one-subprocess-per-test pattern legacy run-unit-tests.py and the ROS CI
-script (realsense-ros/realsense2_camera/test/live_camera/rosci.py) already use:
-launch sys.executable, pipe stdout/stderr straight into the per-test log file,
-honour the test's timeout. The only addition here is pytest-reportlog, which
-writes structured TestReport entries the parent forwards to listeners.
+Same one-subprocess pattern legacy run-unit-tests.py and the ROS CI script
+(realsense-ros/realsense2_camera/test/live_camera/rosci.py) already use: launch
+sys.executable, pipe stdout/stderr straight into the per-test log file, honour the
+test's timeout. The only addition here is pytest-reportlog, which writes structured
+TestReport entries the parent forwards to listeners.
 
 Conftest registers this module as a plugin under the name "rs_subprocess_isolation".
-The parent invokes the child with `-p no:rs_subprocess_isolation`, which blocks
-the plugin in the child so the test runs normally there. No env var or
-user-visible CLI flag is involved.
+The parent invokes the child with `-p no:rs_subprocess_isolation`, which blocks the
+plugin in the child so the tests run normally there. No env var or user-visible CLI
+flag is involved.
 """
 
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,22 +55,79 @@ _CRASH_SIGNALS = {
 # Sentinel returncode meaning subprocess.TimeoutExpired (child was killed by us).
 _TIMED_OUT = "__rs_timed_out__"
 
+# Default per-test timeout when no @pytest.mark.timeout marker is present
+# (matches conftest.py's default).
+_DEFAULT_TEST_TIMEOUT = 200
+
+# nodeid -> list[TestReport] for items already covered by an earlier group's
+# subprocess. The protocol hook drains this for every item it's called for.
+_pending_reports = {}
+
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_protocol(item, nextitem):
-    """Run *item* in a fresh pytest child process.
+    """Run the (fspath, device-id) group containing *item* in a child pytest.
 
     Returning True short-circuits the default protocol; setup/call/teardown
-    reports come back from the child via pytest-reportlog and are forwarded
-    to listeners here so the terminal reporter, JUnit XML, log handlers, etc.
-    see them. The conftest hookwrapper at pytest_runtest_protocol still wraps
-    this call, so per-test log files are opened/closed normally.
+    reports come back from the child via pytest-reportlog and are forwarded to
+    listeners here so the terminal reporter, JUnit XML, log handlers, etc. see
+    them. The conftest hookwrapper at pytest_runtest_protocol still fires
+    per item, so per-test log files are opened/closed normally.
     """
-    reports = _run_test_in_subprocess(item)
-    for report in reports:
+    if item.nodeid in _pending_reports:
+        # Already ran as part of a previous group's subprocess.
+        for report in _pending_reports.pop(item.nodeid):
+            item.ihook.pytest_runtest_logreport(report=report)
+        return True
+
+    group = _find_group(item)
+    by_nodeid = _run_group_in_subprocess(item.config, group)
+    _pending_reports.update(by_nodeid)
+
+    for report in _pending_reports.pop(item.nodeid, []):
         item.ihook.pytest_runtest_logreport(report=report)
     return True
 
+
+# ---------------------------------------------------------------------------
+# Grouping
+# ---------------------------------------------------------------------------
+
+def _group_key(item):
+    """(fspath, device-id-from-brackets) — same key the per-test log handler uses,
+    so per-file/per-device subprocess granularity aligns with the .log file naming.
+    """
+    device_id = None
+    m = re.search(r"\[(.+)\]", item.name)
+    if m:
+        device_id = m.group(1)
+    return (str(item.fspath), device_id)
+
+
+def _find_group(item):
+    """Consecutive items in session.items sharing the group key with *item*.
+
+    pytest_collection_modifyitems already sorts by (module, device_serial) — see
+    rspy.pytest.collection.filter_and_sort_items — so a group is always contiguous.
+    """
+    items = item.session.items
+    try:
+        start = items.index(item)
+    except ValueError:
+        return [item]
+    key = _group_key(item)
+    group = []
+    for i in range(start, len(items)):
+        if _group_key(items[i]) == key:
+            group.append(items[i])
+        else:
+            break
+    return group
+
+
+# ---------------------------------------------------------------------------
+# Child invocation
+# ---------------------------------------------------------------------------
 
 def _forwarded_args(config):
     """Mirror parent-side librealsense flags onto the child pytest invocation.
@@ -129,9 +190,7 @@ def _summary_for(returncode):
     return f"child pytest exited with code {returncode}"
 
 
-def _fabricate_failed_report(item, returncode, log_path):
-    summary = _summary_for(returncode)
-    longrepr = f"{summary}; see {log_path} for full output" if log_path else summary
+def _fabricate_failed(item, longrepr):
     return TestReport(
         nodeid=item.nodeid,
         location=_location(item),
@@ -145,8 +204,8 @@ def _fabricate_failed_report(item, returncode, log_path):
     )
 
 
-def _parse_reportlog(path, item_nodeid):
-    """Yield TestReport objects pertaining to *item_nodeid* from a pytest-reportlog file."""
+def _parse_reportlog(path):
+    """All TestReport objects from a pytest-reportlog file."""
     if not os.path.isfile(path):
         return []
     reports = []
@@ -161,12 +220,10 @@ def _parse_reportlog(path, item_nodeid):
                 continue
             if data.get("$report_type") != "TestReport":
                 continue
-            if data.get("nodeid") != item_nodeid:
-                continue
             try:
                 report = TestReport._from_json(data)
             except Exception as e:
-                log.warning("Failed to deserialize TestReport for %s: %s", item_nodeid, e)
+                log.warning("Failed to deserialize TestReport: %s", e)
                 continue
             # Skip-report longrepr is a (filename, lineno, reason) tuple in pytest;
             # JSON round-trip turns it into a list and the terminal reporter then
@@ -180,19 +237,18 @@ def _parse_reportlog(path, item_nodeid):
 def _forward_child_output(child_output, log_path):
     """Stream the child's captured output into the parent's per-test log file.
 
-    Streams in chunks rather than reading the full child output into memory —
-    pytest crash backtraces can be sizable.
+    Streams in chunks rather than reading everything into memory — a big test
+    group's output plus a crash backtrace can be sizable.
 
     When no per-test FileHandler is active (e.g. -s / capture=no), or when live
     logging is on, also write to sys.stdout so interactive runs still show
-    subprocess output. Returns the path of the file the child output landed
-    in (per-test log) so the fabricated-crash longrepr can point at it.
+    subprocess output.
     """
     child_output.seek(0)
     handler = logging_setup._current_file_handler
     forward_to_terminal = handler is None or getattr(logging_setup, "live_logging", False)
 
-    if log_path:
+    if log_path and handler is not None:
         try:
             handler.stream.flush()
             with open(log_path, "ab") as f:
@@ -205,19 +261,25 @@ def _forward_child_output(child_output, log_path):
     if forward_to_terminal:
         try:
             child_output.seek(0)
-            data = child_output.read()
-            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.write(child_output.read())
             sys.stdout.flush()
         except Exception as e:
             log.debug("Could not forward child stdout to terminal: %s", e)
 
-    return log_path
 
+def _run_group_in_subprocess(config, items):
+    """Run *items* in a fresh pytest child process and return {nodeid: [TestReports]}.
 
-def _run_test_in_subprocess(item):
-    """Run *item* in a fresh pytest child process and return its TestReport list."""
-    timeout = _marker_timeout(item)
-    child_timeout = (timeout + 30) if timeout else None
+    Reports cover setup/call/teardown via pytest-reportlog. Tests with no
+    matching report (child crashed before reaching them, or while running them)
+    get a fabricated failed TestReport so each nodeid produces a terminal
+    outcome and longrepr pointing at the per-test log file.
+    """
+    nodeids = [it.nodeid for it in items]
+    # Sum of per-test timeouts as the parent-side budget; pytest-timeout in the
+    # child still enforces individual test timeouts. +60s slack covers startup +
+    # hub init + final teardown.
+    child_timeout = sum((_marker_timeout(it) or _DEFAULT_TEST_TIMEOUT) for it in items) + 60
 
     fd, report_log_path = tempfile.mkstemp(prefix="rs-subproc-", suffix=".jsonl")
     os.close(fd)
@@ -228,16 +290,16 @@ def _run_test_in_subprocess(item):
     try:
         cmd = [
             sys.executable, "-u",
-            "-m", "pytest", item.nodeid,
+            "-m", "pytest", *nodeids,
             f"--report-log={report_log_path}",
             "-p", f"no:{PLUGIN_NAME}",
             "-p", "no:cacheprovider",
             "--no-header",
             "--tb=short",
         ]
-        cmd.extend(_forwarded_args(item.config))
+        cmd.extend(_forwarded_args(config))
 
-        log.debug("subprocess isolation: %s", " ".join(cmd))
+        log.debug("subprocess isolation: %d nodeid(s) in group; cmd=%s", len(nodeids), " ".join(cmd))
         try:
             p = subprocess.run(
                 cmd,
@@ -259,15 +321,30 @@ def _run_test_in_subprocess(item):
 
         _forward_child_output(child_output, log_path)
 
-        reports = _parse_reportlog(report_log_path, item.nodeid)
-        if reports:
-            if returncode != 0 and returncode != _TIMED_OUT and not any(r.failed for r in reports):
-                # Child exited non-zero but reportlog says everything passed —
-                # likely a late crash after the call report was flushed.
-                reports.append(_fabricate_failed_report(item, returncode, log_path))
-            return reports
+        all_reports = _parse_reportlog(report_log_path)
+        by_nodeid = {nid: [] for nid in nodeids}
+        for r in all_reports:
+            if r.nodeid in by_nodeid:
+                by_nodeid[r.nodeid].append(r)
 
-        return [_fabricate_failed_report(item, returncode, log_path)]
+        # Synthesize a failed report for every nodeid the child didn't fully cover.
+        item_by_nodeid = {it.nodeid: it for it in items}
+        for nid, reports in by_nodeid.items():
+            phases = {r.when for r in reports}
+            if not reports:
+                summary = (
+                    "did not run; earlier test in group crashed"
+                    if returncode != 0 else
+                    "did not run (no report from child)"
+                )
+                longrepr = f"{summary}; see {log_path}" if log_path else summary
+                reports.append(_fabricate_failed(item_by_nodeid[nid], longrepr))
+            elif "call" not in phases and returncode != 0:
+                summary = _summary_for(returncode)
+                longrepr = f"{summary}; see {log_path}" if log_path else summary
+                reports.append(_fabricate_failed(item_by_nodeid[nid], longrepr))
+
+        return by_nodeid
     finally:
         try:
             child_output.close()
