@@ -65,6 +65,9 @@ namespace tare_debug {
         bool active = false;
         std::string prefix;
         int step = 0;
+        // Captured at session start; replicated into every summary row + log.
+        float ground_truth_mm = 0.f;
+        float depth_unit_factor = 0.f;
         // Per-step summary rows captured during the run; flushed on end().
         std::vector<std::string> summary_rows;
     };
@@ -76,6 +79,8 @@ namespace tare_debug {
         std::stringstream pp; pp << "tare_debug_" << ms << "_";
         s.prefix = pp.str();
         s.step = 0;
+        s.ground_truth_mm = 0.f;
+        s.depth_unit_factor = 0.f;
         s.summary_rows.clear();
         s.active = true;
     }
@@ -859,16 +864,30 @@ namespace librealsense
             if (first_call)
             {
                 tare_debug::begin();
+                tare_debug::instance().ground_truth_mm = ground_truth_mm;
+                // Query the active depth-unit factor (RS2_OPTION_DEPTH_UNITS).
+                if (auto * dev = dynamic_cast<d400_device *>(this)) {
+                    try {
+                        auto & sensor = dev->get_depth_sensor();
+                        if (sensor.supports_option(RS2_OPTION_DEPTH_UNITS))
+                            tare_debug::instance().depth_unit_factor =
+                                sensor.get_option(RS2_OPTION_DEPTH_UNITS).query();
+                    } catch (const std::exception & e) {
+                        LOG_WARNING("tare debug: depth_unit query failed: " << e.what());
+                    }
+                }
                 std::stringstream meta;
                 meta << "{\n"
                      << "  \"ground_truth_mm\": " << ground_truth_mm << ",\n"
+                     << "  \"depth_unit_factor\": " << tare_debug::instance().depth_unit_factor << ",\n"
                      << "  \"timeout_ms\": " << timeout_ms << ",\n"
                      << "  \"host_assistance\": " << static_cast<int>(host_assistance) << ",\n"
                      << "  \"caller_json\": " << (json.empty() ? std::string("null") : json) << "\n"
                      << "}";
                 tare_debug::write_text("input.json", meta.str());
                 LOG_INFO("tare debug: session begin, prefix=" << tare_debug::instance().prefix
-                         << " ground_truth_mm=" << ground_truth_mm);
+                         << " ground_truth_mm=" << ground_truth_mm
+                         << " depth_unit_factor=" << tare_debug::instance().depth_unit_factor);
             }
             if (tare_debug::instance().active)
             {
@@ -926,10 +945,17 @@ namespace librealsense
                         right_fx_norm  = tbl->intrinsic_right.x.x;
                         right_ppx_640  = tbl->rect_params[ds::res_640_480].z;
                     }
+                    float health_in_0 = health ? health[0] : std::numeric_limits<float>::quiet_NaN();
+                    float health_in_1 = health ? health[1] : std::numeric_limits<float>::quiet_NaN();
                     std::stringstream row;
                     row << "{\"step\": " << step_idx
                         << ", \"state\": \"" << tare_debug::state_name(state_int) << "\""
+                        << ", \"ground_truth_mm\": " << tare_debug::instance().ground_truth_mm
+                        << ", \"depth_unit_factor\": " << tare_debug::instance().depth_unit_factor
+                        << ", \"valid_pixel_count\": " << _collected_counter
                         << ", \"depth_in\": " << depth
+                        << ", \"health_0\": " << health_in_0
+                        << ", \"health_1\": " << health_in_1
                         << ", \"ram_fx\": " << ram.fx
                         << ", \"ram_fy\": " << ram.fy
                         << ", \"ram_ppx\": " << ram.ppx
@@ -945,7 +971,11 @@ namespace librealsense
                     tare_debug::flush_summary();
                     LOG_INFO("tare debug: step " << step_idx
                              << " state=" << tare_debug::state_name(state_int)
+                             << " gt_mm=" << tare_debug::instance().ground_truth_mm
+                             << " du=" << tare_debug::instance().depth_unit_factor
+                             << " valid_px=" << _collected_counter
                              << " depth=" << depth
+                             << " health=[" << health_in_0 << "," << health_in_1 << "]"
                              << " right_ppx_norm=" << right_ppx_norm
                              << " -> " << step_json_name << ", " << step_calib_bin
                              << " (" << calib.size() << "B)");
@@ -1107,25 +1137,34 @@ namespace librealsense
                 LOG_INFO("Health check numbers from TareCalibrationResult(0x0C): before=" << ph[0] << ", after=" << ph[1]);
                 LOG_INFO("Z calculated from health check numbers : before=" << (ph[0] + 1) * ground_truth_mm << ", after=" << (ph[1] + 1) * ground_truth_mm);
 
-                // Handle errors from firmware
-                if (status != ds_calib_common::STATUS_SUCCESS)
-                    handle_calibration_error(status);
-
 #ifdef TARE_DEBUG_DUMP
-                // Capture health values before res is overwritten (ph points into old res buffer).
+                // Capture partial result up-front so the dump fires even on FW failure
+                // (handle_calibration_error / non-SUCCESS status would otherwise throw
+                // before any "final_*" file is written). ph points into the
+                // TARE_CALIB_CHECK_STATUS res buffer that may be overwritten below.
                 float dbg_health_before = ph[0];
                 float dbg_health_after  = ph[1];
                 ds_calib_common::TareCalibrationResult dbg_result = result;
                 bool dbg_session_active = tare_debug::instance().active;
+                bool dbg_got_calib_table = false;
 #endif
 
-                res = get_calibration_results();
+                // Only fetch the new calibration table on SUCCESS — the call would
+                // fail anyway on errors and we want the partial dump to still happen.
+                if (status == ds_calib_common::STATUS_SUCCESS) {
+                    res = get_calibration_results();
+#ifdef TARE_DEBUG_DUMP
+                    dbg_got_calib_table = true;
+#endif
+                }
 
 #ifdef TARE_DEBUG_DUMP
                 if (dbg_session_active)
                 {
-                    tare_debug::write_binary("final_calib_table.bin", res);
-                    tare_debug::write_text("final_calib_table.json", tare_debug::decode_coefficients_table(res));
+                    if (dbg_got_calib_table) {
+                        tare_debug::write_binary("final_calib_table.bin", res);
+                        tare_debug::write_text("final_calib_table.json", tare_debug::decode_coefficients_table(res));
+                    }
                     std::stringstream ts;
                     ts << "{\n"
                        << "  \"status\": " << static_cast<int>(dbg_result.status) << ",\n"
@@ -1178,6 +1217,9 @@ namespace librealsense
                         std::stringstream row;
                         row << "{\"step\": \"final\""
                             << ", \"state\": \"FINAL_RESULT\""
+                            << ", \"ground_truth_mm\": " << tare_debug::instance().ground_truth_mm
+                            << ", \"depth_unit_factor\": " << tare_debug::instance().depth_unit_factor
+                            << ", \"valid_pixel_count\": " << _collected_counter
                             << ", \"depth_in\": " << depth
                             << ", \"ram_fx\": " << ram_final.fx
                             << ", \"ram_fy\": " << ram_final.fy
@@ -1198,6 +1240,9 @@ namespace librealsense
                     tare_debug::flush_summary();
                     }
                     LOG_INFO("tare debug: final result dumped, calib_table=" << res.size() << "B"
+                             << " gt_mm=" << tare_debug::instance().ground_truth_mm
+                             << " du=" << tare_debug::instance().depth_unit_factor
+                             << " valid_px=" << _collected_counter
                              << " status=" << static_cast<int>(dbg_result.status)
                              << " curPx=" << dbg_result.curPx << " calPx=" << dbg_result.calPx
                              << " health_before=" << dbg_health_before << " health_after=" << dbg_health_after);
@@ -1207,6 +1252,11 @@ namespace librealsense
                     }
                 }
 #endif
+
+                // Throw FW errors AFTER the dump above so failure cases still
+                // produce final_tare_result.json + a FINAL summary row.
+                if (status != ds_calib_common::STATUS_SUCCESS)
+                    handle_calibration_error(status);
 
                 if (depth < 0)
                 {
