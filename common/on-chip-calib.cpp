@@ -35,7 +35,7 @@ namespace rs2
         if( dev.supports( RS2_CAMERA_INFO_CONNECTION_TYPE ) )
         {
             auto con_type = std::string( dev.get_info( RS2_CAMERA_INFO_CONNECTION_TYPE ) );
-            if( con_type == "GMSL" )
+            //if( con_type == "GMSL" )
                 host_assistance = 1;  // To be used for MIPI SKU only
         }
 

@@ -858,6 +858,45 @@ namespace librealsense
         }
 
 #ifdef TARE_DEBUG_DUMP
+        // RAII: at function exit, read RAM and append ram_after_* fields to the most
+        // recently pushed summary row. Captures FW's reaction to this step's FW command
+        // (INTERACTIVE_SCAN_CONTROL / TARE_CALIB_BEGIN), which only updates working RAM
+        // after the command — the entry-time read at the top of the per-step block
+        // reflects the previous step's post-command state.
+        struct ram_after_appender_t {
+            std::shared_ptr<hw_monitor> hwm;
+            ~ram_after_appender_t() noexcept {
+                try {
+                    auto & s = tare_debug::instance();
+                    if (!s.active || s.summary_rows.empty() || !hwm) return;
+                    // Tiny pause to let FW finish its async tare iteration before
+                    // we read working RAM. 1 ms is short enough to be harmless even
+                    // if this function ends up running on a frame-callback thread.
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    auto bytes = hwm->send(command{
+                        ds::MRD,
+                        (int)tare_debug::RIGHT_INTR_RAM_BASE,
+                        (int)tare_debug::RIGHT_INTR_RAM_END });
+                    auto ram = tare_debug::parse_right_intr_ram(bytes);
+                    auto & last = s.summary_rows.back();
+                    auto close_pos = last.rfind('}');
+                    if (close_pos == std::string::npos) return;
+                    std::stringstream ss;
+                    ss << ", \"ram_after_fx\": " << ram.fx
+                       << ", \"ram_after_fy\": " << ram.fy
+                       << ", \"ram_after_ppx\": " << ram.ppx
+                       << ", \"ram_after_ppy\": " << ram.ppy;
+                    last.insert(close_pos, ss.str());
+                    tare_debug::flush_summary();
+                } catch (...) { /* swallow — dtor */ }
+            }
+        };
+        // Guard lives at function scope — dtor fires after the FW command for this
+        // step has executed, capturing FW's post-command RAM state.
+        ram_after_appender_t _ram_after_guard{ _hw_monitor };
+#endif
+
+#ifdef TARE_DEBUG_DUMP
         {
             bool first_call = (host_assistance != host_assistance_type::no_assistance
                                && _interactive_state == interactive_calibration_state::RS2_OCC_STATE_NOT_ACTIVE);
