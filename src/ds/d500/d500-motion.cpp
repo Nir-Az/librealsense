@@ -32,6 +32,11 @@ using rsutils::type::fourcc;
 using namespace librealsense;
 namespace librealsense
 {
+    namespace
+    {
+        constexpr double RAW_TO_DPS_SCALE = 10000.0;
+    }
+
     const std::map<fourcc::value_type, rs2_format> d500_motion_fourcc_to_rs2_format = {
         {fourcc('G','R','E','Y'), RS2_FORMAT_MOTION_XYZ32F},
     };
@@ -46,16 +51,25 @@ namespace librealsense
         return _ds_motion_common->get_motion_intrinsics(stream);
     }
 
+    bool d500_motion::supports_physical_units() const
+    {
+        static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
+        return get_pid() != ds::D585S_PID && ! _is_mipi_device
+            && _fw_version >= min_fw_supporting_physical_units;
+    }
+
+    bool d500_motion::is_imu_high_accuracy() const
+    {
+        return supports_physical_units();
+    }
+
     double d500_motion::get_gyro_default_scale() const
     {
-        // Raw 16 bit register value, dynamic range +/-125 [deg/sec] --> 250/65536=0.003814697265625 [deg/sec/LSB].
-        // Used by D585S (its own flow) and MIPI/UVC (gyro sensitivity not supported there).
-        if( _is_mipi_device || get_pid() == ds::D585S_PID )
-        {
-            return 0.003814697265625;
-        }
-        // Cameras on the HID (USB) path: FW ships values pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000) yields [deg/sec].
-        return 0.0001;
+        if( supports_physical_units() )
+            return 1. / RAW_TO_DPS_SCALE;
+
+        // Legacy D500 reports signed 16-bit raw samples at a fixed 125 dps assumption.
+        return 125. / 32768.;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -105,11 +119,8 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                // Cameras on the HID (USB) path: mf-hid multiplies raw HID values by 10000 to undo the FW's 1000-scale packing.
-                // Combined with get_gyro_default_scale() = 0.0001 the pipeline gets [deg/sec].
-                // Skip on MIPI/UVC (get_raw_motion_sensor() returns nullptr on that path) and on D585S (its own scale flow).
-                if( get_pid() != D585S_PID && ! _is_mipi_device )
-                    get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
+                if( supports_physical_units() )
+                    get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
             }
 #endif
         }
@@ -205,14 +216,14 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        // D585S uses a different FW versioning line (8.58.x) and a different gyro output format; skip.
-        // MIPI/UVC transport has no HID feature-report path, so the option would register with a null
-        // backing hid_sensor and fail on every set() — skip too.
-        if( get_pid() == ds::D585S_PID || _is_mipi_device )
-            return;
-        if( _fw_version >= firmware_version( "7.58.40672.12546" ) && ! _has_motion_module_failed )
+        if( supports_physical_units() && ! _has_motion_module_failed )
+        {
+            auto raw_motion_sensor = get_raw_motion_sensor();
+            raw_motion_sensor->enable_gyro_sensitivity_range_index();
             register_feature(
-                std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
+                std::make_shared< gyro_sensitivity_feature >(
+                    raw_motion_sensor, get_motion_sensor(), 4.f ) );
+        }
     }
 
     void d500_motion::register_stream_to_extrinsic_group(const stream_interface& stream, uint32_t group_index)
