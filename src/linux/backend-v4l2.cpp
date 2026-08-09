@@ -1671,11 +1671,11 @@ namespace librealsense
                                                 uint8_t md_size = buf_mgr.metadata_size();
                                                 void* md_start = buf_mgr.metadata_start();
 
-                                                // D457 development - hid over uvc - md size for IMU is 64
+                                                // IMU node (mi=4) delivers data with no metadata node, synthesize the metadata from the payload.
+                                                // Frame size is 64 bytes on D400 but 256 on D500.
                                                 metadata_hid_raw meta_data{};
-                                                if (md_size == 0 && buffer->get_length_frame_only() <= 64)
+                                                if (md_size == 0 && _info.mi == 4)
                                                 {
-                                                    // Populate HID IMU data - Header
                                                     populate_imu_data(meta_data, buffer->get_frame_start(), md_size, &md_start);
                                                 }
 
