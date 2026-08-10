@@ -81,11 +81,14 @@ namespace librealsense
 
         od_ep->register_option( RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option );
 
-        auto detection_distance = std::make_shared< uvc_xu_option< uint8_t > >(raw_od_ep,
-                                                                               ds::inference_xu,
-                                                                               ds::d500_xu_id::DETECTION_DISTANCE,
-                                                                               "Enable firmware distance calculation for detections" );
-        od_ep->register_option( RS2_OPTION_DETECTION_DISTANCE, detection_distance );
+        if( _fw_version >= firmware_version( "7.58.40802.12738" ) )
+        {
+            auto detection_distance = std::make_shared< uvc_xu_option< uint8_t > >(raw_od_ep,
+                                                                                   ds::inference_xu,
+                                                                                   ds::d500_xu_id::DETECTION_DISTANCE,
+                                                                                   "Enable firmware distance calculation for detections" );
+            od_ep->register_option( RS2_OPTION_DETECTION_DISTANCE, detection_distance );
+        }
 
         od_ep->register_info( RS2_CAMERA_INFO_PHYSICAL_PORT, od_devices_info.front().device_path );
 
