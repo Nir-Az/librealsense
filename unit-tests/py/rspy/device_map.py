@@ -103,8 +103,11 @@ def resolve_node( nodes, name = None ):
     name = name or node_name()
     if name in nodes:
         return nodes[name]
-    for key in nodes:  # map keys may differ in case from the hostname
-        if key.lower() == name.lower():
+    # Map keys may differ from the hostname in case, and one side may be an FQDN
+    # while the other is the short name (Jenkins node names vs socket.gethostname())
+    short = name.split( '.' )[0].lower()
+    for key in nodes:
+        if key.split( '.' )[0].lower() == short:
             return nodes[key]
     return None
 

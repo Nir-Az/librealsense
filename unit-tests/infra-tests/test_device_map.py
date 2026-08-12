@@ -115,6 +115,11 @@ class TestLoadAndResolve:
         nodes = device_map.load_map(map_file)
         assert device_map.resolve_node(nodes, 'BENCH2')['setup'] == 'libci2'
 
+    def test_resolve_fqdn_matches_short_key(self, map_file):
+        # Jenkins reports some nodes as FQDN; map keys are short hostnames
+        nodes = device_map.load_map(map_file)
+        assert device_map.resolve_node(nodes, 'bench1.realsenseai.com')['setup'] == 'libci1'
+
     def test_resolve_unknown_returns_none(self, map_file):
         nodes = device_map.load_map(map_file)
         assert device_map.resolve_node(nodes, 'stranger') is None
