@@ -47,7 +47,6 @@ def connect(monkeypatch, *fake_devices):
 MAP_YAML = """
 nodes:
   bench1:
-    setup: libci1
     cameras:
       - product: D455
         sn: "111"
@@ -60,7 +59,6 @@ nodes:
         fwid: "333f"
         connection: DDS
   bench2:
-    setup: libci2
     cameras:
       - product: D435
         sn: "444"        # no fwid on purpose: exercises the recovery heuristic
@@ -109,16 +107,16 @@ class TestLoadAndResolve:
 
     def test_resolve_exact(self, map_file):
         nodes = device_map.load_map(map_file)
-        assert device_map.resolve_node(nodes, 'bench1')['setup'] == 'libci1'
+        assert len(device_map.resolve_node(nodes, 'bench1')['cameras']) == 3
 
     def test_resolve_case_insensitive(self, map_file):
         nodes = device_map.load_map(map_file)
-        assert device_map.resolve_node(nodes, 'BENCH2')['setup'] == 'libci2'
+        assert device_map.resolve_node(nodes, 'BENCH2') is nodes['bench2']
 
     def test_resolve_fqdn_matches_short_key(self, map_file):
-        # Jenkins reports some nodes as FQDN; map keys are short hostnames
+        # Jenkins reports some machines as FQDN; map keys are short hostnames
         nodes = device_map.load_map(map_file)
-        assert device_map.resolve_node(nodes, 'bench1.realsenseai.com')['setup'] == 'libci1'
+        assert device_map.resolve_node(nodes, 'bench1.realsenseai.com') is nodes['bench1']
 
     def test_resolve_unknown_returns_none(self, map_file):
         nodes = device_map.load_map(map_file)
@@ -174,7 +172,7 @@ class TestCheck:
         report = run_check(monkeypatch, map_file, 'bench1', None, D455(), D585S(), D555())
         assert report['status'] == device_map.STATUS_OK
         assert set(states_by_product(report).values()) == {device_map.OK}
-        assert report['setup'] == 'libci1'
+        assert report['node'] == 'bench1'
         assert report['runner'] == 'pytest'
 
     def test_one_missing(self, monkeypatch, map_file):
@@ -263,7 +261,7 @@ class TestOutput:
     def test_render_line_ok(self, monkeypatch, map_file):
         report = run_check(monkeypatch, map_file, 'bench1', None, D455(), D585S(), D555())
         line = device_map.render_line(report)
-        assert line.startswith('libci1: ')
+        assert line.startswith('bench1: ')
         assert 'D455 ok' in line
 
     def test_render_line_missing_shouts(self, monkeypatch, map_file):

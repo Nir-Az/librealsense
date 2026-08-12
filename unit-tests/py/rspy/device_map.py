@@ -19,13 +19,15 @@ Map schema (see also the inventory file in the deploy repo):
 
     nodes:
       <machine hostname>:
-        setup: libci1                # informational rig grouping
         cameras:
           - product: D455           # spec-matching name (devices.by_spec semantics)
             sn: "213622252410"      # serial_number in normal mode
             fwid: "213323050512"    # firmware_update_id: the identity a device in
                                     # DFU/recovery enumerates under
             connection: USB         # optional: USB (default) | DDS | GMSL
+
+Which hub port a camera sits on is a lab wiring detail and is deliberately not
+part of the map: only the camera set is required.
 
 This module only classifies and reports; it never touches hub ports and never
 flashes. Call check() after devices.query().
@@ -160,7 +162,6 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
     report = {
         'schema': SCHEMA_VERSION,
         'node': name,
-        'setup': entry.get( 'setup' ) if entry else None,
         'runner': runner,
         'timestamp': time.strftime( '%Y-%m-%dT%H:%M:%SZ', time.gmtime() ),
         'status': STATUS_NO_MAP,
@@ -261,12 +262,12 @@ def missing_serials( report = None ):
 
 def render_line( report = None ):
     """One-line human summary, e.g. for a Jenkins build description:
-    libci1: D455 ok · D585S MISSING · D555 in-recovery
+    <machine>: D455 ok · D585S MISSING · D555 in-recovery
     """
     report = report or _report
     if not report:
         return ''
-    prefix = report.get( 'setup' ) or report.get( 'node' )
+    prefix = report.get( 'node' )
     if report['status'] == STATUS_NO_MAP:
         return f'{prefix}: no device map'
     if report['status'] == STATUS_TOTAL_ENUMERATION_FAILURE:
