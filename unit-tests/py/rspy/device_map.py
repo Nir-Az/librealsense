@@ -1,0 +1,297 @@
+# License: Apache 2.0. See LICENSE file in root directory.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
+
+"""
+Per-machine device inventory ("device map") and health classification.
+
+The map is a YAML file listing, per CI machine, the cameras that are expected to
+be connected. The health check compares it against what actually enumerated (the
+rspy.devices state after devices.query()) and classifies each expected camera:
+
+    ok            enumerated in normal mode
+    in-recovery   enumerated in DFU/recovery mode (recovering it is fw-update's job)
+    missing       not found in any form
+    degraded      reserved for link-quality checks (set at verdict time)
+    pre-excluded  excluded before the run (--exclude-device / exceptions.specs);
+                  not checked and never affects the verdict
+
+Map schema (see also the inventory file in the deploy repo):
+
+    nodes:
+      <machine hostname>:
+        setup: libci1                # informational rig grouping
+        cameras:
+          - product: D455           # spec-matching name (devices.by_spec semantics)
+            sn: "213622252410"      # serial_number in normal mode
+            fwid: "213323050512"    # firmware_update_id: the identity a device in
+                                    # DFU/recovery enumerates under
+            connection: USB         # optional: USB (default) | DDS | GMSL
+
+This module only classifies and reports; it never touches hub ports and never
+flashes. Call check() after devices.query().
+"""
+
+import json
+import os
+import socket
+import time
+
+from rspy import log
+
+# Per-camera states
+OK = 'ok'
+IN_RECOVERY = 'in-recovery'
+MISSING = 'missing'
+DEGRADED = 'degraded'
+PRE_EXCLUDED = 'pre-excluded'
+UNEXPECTED = 'unexpected'
+
+# Run-level statuses
+STATUS_OK = 'ok'
+STATUS_DEGRADED = 'degraded'
+STATUS_TOTAL_ENUMERATION_FAILURE = 'total-enumeration-failure'
+STATUS_NO_MAP = 'no-map'
+
+SCHEMA_VERSION = 1
+
+# Last report produced by check(), for consumers in the same process (e.g. the
+# map-check verdict test)
+_report = None
+
+
+def default_map_path():
+    """The map lives with the machine's other CI collaterals (like exceptions.specs)"""
+    from rspy import libci
+    return os.path.join( libci.home, 'device-map.yaml' )
+
+
+def load_map( path = None ):
+    """
+    :return: the 'nodes' dictionary of the inventory, or None if there is no map
+    """
+    path = path or default_map_path()
+    if not path or not os.path.isfile( path ):
+        log.d( f'no device map at {path}' )
+        return None
+    import yaml
+    with open( path ) as f:
+        data = yaml.safe_load( f )
+    nodes = data.get( 'nodes' ) if isinstance( data, dict ) else None
+    if not nodes:
+        log.w( f'device map {path} has no "nodes" section' )
+        return None
+    # YAML parses unquoted serial numbers as integers; everything downstream
+    # compares strings
+    for entry in nodes.values():
+        for camera in entry.get( 'cameras' ) or []:
+            for key in ('sn', 'fwid'):
+                if camera.get( key ) is not None:
+                    camera[key] = str( camera[key] )
+    return nodes
+
+
+def node_name():
+    return socket.gethostname()
+
+
+def resolve_node( nodes, name = None ):
+    """
+    :return: this machine's map entry, or None if it has none
+    """
+    if not nodes:
+        return None
+    name = name or node_name()
+    if name in nodes:
+        return nodes[name]
+    for key in nodes:  # map keys may differ in case from the hostname
+        if key.lower() == name.lower():
+            return nodes[key]
+    return None
+
+
+def _product_line_of( product ):
+    """D455 -> D400; D555/D585S -> D500"""
+    p = str( product ).upper()
+    if p.startswith( 'D4' ):
+        return 'D400'
+    if p.startswith( 'D5' ):
+        return 'D500'
+    return None
+
+
+def spec_matches_camera( spec, camera ):
+    """
+    Match an exclusion spec against MAP data, not against enumerated devices --
+    a pre-excluded camera may also be unplugged, in which case it would never
+    enumerate and devices.by_spec() could not see it.
+    Same semantics as devices.by_spec: a trailing '*' means product line, an
+    exact serial/fwid matches, anything else is a substring of the product name.
+    """
+    product = str( camera.get( 'product' ) or '' )
+    if spec in (camera.get( 'sn' ), camera.get( 'fwid' )):
+        return True
+    if spec.endswith( '*' ):
+        prefix = spec[:-1].upper()
+        return product.upper().startswith( prefix ) or _product_line_of( product ) == prefix
+    return bool( spec ) and spec.upper() in product.upper()
+
+
+def check( exclude_specs = None, node = None, runner = None, map_file = None ):
+    """
+    Classify this machine's expected cameras against what actually enumerated.
+    Call after devices.query(). The report is cached for get_report().
+
+    :param exclude_specs: specs already excluded from the run (--exclude-device,
+                          exceptions.specs); matching cameras are reported
+                          pre-excluded and are not checked
+    :param node: override the machine name (default: hostname)
+    :param runner: 'legacy' / 'pytest', recorded in the report
+    :param map_file: override the map path (default: see default_map_path())
+    :return: the health report dictionary (health.json schema)
+    """
+    global _report
+    from rspy import devices
+
+    name = node or node_name()
+    entry = resolve_node( load_map( map_file ), name )
+    report = {
+        'schema': SCHEMA_VERSION,
+        'node': name,
+        'setup': entry.get( 'setup' ) if entry else None,
+        'runner': runner,
+        'timestamp': time.strftime( '%Y-%m-%dT%H:%M:%SZ', time.gmtime() ),
+        'status': STATUS_NO_MAP,
+        'cameras': [],
+    }
+    if not entry:
+        log.w( f'no device-map entry for machine "{name}"; health check skipped' )
+        _report = report
+        return report
+
+    expected = entry.get( 'cameras' ) or []
+    enumerated = set( devices.all() )
+    recovery_sns = set( devices.recovery() )
+    matched = set()
+    unconfirmed = []  # cameras with no exact match, candidates for the recovery heuristic
+
+    for camera in expected:
+        sn = camera.get( 'sn' )
+        fwid = camera.get( 'fwid' )
+        result = { 'product': camera.get( 'product' ), 'sn': sn }
+        report['cameras'].append( result )
+
+        matching_spec = next( (spec for spec in exclude_specs or [] if spec_matches_camera( spec, camera )), None )
+        if matching_spec is not None:
+            result['state'] = PRE_EXCLUDED
+            result['by'] = matching_spec
+        elif sn in enumerated and sn not in recovery_sns:
+            result['state'] = OK
+            matched.add( sn )
+        elif sn in recovery_sns or fwid in enumerated:
+            # A device in DFU/recovery has no serial_number and enumerates under
+            # its firmware_update_id (see devices.query())
+            result['state'] = IN_RECOVERY
+            matched.add( sn if sn in recovery_sns else fwid )
+        else:
+            result['state'] = MISSING  # may be downgraded to in-recovery below
+            unconfirmed.append( (camera, result) )
+
+    # Heuristic for map entries without fwid: an unmatched recovery-mode device of
+    # the same product line as an unaccounted-for expected camera is most likely
+    # that camera in DFU -- report in-recovery (unconfirmed) rather than missing
+    unmatched_recovery = recovery_sns - matched
+    for camera, result in unconfirmed:
+        if camera.get( 'fwid' ):
+            continue  # had an exact DFU identity to match against; missing is missing
+        line = _product_line_of( camera.get( 'product' ) )
+        for rec_sn in sorted( unmatched_recovery ):
+            device = devices.get( rec_sn )
+            if device and device.product_line == line:
+                result['state'] = IN_RECOVERY
+                result['note'] = 'unconfirmed -- matched by product line only (no fwid in map)'
+                unmatched_recovery.discard( rec_sn )
+                matched.add( rec_sn )
+                break
+
+    # Extra connected devices not in the map: report for drift visibility, never fail
+    known = matched | { c.get( 'sn' ) for c in expected } | { c.get( 'fwid' ) for c in expected }
+    for sn in sorted( enumerated - known ):
+        device = devices.get( sn )
+        report['cameras'].append( {
+            'product': device.name if device else None,
+            'sn': sn,
+            'state': UNEXPECTED,
+        } )
+
+    n_checked = sum( 1 for c in report['cameras'] if c['state'] not in (PRE_EXCLUDED, UNEXPECTED) )
+    n_missing = sum( 1 for c in report['cameras'] if c['state'] == MISSING )
+    if n_checked > 0 and not enumerated:
+        report['status'] = STATUS_TOTAL_ENUMERATION_FAILURE
+    elif n_missing > 0:
+        report['status'] = STATUS_DEGRADED
+    else:
+        report['status'] = STATUS_OK
+
+    _report = report
+    return report
+
+
+def get_report():
+    """The report from the last check() in this process, or None"""
+    return _report
+
+
+def missing_products( report = None ):
+    """Products classified missing -- feeds the run's device-exclusion mechanism"""
+    report = report or _report
+    if not report:
+        return []
+    return [c['product'] for c in report['cameras'] if c['state'] == MISSING]
+
+
+def missing_serials( report = None ):
+    report = report or _report
+    if not report:
+        return []
+    return [c['sn'] for c in report['cameras'] if c['state'] == MISSING]
+
+
+def render_line( report = None ):
+    """One-line human summary, e.g. for a Jenkins build description:
+    libci1: D455 ok · D585S MISSING · D555 in-recovery
+    """
+    report = report or _report
+    if not report:
+        return ''
+    prefix = report.get( 'setup' ) or report.get( 'node' )
+    if report['status'] == STATUS_NO_MAP:
+        return f'{prefix}: no device map'
+    if report['status'] == STATUS_TOTAL_ENUMERATION_FAILURE:
+        return f'{prefix}: NO DEVICES ENUMERATED (expected {len( report["cameras"] )})'
+    parts = []
+    for camera in report['cameras']:
+        state = camera['state']
+        if state == MISSING:
+            state = 'MISSING'
+        elif state == DEGRADED:
+            state = 'DEGRADED(' + camera.get( 'detail', '?' ) + ')'
+        parts.append( f'{camera["product"]} {state}' )
+    return f'{prefix}: ' + ' · '.join( parts )
+
+
+def write_health_json( report = None, path = None ):
+    """
+    Write the report as health.json, plus a pre-rendered health.txt one-liner
+    next to it (consumed by the Jenkins build-description step, which has no
+    JSON parser guarantees).
+    """
+    report = report or _report
+    if not report or not path:
+        return
+    os.makedirs( os.path.dirname( path ) or '.', exist_ok = True )
+    with open( path, 'w' ) as f:
+        json.dump( report, f, indent = 2 )
+    txt_path = os.path.splitext( path )[0] + '.txt'
+    with open( txt_path, 'w' ) as f:
+        f.write( render_line( report ) + '\n' )
+    log.d( f'wrote {path}' )
