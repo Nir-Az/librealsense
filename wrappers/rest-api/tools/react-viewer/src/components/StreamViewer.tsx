@@ -21,6 +21,11 @@ const STREAM_HUES: Record<string, string> = {
 
 const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
 
+// LineChart margin.top and XAxis height, needed to map a mouse position inside the
+// chart wrapper onto the plot area when zooming about the pointer.
+const CHART_MARGIN_TOP = 4
+const CHART_AXIS_HEIGHT = 1
+
 // IMU chart series, sharing the colors of the X/Y/Z bars above the chart.
 const IMU_AXES = [
   { key: 'x', color: '#ef4444' },
@@ -447,6 +452,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   
   const data = isGyro ? imuHistory.gyro : isAccel ? imuHistory.accel : []
   const latest = data[data.length - 1]
+  const hasSamples = latest !== undefined
 
   // Dead zone: the smallest Y scale the axis will ever use, well above the at-rest
   // noise of each sensor. Without it the axis zooms into sensor noise and a
@@ -465,12 +471,9 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   // Tooltip labels read as time relative to the newest plotted sample.
   const newestSampleTime = chartData.length ? chartData[chartData.length - 1].t : 0
 
-  // Wheel zoom over the time axis. The window is a fixed span anchored to the
-  // newest sample rather than the data extent, so the axis does not rescale while
-  // the buffer fills — the trace just slides in from the right.
-  // Manual Y scale set by the wheel. null leaves the axis on the automatic bound.
-  // The time window is deliberately left fixed.
-  const [zoomYBound, setZoomYBound] = useState<number | null>(null)
+  // Manual Y range set by the wheel, as [min, max]. null leaves the axis on the
+  // automatic symmetric bound. The time window is deliberately left fixed.
+  const [zoomYRange, setZoomYRange] = useState<[number, number] | null>(null)
   const chartWrapRef = useRef<HTMLDivElement>(null)
   const windowMs = IMU_CHART_WINDOW_MS
   const autoBoundRef = useRef(axisBound)
@@ -480,20 +483,37 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      setZoomYBound((current) => {
+      // Zoom about the value under the pointer, the way ImPlot does, rather than
+      // about zero — otherwise a trace offset from zero (accel Y at -9.8) walks
+      // out of view as you zoom in.
+      const rect = el.getBoundingClientRect()
+      const plotHeight = rect.height - CHART_MARGIN_TOP - CHART_AXIS_HEIGHT
+      if (plotHeight <= 0) return
+      const ratio = Math.min(1, Math.max(0, (e.clientY - rect.top - CHART_MARGIN_TOP) / plotHeight))
+      const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25
+      setZoomYRange((current) => {
         const auto = autoBoundRef.current
-        const next = (current ?? auto) * (e.deltaY > 0 ? 1.25 : 1 / 1.25)
+        const [min, max] = current ?? [-auto, auto]
+        const span = max - min
+        const nextSpan = span * factor
         // Zooming back out past the automatic scale hands the axis back to it.
-        return next >= auto ? null : Math.max(1e-4, next)
+        if (nextSpan >= auto * 2) return null
+        if (nextSpan < 1e-4) return current
+        const cursorValue = max - ratio * span
+        const nextMax = cursorValue + ratio * nextSpan
+        return [nextMax - nextSpan, nextMax]
       })
     }
     // Non-passive: React's own onWheel cannot preventDefault the page scroll.
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+    // The chart only renders once the first sample lands, so this has to re-run
+    // when that happens — on mount the element does not exist yet.
+  }, [hasSamples])
 
-  const yBound = zoomYBound ?? axisBound
-  const yDigits = yBound >= 1 ? 1 : yBound >= 0.1 ? 2 : yBound >= 0.01 ? 3 : 4
+  const [yMin, yMax] = zoomYRange ?? [-axisBound, axisBound]
+  const ySpan = yMax - yMin
+  const yDigits = ySpan >= 2 ? 1 : ySpan >= 0.2 ? 2 : ySpan >= 0.02 ? 3 : 4
 
   const windowStart = newestSampleTime - windowMs
   const visibleData = useMemo(
@@ -664,13 +684,13 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-rs-dim nums">{(windowMs / 1000).toFixed(1)} s</span>
-                {zoomYBound !== null && (
+                {zoomYRange !== null && (
                   <button
-                    onClick={() => setZoomYBound(null)}
+                    onClick={() => setZoomYRange(null)}
                     title="Reset Y axis to auto"
                     className="px-1.5 py-0.5 rounded border border-rs-accent/40 text-rs-accent nums hover:bg-rs-accent/10 transition-colors"
                   >
-                    ±{yBound.toFixed(yDigits)}
+                    {yMin.toFixed(yDigits)} … {yMax.toFixed(yDigits)}
                   </button>
                 )}
                 <button
@@ -691,7 +711,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
             {/* History chart, filling whatever height is left in the tile */}
             <div ref={chartWrapRef} className="flex-1 min-h-[80px] mt-2" title="Scroll to scale the Y axis">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={visibleData} margin={{ top: 4, right: 6, bottom: 0, left: 0 }}>
+                <LineChart data={visibleData} margin={{ top: CHART_MARGIN_TOP, right: 6, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
                   <XAxis
                     dataKey="t"
@@ -699,7 +719,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
                     domain={[windowStart, newestSampleTime]}
                     allowDataOverflow
                     tick={false}
-                    height={1}
+                    height={CHART_AXIS_HEIGHT}
                     stroke="#29314a"
                   />
                   <YAxis
@@ -707,7 +727,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
                     fontSize={10}
                     tickLine={false}
                     width={52}
-                    domain={[-yBound, yBound]}
+                    domain={[yMin, yMax]}
                     allowDataOverflow
                     tickFormatter={(v: number) => v.toFixed(yDigits)}
                   />
