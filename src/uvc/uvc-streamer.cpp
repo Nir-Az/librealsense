@@ -170,7 +170,7 @@ namespace librealsense
 
                 _publish_frame_thread->start();
 
-            }, [this](){ return _running; });
+            }, [this](){ return _running; }, true);
         }
 
         void uvc_streamer::stop()
@@ -205,7 +205,7 @@ namespace librealsense
                     _stopped_cv.notify_one();
                 }
 
-            }, [this](){ return !_running; });
+            }, [this](){ return !_running; }, true);
         }
 
         void uvc_streamer::flush()

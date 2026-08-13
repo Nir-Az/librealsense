@@ -199,7 +199,7 @@ namespace librealsense
                             break;
                     }
                 }
-            }, [this, state](){ return state == _power_state; });
+            }, [this, state](){ return state == _power_state; }, true);
 
             if(state != _power_state)
                 throw std::runtime_error("failed to set power state");
@@ -518,7 +518,7 @@ namespace librealsense
                             0);
                 }
 
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
                 throw std::runtime_error("get_data_usb failed, error: " + usb_status_to_string.at(sts));
@@ -608,7 +608,7 @@ namespace librealsense
                           0);
                 }
 
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
                 throw std::runtime_error("set_data_usb failed, error: " + usb_status_to_string.at(sts));
@@ -632,7 +632,7 @@ namespace librealsense
                             static_cast<unsigned char *>(data),
                             len, transferred, CONTROL_TRANSFER_TIMEOUT);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts == RS2_USB_STATUS_NO_DEVICE)
                 throw std::runtime_error("usb device disconnected");
@@ -655,7 +655,7 @@ namespace librealsense
                             static_cast<unsigned char *>(data),
                             len, transferred, CONTROL_TRANSFER_TIMEOUT);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts == RS2_USB_STATUS_NO_DEVICE)
                 throw std::runtime_error("usb device disconnected");
@@ -870,7 +870,7 @@ namespace librealsense
                                 buf, static_cast<uint32_t>(len), transferred, 0);
                     } while (sts != RS2_USB_STATUS_SUCCESS && retries++ < 5);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
             {

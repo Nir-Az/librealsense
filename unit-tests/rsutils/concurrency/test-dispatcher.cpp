@@ -6,6 +6,7 @@
 #include <rsutils/concurrency/concurrency.h>
 
 #include <algorithm>
+#include <future>
 #include <vector>
 #include <iostream>
 
@@ -57,6 +58,66 @@ TEST_CASE( "invoke and wait" )
     stopwatch sw;
     d.invoke_and_wait(func, []() {return false; }, true);
     REQUIRE( sw.get_elapsed() > std::chrono::seconds( 3 ) ); // verify we get here only after the function call ended
+    d.stop();
+}
+
+TEST_CASE( "invoke and wait is blocking by default" )
+{
+    std::atomic_bool worker_started{ false };
+    std::atomic_bool release_worker{ false };
+    std::atomic_bool queued_action_dropped{ false };
+    std::atomic_bool invocation_started{ false };
+    std::atomic_bool invoked_action_ran{ false };
+    dispatcher d( 1, [&]( dispatcher::action const & ) { queued_action_dropped = true; } );
+    d.start();
+
+    d.invoke( [&]( dispatcher::cancellable_timer ) {
+        worker_started = true;
+        while( ! release_worker )
+            std::this_thread::yield();
+    } );
+    while( ! worker_started )
+        std::this_thread::yield();
+
+    d.invoke( []( dispatcher::cancellable_timer ) {} );
+    auto invocation = std::async( std::launch::async, [&]() {
+        invocation_started = true;
+        d.invoke_and_wait(
+            [&]( dispatcher::cancellable_timer ) { invoked_action_ran = true; },
+            []() { return false; } );
+    } );
+    while( ! invocation_started )
+        std::this_thread::yield();
+
+    CHECK( invocation.wait_for( std::chrono::milliseconds( 100 ) ) == std::future_status::timeout );
+    CHECK_FALSE( queued_action_dropped );
+
+    release_worker = true;
+    CHECK( invocation.wait_for( std::chrono::seconds( 1 ) ) == std::future_status::ready );
+    CHECK( invoked_action_ran );
+    d.stop();
+}
+
+TEST_CASE( "invoke and wait propagates action errors" )
+{
+    dispatcher d( 1 );
+    d.start();
+
+#if defined( _WIN32 )
+    CHECK_THROWS(
+        d.invoke_and_wait(
+            []( dispatcher::cancellable_timer ) { throw std::runtime_error( "dispatch failed" ); },
+            []() { return false; },
+            true ) );
+#else
+    CHECK_THROWS_WITH(
+        d.invoke_and_wait(
+            []( dispatcher::cancellable_timer ) { throw std::runtime_error( "dispatch failed" ); },
+            []() { return false; },
+            true ),
+        "dispatch failed" );
+#endif
+
     d.stop();
 }
 

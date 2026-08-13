@@ -997,7 +997,8 @@ void option_model::set_option_sync( float req_value )
             }
             c.try_sleep( std::chrono::milliseconds( 50 ) );
         },
-        []() { return false; } );
+        []() { return false; },
+        true );
 }
 
 void option_model::update_value( const rs2::option_value & updated_value, notifications_model & model )

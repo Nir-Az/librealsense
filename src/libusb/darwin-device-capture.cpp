@@ -2,22 +2,43 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "darwin-device-capture.h"
+#include "darwin-capture-wait.h"
 
 #if defined(__APPLE__)
 
 #include "types.h"
 
+#include <chrono>
 #include <condition_variable>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace librealsense
 {
     namespace platform
     {
+        namespace detail
+        {
+            void wait_for_capture_registry_change(
+                std::condition_variable& changed,
+                std::unique_lock<std::mutex>& lock,
+                const std::function<bool()>& predicate,
+                const std::string& key,
+                std::chrono::steady_clock::duration timeout)
+            {
+                if(!changed.wait_for(lock, timeout, predicate))
+                    throw std::runtime_error(
+                        "timed out waiting for Darwin USB capture state for device " + key);
+            }
+        }
+
+        constexpr std::chrono::milliseconds darwin_capture_settle_time{500};
+        constexpr std::chrono::seconds darwin_capture_wait_timeout{5};
+
         class darwin_device_capture_state
         {
         public:
@@ -45,7 +66,12 @@ namespace librealsense
                 status = libusb_detach_kernel_driver(_handle, _interface_number);
 
                 if(status == LIBUSB_SUCCESS)
+                {
                     _captured = true;
+                    // Capture causes a device re-enumeration. Wait until UVC class
+                    // requests can be serviced reliably before exposing the lease.
+                    std::this_thread::sleep_for(darwin_capture_settle_time);
+                }
                 else if(status != LIBUSB_ERROR_NOT_FOUND)
                 {
                     libusb_close(_handle);
@@ -203,12 +229,17 @@ namespace librealsense
                         return { entry, entry->state };
                     }
 
-                    entry->changed.wait(lock, [&]() {
+                    detail::wait_for_capture_registry_change(
+                        entry->changed,
+                        lock,
+                        [&]() {
                         auto const current = registry->entries.find(key);
                         return current == registry->entries.end()
                             || current->second != entry
                             || entry->phase == capture_phase::active;
-                    });
+                        },
+                        key,
+                        darwin_capture_wait_timeout);
                 }
             }
 

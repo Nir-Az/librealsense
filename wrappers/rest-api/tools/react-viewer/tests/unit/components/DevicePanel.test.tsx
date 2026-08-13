@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render, createMockDevice, createMockDeviceState } from '../../utils/test-utils'
+import { render, createMockDevice, createMockDeviceState, createMockSensor, createMockOption } from '../../utils/test-utils'
 import { DevicePanel } from '@/components/DevicePanel'
 import { useAppStore } from '@/store'
 
@@ -244,8 +244,104 @@ describe('DevicePanel', () => {
   describe('Header', () => {
     it('renders "Devices" header', () => {
       render(<DevicePanel />)
-      
+
       expect(screen.getByText('Devices')).toBeInTheDocument()
+    })
+  })
+
+  describe('Control Search', () => {
+    function renderWithControls(overrides: {
+      options?: ReturnType<typeof createMockOption>[]
+      setOption?: ReturnType<typeof vi.fn>
+    } = {}) {
+      const device = createMockDevice()
+      const sensor = createMockSensor({ sensor_id: 'sensor-a', name: 'Stereo Module' })
+      const options = overrides.options ?? [
+        createMockOption({ option_id: 'Exposure', name: 'Exposure', category: 'Basic Controls' }),
+        createMockOption({ option_id: 'Gain', name: 'Gain', category: 'Basic Controls' }),
+        createMockOption({ option_id: 'Laser_Power', name: 'Laser Power', category: 'Basic Controls' }),
+      ]
+      const deviceState = createMockDeviceState(device, {
+        isActive: true,
+        sensors: [sensor],
+        options: { 'sensor-a': options },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: {
+          devices: [device],
+          deviceStates: { [device.device_id]: deviceState },
+          ...(overrides.setOption ? { setOption: overrides.setOption } : {}),
+        },
+      })
+    }
+
+    it('renders the control search box for an active device', () => {
+      renderWithControls()
+      expect(screen.getByPlaceholderText('Search controls…')).toBeInTheDocument()
+    })
+
+    it('filters to matching controls and auto-expands, hiding non-matches', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'gain')
+
+      await waitFor(() => expect(screen.getByText('Gain')).toBeInTheDocument())
+      expect(screen.queryByText('Exposure')).not.toBeInTheDocument()
+      expect(screen.queryByText('Laser Power')).not.toBeInTheDocument()
+    })
+
+    it('matches a control name mid-word, case-insensitively', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'POWER')
+
+      await waitFor(() => expect(screen.getByText('Laser Power')).toBeInTheDocument())
+      expect(screen.queryByText('Gain')).not.toBeInTheDocument()
+    })
+
+    it('shows no results for a term that appears in no control label', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'option')
+
+      await waitFor(() => expect(screen.getByText(/No controls match/)).toBeInTheDocument())
+      expect(screen.queryByText('Exposure')).not.toBeInTheDocument()
+      expect(screen.queryByText('Gain')).not.toBeInTheDocument()
+    })
+
+    it('restores every option of a category, including ones the search hides', async () => {
+      const setOption = vi.fn().mockResolvedValue(undefined)
+      renderWithControls({
+        setOption,
+        options: [
+          createMockOption({
+            option_id: 'Exposure', name: 'Exposure', category: 'Basic Controls',
+            current_value: 100, default_value: 50,
+          }),
+          createMockOption({
+            option_id: 'Gain', name: 'Gain', category: 'Basic Controls',
+            current_value: 32, default_value: 16,
+          }),
+        ],
+      })
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'gain')
+      await waitFor(() => expect(screen.getByText('Gain')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByTitle('Restore Basic Controls to defaults'))
+
+      await waitFor(() => expect(setOption).toHaveBeenCalledTimes(2))
+      expect(setOption).toHaveBeenCalledWith('test-device-1', 'sensor-a', 'Exposure', 50)
+      expect(setOption).toHaveBeenCalledWith('test-device-1', 'sensor-a', 'Gain', 16)
+    })
+
+    it('shows a no-match message and clears back to collapsed on X', async () => {
+      renderWithControls()
+      const input = screen.getByPlaceholderText('Search controls…')
+      await userEvent.type(input, 'zzzqqq')
+
+      await waitFor(() => expect(screen.getByText(/No controls match/)).toBeInTheDocument())
+
+      await userEvent.click(screen.getByTitle('Clear search'))
+      expect(screen.queryByText(/No controls match/)).not.toBeInTheDocument()
+      // back to idle: controls collapsed, options not rendered
+      expect(screen.queryByText('Exposure')).not.toBeInTheDocument()
     })
   })
 })

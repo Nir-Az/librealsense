@@ -132,7 +132,7 @@ namespace librealsense
                 _messenger.reset();
 #endif
                _running = false;
-            }, [this](){ return !_running; });
+            }, [this](){ return !_running; }, true);
         }
 
         void rs_hid_device::start_capture(hid_callback callback)
@@ -217,7 +217,7 @@ namespace librealsense
                     _messenger->submit_request(r);
 #endif
 
-            }, [this](){ return _running; });
+            }, [this](){ return _running; }, true);
         }
 
         void rs_hid_device::handle_interrupt()
