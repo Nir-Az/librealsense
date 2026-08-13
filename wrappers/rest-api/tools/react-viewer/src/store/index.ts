@@ -18,6 +18,16 @@ import type {
 // Used to await completion before allowing a new start
 const pendingStopPromises = new Map<string, Promise<void>>()
 
+// IMU graph cadence, mirroring the C++ viewer (common/graph-model.h): one sample
+// every 50 ms, 300 samples retained — a 15 s window.
+const IMU_SAMPLE_INTERVAL_MS = 50
+const IMU_HISTORY_SIZE = 300
+// A gap this long means streaming stopped and restarted. Keeping the older samples
+// would leave the graph spanning minutes of wall clock with a flat stretch across
+// the gap, so start the window fresh instead.
+const IMU_STALE_GAP_MS = 1000
+const imuLastSampleAt: Record<'accel' | 'gyro', number> = { accel: 0, gyro: 0 }
+
 // Server sends point-cloud buffers as base64 strings over Socket.IO; the
 // ArrayBuffer branch is here for a future binary-attachment transport.
 function decodeUint8Payload(raw: ArrayBuffer | string): Uint8Array {
@@ -1033,11 +1043,21 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   // IMU history (global)
   imuHistory: { accel: [], gyro: [] },
-  maxIMUHistoryLength: 100,
+  // 300 samples at one per 50 ms — a 15 s window, matching the C++ viewer's graph
+  // (common/graph-model.h VECTOR_SIZE / _update_rate).
+  maxIMUHistoryLength: IMU_HISTORY_SIZE,
   addIMUData: (type, data) => {
+    // Motion frames arrive at up to 400 Hz; keep the graph cadence instead of
+    // every frame, so the window spans seconds and the store isn't rewritten
+    // hundreds of times a second.
+    const now = Date.now()
+    const gap = now - imuLastSampleAt[type]
+    if (gap < IMU_SAMPLE_INTERVAL_MS) return
+    imuLastSampleAt[type] = now
+
     set((state) => {
-      const history = [...state.imuHistory[type]]
-      history.push({ timestamp: Date.now(), ...data })
+      const history = gap > IMU_STALE_GAP_MS ? [] : [...state.imuHistory[type]]
+      history.push({ timestamp: now, ...data })
       if (history.length > state.maxIMUHistoryLength) {
         history.shift()
       }

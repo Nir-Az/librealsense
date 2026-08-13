@@ -1,9 +1,32 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Pause, Play } from 'lucide-react'
 import { useAppStore } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
+import { IMU_CHART_WINDOW_MS, nextIMUAxisBound, toIMUChartSeries, type IMUChartPoint } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
+
+// Muted hue per stream type, used only as an edge accent on the stream label so
+// tiles stay identifiable without the panel turning into a rainbow.
+const STREAM_HUES: Record<string, string> = {
+  depth: '#4f9cf0',
+  color: '#35c07a',
+  infrared: '#9b8cf5',
+  fisheye: '#d9a13b',
+  gyro: '#ef6a6a',
+  accel: '#e8934a',
+}
+
+const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
+
+// IMU chart series, sharing the colors of the X/Y/Z bars above the chart.
+const IMU_AXES = [
+  { key: 'x', color: '#ef4444' },
+  { key: 'y', color: '#22c55e' },
+  { key: 'z', color: '#3b82f6' },
+] as const
 
 // A stream with its device context
 interface DeviceStream {
@@ -316,18 +339,6 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
     }
   }, [deviceId, streamType, handleTrack, handleConnectionStateChange])
 
-  const getStreamColor = (type: string) => {
-    const colors: Record<string, string> = {
-      depth: 'bg-blue-600',
-      color: 'bg-green-600',
-      infrared: 'bg-purple-600',
-      fisheye: 'bg-yellow-600',
-      gyro: 'bg-red-600',
-      accel: 'bg-orange-600',
-    }
-    return colors[type.toLowerCase()] || 'bg-gray-600'
-  }
-
   return (
     <div 
       ref={containerRef}
@@ -350,23 +361,23 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
       {showDeviceName && (
         <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent px-2 py-1">
           <div className="text-xs text-white font-medium truncate">
-            {deviceName} <span className="text-gray-400">({serialNumber})</span>
+            {deviceName} <span className="text-white/60 nums">({serialNumber})</span>
           </div>
         </div>
       )}
 
-      {/* Stream Label */}
+      {/* Stream Label — hue on the edge only, so it reads over any video content */}
       <div
-        className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} left-2 px-2 py-1 rounded text-xs font-semibold text-white ${getStreamColor(
-          streamType
-        )}`}
+        className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} left-2 px-2 py-0.5 rounded-md border-l-2
+                    bg-black/55 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-[0.06em] text-white/90`}
+        style={{ borderLeftColor: streamHue(streamType) }}
       >
         {streamType.toUpperCase()}
       </div>
 
       {/* Connection Status */}
       {connectionState && connectionState !== 'connected' && (
-        <div className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} right-2 px-2 py-1 bg-yellow-600 rounded text-xs text-white`}>
+        <div className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} right-2 px-2 py-0.5 rounded-md border border-rs-warn/40 bg-rs-warn/15 backdrop-blur-sm text-[11px] text-rs-warn`}>
           {connectionState}
         </div>
       )}
@@ -436,19 +447,69 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   
   const data = isGyro ? imuHistory.gyro : isAccel ? imuHistory.accel : []
   const latest = data[data.length - 1]
+
+  // Dead zone: the smallest Y scale the axis will ever use, well above the at-rest
+  // noise of each sensor. Without it the axis zooms into sensor noise and a
+  // stationary camera looks like it is shaking.
+  const axisFloor = isGyro ? 0.5 : 12
+  // The store already samples motion frames at the graph's cadence, so the chart
+  // follows it directly. Pausing snapshots the series; the bars and magnitude
+  // above keep tracking the live stream either way.
+  const [pausedSeries, setPausedSeries] = useState<IMUChartPoint[] | null>(null)
+  const [axisBound, setAxisBound] = useState(axisFloor)
+  const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
+  const liveSeries = useMemo(() => toIMUChartSeries(data), [data])
+  const chartData = pausedSeries ?? liveSeries
+  const chartPaused = pausedSeries !== null
+
+  // Tooltip labels read as time relative to the newest plotted sample.
+  const newestSampleTime = chartData.length ? chartData[chartData.length - 1].t : 0
+
+  // Wheel zoom over the time axis. The window is a fixed span anchored to the
+  // newest sample rather than the data extent, so the axis does not rescale while
+  // the buffer fills — the trace just slides in from the right.
+  // Manual Y scale set by the wheel. null leaves the axis on the automatic bound.
+  // The time window is deliberately left fixed.
+  const [zoomYBound, setZoomYBound] = useState<number | null>(null)
+  const chartWrapRef = useRef<HTMLDivElement>(null)
+  const windowMs = IMU_CHART_WINDOW_MS
+  const autoBoundRef = useRef(axisBound)
+  autoBoundRef.current = axisBound
+  useEffect(() => {
+    const el = chartWrapRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      setZoomYBound((current) => {
+        const auto = autoBoundRef.current
+        const next = (current ?? auto) * (e.deltaY > 0 ? 1.25 : 1 / 1.25)
+        // Zooming back out past the automatic scale hands the axis back to it.
+        return next >= auto ? null : Math.max(1e-4, next)
+      })
+    }
+    // Non-passive: React's own onWheel cannot preventDefault the page scroll.
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const yBound = zoomYBound ?? axisBound
+  const yDigits = yBound >= 1 ? 1 : yBound >= 0.1 ? 2 : yBound >= 0.01 ? 3 : 4
+
+  const windowStart = newestSampleTime - windowMs
+  const visibleData = useMemo(
+    () => chartData.filter((p) => p.t >= windowStart),
+    [chartData, windowStart],
+  )
+
+  useEffect(() => {
+    setAxisBound((current) => nextIMUAxisBound(visibleData, current, axisFloor))
+  }, [visibleData, axisFloor])
   
   // Calculate magnitude
   const magnitude = latest 
     ? Math.sqrt(latest.x ** 2 + latest.y ** 2 + latest.z ** 2)
     : null
   
-  const getStreamColor = () => {
-    if (isGyro) return { bg: 'bg-red-900/50', border: 'border-red-500', text: 'text-red-400' }
-    if (isAccel) return { bg: 'bg-orange-900/50', border: 'border-orange-500', text: 'text-orange-400' }
-    return { bg: 'bg-gray-900/50', border: 'border-gray-500', text: 'text-gray-400' }
-  }
-  
-  const colors = getStreamColor()
   const unit = isGyro ? 'rad/s' : 'm/s²'
   
   // Calculate bar widths based on value (normalized to max expected range)
@@ -459,17 +520,17 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   }
   
   return (
-    <div className={`relative rounded-lg overflow-hidden ${colors.bg} border ${colors.border} flex flex-col`}>
+    <div className="relative rounded-lg overflow-hidden bg-rs-dark border border-rs-border flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-black/30">
+      <div className="flex items-center justify-between px-3 py-2 bg-rs-inset/70 border-b border-rs-border">
         <div className="flex items-center gap-2">
-          <span className={`font-semibold ${colors.text}`}>
+          <span className="font-semibold text-[11px] uppercase tracking-[0.06em] text-rs-text">
             {streamType.toUpperCase()}
           </span>
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="w-1.5 h-1.5 bg-rs-ok rounded-full animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{unit}</span>
+          <span className="text-xs text-rs-dim">{unit}</span>
           <MetadataPanel
             metadata={metadata}
             streamType={streamType}
@@ -481,16 +542,24 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
       </div>
       
       {showDeviceName && (
-        <div className="px-3 py-1 text-xs text-gray-400 bg-black/20">
+        <div className="px-3 py-1 text-xs text-rs-muted bg-rs-darker/40 nums">
           {deviceName} ({serialNumber})
         </div>
       )}
       
       {/* Content */}
-      <div className="flex-1 flex flex-col justify-center p-4">
+      <div className="flex-1 min-h-0 flex flex-col p-4">
         {!latest ? (
-          <div className="text-center text-gray-500">
-            <p>Waiting for data...</p>
+          /* Placeholder in the shape of the real readout, so an idle tile does
+             not read as a broken chart. */
+          <div className="my-auto space-y-3 opacity-40">
+            {['X', 'Y', 'Z'].map((axis) => (
+              <div key={axis} className="flex items-center gap-3">
+                <span className="w-4 font-bold text-rs-dim">{axis}</span>
+                <div className="flex-1 h-4 rounded bg-rs-darker/70 border border-rs-border/60" />
+              </div>
+            ))}
+            <p className="pt-2 text-center text-xs text-rs-dim">Waiting for data…</p>
           </div>
         ) : (
           <>
@@ -499,7 +568,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
               {/* X */}
               <div className="flex items-center gap-3">
                 <span className="text-red-400 font-bold w-4">X</span>
-                <div className="flex-1 h-4 bg-gray-800 rounded overflow-hidden relative">
+                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
                   <div 
                     className="absolute top-0 h-full bg-red-500/70 transition-all duration-75"
                     style={{ 
@@ -518,7 +587,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
               {/* Y */}
               <div className="flex items-center gap-3">
                 <span className="text-green-400 font-bold w-4">Y</span>
-                <div className="flex-1 h-4 bg-gray-800 rounded overflow-hidden relative">
+                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
                   <div 
                     className="absolute top-0 h-full bg-green-500/70 transition-all duration-75"
                     style={{ 
@@ -537,7 +606,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
               {/* Z */}
               <div className="flex items-center gap-3">
                 <span className="text-blue-400 font-bold w-4">Z</span>
-                <div className="flex-1 h-4 bg-gray-800 rounded overflow-hidden relative">
+                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
                   <div 
                     className="absolute top-0 h-full bg-blue-500/70 transition-all duration-75"
                     style={{ 
@@ -556,21 +625,112 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
             
             {/* Magnitude */}
             {magnitude !== null && (
-              <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
-                <span className="text-purple-400 font-semibold">‖{isGyro ? 'ω' : 'a'}‖</span>
-                <span className="font-mono font-bold text-lg">
+              <div className="mt-4 pt-3 border-t border-rs-border flex items-center justify-between">
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-rs-accent font-semibold">‖{isGyro ? 'ω' : 'a'}‖</span>
+                  <span className="text-[10px] uppercase tracking-wide text-rs-dim">magnitude</span>
+                </span>
+                <span className="font-mono font-bold text-lg nums">
                   {magnitude.toFixed(3)}
-                  <span className="text-xs text-gray-400 ml-1">{unit}</span>
+                  <span className="text-xs text-rs-muted ml-1">{unit}</span>
                 </span>
                 {isAccel && Math.abs(magnitude - 9.81) < 0.5 && (
-                  <span className="text-xs text-green-400">(≈1g)</span>
+                  <span className="text-xs text-rs-ok">(≈1g)</span>
                 )}
               </div>
             )}
             
             {/* Sample count */}
-            <div className="mt-2 text-xs text-gray-500 text-center">
-              {data.length} samples
+            {/* Chart controls: per-series visibility, sample count, pause */}
+            <div className="mt-2 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1">
+                {IMU_AXES.map(({ key, color }) => {
+                  const hidden = hiddenAxes[key]
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setHiddenAxes((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      title={`${hidden ? 'Show' : 'Hide'} ${key.toUpperCase()} series`}
+                      className="px-1.5 py-0.5 rounded border font-bold uppercase transition-colors"
+                      style={{
+                        borderColor: hidden ? '#29314a' : color,
+                        color: hidden ? '#626c82' : color,
+                      }}
+                    >
+                      {key}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-rs-dim nums">{(windowMs / 1000).toFixed(1)} s</span>
+                {zoomYBound !== null && (
+                  <button
+                    onClick={() => setZoomYBound(null)}
+                    title="Reset Y axis to auto"
+                    className="px-1.5 py-0.5 rounded border border-rs-accent/40 text-rs-accent nums hover:bg-rs-accent/10 transition-colors"
+                  >
+                    ±{yBound.toFixed(yDigits)}
+                  </button>
+                )}
+                <button
+                  onClick={() => setPausedSeries((prev) => (prev ? null : liveSeries))}
+                  title={chartPaused ? 'Resume chart' : 'Pause chart'}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${
+                    chartPaused
+                      ? 'border-rs-warn/50 bg-rs-warn/10 text-rs-warn'
+                      : 'border-rs-border text-rs-muted hover:border-rs-dim hover:text-rs-text'
+                  }`}
+                >
+                  {chartPaused ? <Play className="w-3 h-3" fill="currentColor" /> : <Pause className="w-3 h-3" fill="currentColor" />}
+                  {chartPaused ? 'paused' : 'pause'}
+                </button>
+              </div>
+            </div>
+
+            {/* History chart, filling whatever height is left in the tile */}
+            <div ref={chartWrapRef} className="flex-1 min-h-[80px] mt-2" title="Scroll to scale the Y axis">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={visibleData} margin={{ top: 4, right: 6, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={[windowStart, newestSampleTime]}
+                    allowDataOverflow
+                    tick={false}
+                    height={1}
+                    stroke="#29314a"
+                  />
+                  <YAxis
+                    stroke="#8e97ab"
+                    fontSize={10}
+                    tickLine={false}
+                    width={52}
+                    domain={[-yBound, yBound]}
+                    allowDataOverflow
+                    tickFormatter={(v: number) => v.toFixed(yDigits)}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#151b2b', border: '1px solid #29314a', borderRadius: 6 }}
+                    labelStyle={{ color: '#8e97ab' }}
+                    labelFormatter={(t: number) => `${((t - newestSampleTime) / 1000).toFixed(2)} s`}
+                    isAnimationActive={false}
+                  />
+                  {IMU_AXES.map(({ key, color }) => (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      stroke={color}
+                      hide={!!hiddenAxes[key]}
+                      dot={false}
+                      strokeWidth={1}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </>
         )}

@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useAppStore } from '../store'
+import { toIMUChartSeries, type IMUChartPoint } from '../utils/imuChart'
 
 export function IMUViewer() {
   const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isStreaming } =
@@ -18,23 +19,8 @@ export function IMUViewer() {
   const hasIMUData = imuHistory.accel.length > 0 || imuHistory.gyro.length > 0
 
   // Format data for charts
-  const accelData = useMemo(() => {
-    return imuHistory.accel.map((d, i) => ({
-      index: i,
-      x: d.x,
-      y: d.y,
-      z: d.z,
-    }))
-  }, [imuHistory.accel])
-
-  const gyroData = useMemo(() => {
-    return imuHistory.gyro.map((d, i) => ({
-      index: i,
-      x: d.x,
-      y: d.y,
-      z: d.z,
-    }))
-  }, [imuHistory.gyro])
+  const accelData = useMemo(() => toIMUChartSeries(imuHistory.accel), [imuHistory.accel])
+  const gyroData = useMemo(() => toIMUChartSeries(imuHistory.gyro), [imuHistory.gyro])
 
   // Get latest values
   const latestAccel = imuHistory.accel[imuHistory.accel.length - 1]
@@ -49,15 +35,15 @@ export function IMUViewer() {
     : null
 
   return (
-    <div className="border-t border-gray-700 bg-rs-dark">
+    <div className="border-t border-rs-border bg-rs-dark">
       {/* Header */}
       <button
         onClick={toggleIMUViewer}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-800 transition-colors"
+        className="w-full flex items-center justify-between p-3 hover:bg-rs-inset transition-colors"
       >
         <div className="flex items-center gap-3">
           <svg
-            className="w-5 h-5 text-orange-400"
+            className="w-5 h-5 text-rs-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -204,25 +190,27 @@ export function IMUViewer() {
 }
 
 interface IMUChartProps {
-  data: { index: number; x: number; y: number; z: number }[]
+  data: IMUChartPoint[]
   title: string
   titleColor: string
 }
 
 function IMUChart({ data, title, titleColor }: IMUChartProps) {
   if (data.length === 0) return null
+  const newest = data[data.length - 1].t
   return (
-    <div className="bg-gray-800 rounded-lg p-3">
+    <div className="bg-rs-inset border border-rs-border rounded-lg p-3">
       <h4 className={`text-sm font-semibold mb-2 ${titleColor}`}>{title}</h4>
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#444" />
-            <XAxis dataKey="index" tick={false} stroke="#666" />
-            <YAxis stroke="#666" fontSize={10} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
+            <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} tick={false} stroke="#29314a" />
+            <YAxis stroke="#8e97ab" fontSize={10} />
             <Tooltip
-              contentStyle={{ backgroundColor: '#1a1a2e', border: 'none' }}
-              labelStyle={{ color: '#888' }}
+              contentStyle={{ backgroundColor: '#151b2b', border: '1px solid #29314a', borderRadius: 6 }}
+              labelStyle={{ color: '#8e97ab' }}
+              labelFormatter={(t: number) => `${((t - newest) / 1000).toFixed(2)} s`}
             />
             <Legend wrapperStyle={{ fontSize: '10px' }} />
             <Line type="monotone" dataKey="x" stroke="#ef4444" dot={false} strokeWidth={1} />
