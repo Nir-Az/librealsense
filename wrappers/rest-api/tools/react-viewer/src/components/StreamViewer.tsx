@@ -21,10 +21,18 @@ const STREAM_HUES: Record<string, string> = {
 
 const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
 
-// LineChart margin.top and XAxis height, needed to map a mouse position inside the
-// chart wrapper onto the plot area when zooming about the pointer.
-const CHART_MARGIN_TOP = 4
-const CHART_AXIS_HEIGHT = 1
+// Chart geometry, shared by the LineChart/XAxis props and by the wheel handler's
+// pixel-to-value mapping. Every value that shrinks the plot area lives here, so
+// tuning one cannot silently skew the zoom math.
+const CHART_LAYOUT = {
+  marginTop: 4,
+  marginRight: 6,
+  marginBottom: 0,
+  axisHeight: 1,
+} as const
+
+const chartPlotHeight = (wrapperHeight: number) =>
+  wrapperHeight - CHART_LAYOUT.marginTop - CHART_LAYOUT.marginBottom - CHART_LAYOUT.axisHeight
 
 // IMU chart series, sharing the colors of the X/Y/Z bars above the chart.
 const IMU_AXES = [
@@ -487,9 +495,9 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
       // about zero — otherwise a trace offset from zero (accel Y at -9.8) walks
       // out of view as you zoom in.
       const rect = el.getBoundingClientRect()
-      const plotHeight = rect.height - CHART_MARGIN_TOP - CHART_AXIS_HEIGHT
+      const plotHeight = chartPlotHeight(rect.height)
       if (plotHeight <= 0) return
-      const ratio = Math.min(1, Math.max(0, (e.clientY - rect.top - CHART_MARGIN_TOP) / plotHeight))
+      const ratio = Math.min(1, Math.max(0, (e.clientY - rect.top - CHART_LAYOUT.marginTop) / plotHeight))
       const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25
       setZoomYRange((current) => {
         const auto = autoBoundRef.current
@@ -711,7 +719,15 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
             {/* History chart, filling whatever height is left in the tile */}
             <div ref={chartWrapRef} className="flex-1 min-h-[80px] mt-2" title="Scroll to scale the Y axis">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={visibleData} margin={{ top: CHART_MARGIN_TOP, right: 6, bottom: 0, left: 0 }}>
+                <LineChart
+                  data={visibleData}
+                  margin={{
+                    top: CHART_LAYOUT.marginTop,
+                    right: CHART_LAYOUT.marginRight,
+                    bottom: CHART_LAYOUT.marginBottom,
+                    left: 0,
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
                   <XAxis
                     dataKey="t"
@@ -719,7 +735,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
                     domain={[windowStart, newestSampleTime]}
                     allowDataOverflow
                     tick={false}
-                    height={CHART_AXIS_HEIGHT}
+                    height={CHART_LAYOUT.axisHeight}
                     stroke="#29314a"
                   />
                   <YAxis

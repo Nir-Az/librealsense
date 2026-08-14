@@ -30,7 +30,9 @@ export function toIMUChartSeries(samples: IMUSample[]): IMUChartPoint[] {
 // tracking the peak exactly.
 const AXIS_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
-const snapUp = (value: number) => AXIS_STEPS.find((step) => step >= value) ?? AXIS_STEPS[AXIS_STEPS.length - 1]
+// Beyond the ladder, fall back to the value itself rather than the largest step:
+// a bad frame or wrong-unit stream should still be shown in full, not clipped.
+const snapUp = (value: number) => AXIS_STEPS.find((step) => step >= value) ?? value
 
 // Symmetric Y bound that grows the moment the signal needs room but shrinks only
 // once it fits well inside the current scale — without that hysteresis the axis

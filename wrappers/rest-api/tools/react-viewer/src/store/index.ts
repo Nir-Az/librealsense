@@ -809,6 +809,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
       return
     }
 
+    // A restart begins a new graph window. Needed because a stop/start faster than
+    // IMU_STALE_GAP_MS would not trip the stale-gap check when samples resume.
+    for (const config of enabledStreamConfigs) {
+      const type = config.stream_type.toLowerCase()
+      if (type === 'accel' || type === 'gyro') imuLastSampleAt[type] = 0
+    }
+
     // Get sensor-level resolution/FPS (shared across all streams from this sensor)
     const sensorConfig = deviceState.sensorConfigs[sensorId]
     if (!sensorConfig) {
