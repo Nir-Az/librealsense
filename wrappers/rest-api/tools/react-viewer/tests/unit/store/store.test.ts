@@ -223,6 +223,32 @@ describe('AppStore', () => {
       
       expect(useAppStore.getState().isAnyDeviceStreaming()).toBe(false)
     })
+
+    // Regression: derived streaming state used to be a `get isStreaming()`
+    // accessor. Zustand merges with Object.assign, which copies an accessor's
+    // evaluated value, so it froze at false after the first set() and every
+    // consumer silently believed nothing was ever streaming.
+    it('keeps derived streaming state correct across later store updates', () => {
+      const device = createMockDevice()
+
+      useAppStore.setState({
+        devices: [device],
+        deviceStates: {
+          [device.device_id]: createMockDeviceState(device, { isActive: true, isStreaming: true }),
+        },
+      })
+      expect(useAppStore.getState().isAnyDeviceStreaming()).toBe(true)
+
+      // An unrelated write must not stale the derived value.
+      useAppStore.setState({ error: 'unrelated' })
+      expect(useAppStore.getState().isAnyDeviceStreaming()).toBe(true)
+    })
+
+    it('does not expose a snapshot-prone isStreaming value on the store', () => {
+      // A plain boolean here would be frozen at creation time; consumers must
+      // call isAnyDeviceStreaming() instead.
+      expect('isStreaming' in useAppStore.getState()).toBe(false)
+    })
   })
 
   describe('fetchDevices', () => {

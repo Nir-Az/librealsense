@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -6,11 +6,18 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { useAppStore } from '../store'
-import { toIMUChartSeries, type IMUChartPoint } from '../utils/imuChart'
+import {
+  IMU_AXES,
+  IMU_CHART_LAYOUT,
+  imuPlotHeight,
+  nextIMUAxisBound,
+  toIMUChartSeries,
+  zoomIMUAxisRange,
+  type IMUChartPoint,
+} from '../utils/imuChart'
 
 export function IMUViewer() {
   const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isAnyDeviceStreaming } =
@@ -170,8 +177,10 @@ export function IMUViewer() {
 
               {/* Charts */}
               <div className="grid grid-cols-2 gap-4">
-                <IMUChart data={accelData} title="Accelerometer History" titleColor="text-rs-text" />
-                <IMUChart data={gyroData} title="Gyroscope History" titleColor="text-rs-text" />
+                {/* Dead zones: 1 g plus headroom for accel, a little above the
+                    gyro's at-rest noise. */}
+                <IMUChart data={accelData} title="Accelerometer History" axisFloor={12} />
+                <IMUChart data={gyroData} title="Gyroscope History" axisFloor={0.5} />
               </div>
 
               {/* Actions */}
@@ -197,30 +206,129 @@ export function IMUViewer() {
 interface IMUChartProps {
   data: IMUChartPoint[]
   title: string
-  titleColor: string
+  // Smallest Y scale to use, so at-rest sensor noise is not magnified.
+  axisFloor: number
 }
 
-function IMUChart({ data, title, titleColor }: IMUChartProps) {
-  if (data.length === 0) return null
+function IMUChart({ data, title, axisFloor }: IMUChartProps) {
+  const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
+  const [zoomRange, setZoomRange] = useState<[number, number] | null>(null)
+  const [autoBound, setAutoBound] = useState(axisFloor)
+  const plotRef = useRef<HTMLDivElement>(null)
+  const hasData = data.length > 0
+
+  useEffect(() => {
+    setAutoBound((current) => nextIMUAxisBound(data, current, axisFloor))
+  }, [data, axisFloor])
+
+  const autoBoundRef = useRef(autoBound)
+  autoBoundRef.current = autoBound
+  useEffect(() => {
+    const el = plotRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const plotHeight = imuPlotHeight(rect.height)
+      if (plotHeight <= 0) return
+      const ratio = Math.min(
+        1,
+        Math.max(0, (e.clientY - rect.top - IMU_CHART_LAYOUT.marginTop) / plotHeight),
+      )
+      const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25
+      setZoomRange((current) => zoomIMUAxisRange(current, autoBoundRef.current, ratio, factor))
+    }
+    // Non-passive: React's own onWheel cannot preventDefault the page scroll.
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // The plot is only rendered once there is data, so re-run when that flips.
+  }, [hasData])
+
+  if (!hasData) return null
+
   const newest = data[data.length - 1].t
+  const [yMin, yMax] = zoomRange ?? [-autoBound, autoBound]
+  const ySpan = yMax - yMin
+  const yDigits = ySpan >= 2 ? 1 : ySpan >= 0.2 ? 2 : ySpan >= 0.02 ? 3 : 4
+
   return (
     <div className="bg-rs-inset border border-rs-border rounded-lg p-3">
-      <h4 className={`text-sm font-semibold mb-2 ${titleColor}`}>{title}</h4>
-      <div className="h-40">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <h4 className="text-sm font-semibold text-rs-text">{title}</h4>
+        <div className="flex items-center gap-1 text-xs">
+          {IMU_AXES.map(({ key, color }) => {
+            const hidden = !!hiddenAxes[key]
+            return (
+              <button
+                key={key}
+                onClick={() => setHiddenAxes((prev) => ({ ...prev, [key]: !prev[key] }))}
+                aria-pressed={!hidden}
+                title={`${hidden ? 'Show' : 'Hide'} ${key.toUpperCase()}`}
+                className="px-1.5 py-0.5 rounded border font-bold uppercase transition-colors"
+                style={{ borderColor: hidden ? '#29314a' : color, color: hidden ? '#626c82' : color }}
+              >
+                {key}
+              </button>
+            )
+          })}
+          {zoomRange !== null && (
+            <button
+              onClick={() => setZoomRange(null)}
+              title="Reset Y axis to auto"
+              className="ml-1 px-1.5 py-0.5 rounded border border-rs-accent/40 text-rs-accent nums hover:bg-rs-accent/10 transition-colors"
+            >
+              {yMin.toFixed(yDigits)} … {yMax.toFixed(yDigits)}
+            </button>
+          )}
+        </div>
+      </div>
+      <div ref={plotRef} className="h-40" title="Scroll to scale the Y axis">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart
+            data={data}
+            margin={{
+              top: IMU_CHART_LAYOUT.marginTop,
+              right: IMU_CHART_LAYOUT.marginRight,
+              bottom: IMU_CHART_LAYOUT.marginBottom,
+              left: 0,
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
-            <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} tick={false} stroke="#29314a" />
-            <YAxis stroke="#8e97ab" fontSize={10} />
+            <XAxis
+              dataKey="t"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              tick={false}
+              height={IMU_CHART_LAYOUT.axisHeight}
+              stroke="#29314a"
+            />
+            <YAxis
+              stroke="#8e97ab"
+              fontSize={10}
+              tickLine={false}
+              width={52}
+              domain={[yMin, yMax]}
+              allowDataOverflow
+              tickFormatter={(v: number) => v.toFixed(yDigits)}
+            />
             <Tooltip
               contentStyle={{ backgroundColor: '#151b2b', border: '1px solid #29314a', borderRadius: 6 }}
               labelStyle={{ color: '#8e97ab' }}
               labelFormatter={(t: number) => `${((t - newest) / 1000).toFixed(2)} s`}
+              isAnimationActive={false}
             />
-            <Legend wrapperStyle={{ fontSize: '10px' }} />
-            <Line type="monotone" dataKey="x" stroke="#ef4444" dot={false} strokeWidth={1} />
-            <Line type="monotone" dataKey="y" stroke="#22c55e" dot={false} strokeWidth={1} />
-            <Line type="monotone" dataKey="z" stroke="#3b82f6" dot={false} strokeWidth={1} />
+            {IMU_AXES.map(({ key, color }) => (
+              <Line
+                key={key}
+                type="monotone"
+                dataKey={key}
+                stroke={color}
+                hide={!!hiddenAxes[key]}
+                dot={false}
+                strokeWidth={1}
+                isAnimationActive={false}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>

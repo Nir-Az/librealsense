@@ -22,3 +22,74 @@ export interface IMUChartPoint {
 export function toIMUChartSeries(samples: IMUSample[]): IMUChartPoint[] {
   return samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z }))
 }
+
+// The three plotted series, sharing the colors used for the X/Y/Z bars elsewhere.
+export const IMU_AXES = [
+  { key: 'x', color: '#ef4444' },
+  { key: 'y', color: '#22c55e' },
+  { key: 'z', color: '#3b82f6' },
+] as const
+
+export type IMUAxisKey = (typeof IMU_AXES)[number]['key']
+
+// Chart geometry, shared by the LineChart/XAxis props and by the wheel handler's
+// pixel-to-value mapping. Everything that shrinks the plot area lives here so the
+// two cannot drift apart.
+export const IMU_CHART_LAYOUT = {
+  marginTop: 6,
+  marginRight: 8,
+  marginBottom: 0,
+  axisHeight: 12,
+} as const
+
+export const imuPlotHeight = (wrapperHeight: number) =>
+  wrapperHeight -
+  IMU_CHART_LAYOUT.marginTop -
+  IMU_CHART_LAYOUT.marginBottom -
+  IMU_CHART_LAYOUT.axisHeight
+
+// Axis bounds snap to these so the scale settles on round numbers instead of
+// tracking the peak exactly.
+const AXIS_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+
+// Beyond the ladder, fall back to the value itself rather than the largest step: a
+// bad frame or wrong-unit stream should still be shown in full, not clipped.
+const snapUp = (value: number) => AXIS_STEPS.find((step) => step >= value) ?? value
+
+// Symmetric Y bound that grows the moment the signal needs room but shrinks only
+// once it fits well inside the current scale — without that hysteresis the axis
+// rescales on nearly every redraw and the chart looks like it is jumping. `floor`
+// is a dead zone: the smallest scale the axis will use, so a stationary camera
+// does not look like it is shaking.
+export function nextIMUAxisBound(points: IMUChartPoint[], current: number, floor: number): number {
+  let peak = 0
+  for (const p of points) {
+    peak = Math.max(peak, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z))
+  }
+  // Headroom applies to the data, then the floor clamps. Scaling the floor itself
+  // would push the resting scale a ladder step above the intended dead zone.
+  const needed = Math.max(floor, peak * 1.15)
+  if (needed > current) return snapUp(needed)
+  if (needed < current / 2.5) return snapUp(Math.max(needed, floor))
+  return current
+}
+
+// Next manual Y range for one wheel notch. `ratio` is the pointer's position in the
+// plot area (0 at the top, 1 at the bottom); the value under it stays put, the way
+// ImPlot behaves, so a trace offset from zero does not walk off screen. Returns
+// null once zoomed back out past the automatic scale, handing the axis back to it.
+export function zoomIMUAxisRange(
+  current: [number, number] | null,
+  autoBound: number,
+  ratio: number,
+  factor: number,
+): [number, number] | null {
+  const [min, max] = current ?? [-autoBound, autoBound]
+  const span = max - min
+  const nextSpan = span * factor
+  if (nextSpan >= autoBound * 2) return null
+  if (nextSpan < 1e-4) return current
+  const cursorValue = max - ratio * span
+  const nextMax = cursorValue + ratio * nextSpan
+  return [nextMax - nextSpan, nextMax]
+}

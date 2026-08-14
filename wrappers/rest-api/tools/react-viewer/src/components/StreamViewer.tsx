@@ -5,15 +5,14 @@ import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
-// Muted hue per stream type, used only as an edge accent on the stream label so
-// tiles stay identifiable without the panel turning into a rainbow.
+// Muted hue per stream type, used only as an edge accent on the video stream label
+// so tiles stay identifiable without the panel turning into a rainbow. Motion
+// streams render as IMUStreamTile and never reach that label.
 const STREAM_HUES: Record<string, string> = {
   depth: '#4f9cf0',
   color: '#35c07a',
   infrared: '#9b8cf5',
   fisheye: '#d9a13b',
-  gyro: '#ef6a6a',
-  accel: '#e8934a',
 }
 
 const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
