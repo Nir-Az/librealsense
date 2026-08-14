@@ -212,8 +212,6 @@ interface AppState {
   setError: (error: string | null) => void
   clearError: () => void
 
-  isStreaming: boolean
-  isPointCloudEnabled: boolean
   pointCloudVertices: Float32Array | null
   // Per-vertex RGB sampled from the live color frame on the server (1 Uint8 per
   // channel, 3 channels per vertex; aligned 1:1 with pointCloudVertices). Null
@@ -1345,19 +1343,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   error: null,
   setError: (error) => set({ error }),
   clearError: () => set({ error: null }),
-
-  get isStreaming() {
-    const state = get()
-    // Return true if any device is streaming
-    return Object.values(state.deviceStates).some(ds => ds.isStreaming)
-  },
-
-  get isPointCloudEnabled() {
-    const state = get()
-    return Object.values(state.deviceStates).some(
-      ds => ds.streamMetadata?.['depth']?.point_cloud !== undefined,
-    )
-  },
 
   pointCloudVertices: null,
   pointCloudColors: null,

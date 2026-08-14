@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Pause, Play } from 'lucide-react'
 import { useAppStore } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
-import { IMU_CHART_WINDOW_MS, nextIMUAxisBound, toIMUChartSeries, type IMUChartPoint } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
 // Muted hue per stream type, used only as an edge accent on the stream label so
@@ -20,26 +17,6 @@ const STREAM_HUES: Record<string, string> = {
 }
 
 const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
-
-// Chart geometry, shared by the LineChart/XAxis props and by the wheel handler's
-// pixel-to-value mapping. Every value that shrinks the plot area lives here, so
-// tuning one cannot silently skew the zoom math.
-const CHART_LAYOUT = {
-  marginTop: 4,
-  marginRight: 6,
-  marginBottom: 0,
-  axisHeight: 1,
-} as const
-
-const chartPlotHeight = (wrapperHeight: number) =>
-  wrapperHeight - CHART_LAYOUT.marginTop - CHART_LAYOUT.marginBottom - CHART_LAYOUT.axisHeight
-
-// IMU chart series, sharing the colors of the X/Y/Z bars above the chart.
-const IMU_AXES = [
-  { key: 'x', color: '#ef4444' },
-  { key: 'y', color: '#22c55e' },
-  { key: 'z', color: '#3b82f6' },
-] as const
 
 // A stream with its device context
 interface DeviceStream {
@@ -460,79 +437,7 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   
   const data = isGyro ? imuHistory.gyro : isAccel ? imuHistory.accel : []
   const latest = data[data.length - 1]
-  const hasSamples = latest !== undefined
 
-  // Dead zone: the smallest Y scale the axis will ever use, well above the at-rest
-  // noise of each sensor. Without it the axis zooms into sensor noise and a
-  // stationary camera looks like it is shaking.
-  const axisFloor = isGyro ? 0.5 : 12
-  // The store already samples motion frames at the graph's cadence, so the chart
-  // follows it directly. Pausing snapshots the series; the bars and magnitude
-  // above keep tracking the live stream either way.
-  const [pausedSeries, setPausedSeries] = useState<IMUChartPoint[] | null>(null)
-  const [axisBound, setAxisBound] = useState(axisFloor)
-  const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
-  const liveSeries = useMemo(() => toIMUChartSeries(data), [data])
-  const chartData = pausedSeries ?? liveSeries
-  const chartPaused = pausedSeries !== null
-
-  // Tooltip labels read as time relative to the newest plotted sample.
-  const newestSampleTime = chartData.length ? chartData[chartData.length - 1].t : 0
-
-  // Manual Y range set by the wheel, as [min, max]. null leaves the axis on the
-  // automatic symmetric bound. The time window is deliberately left fixed.
-  const [zoomYRange, setZoomYRange] = useState<[number, number] | null>(null)
-  const chartWrapRef = useRef<HTMLDivElement>(null)
-  const windowMs = IMU_CHART_WINDOW_MS
-  const autoBoundRef = useRef(axisBound)
-  autoBoundRef.current = axisBound
-  useEffect(() => {
-    const el = chartWrapRef.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      // Zoom about the value under the pointer, the way ImPlot does, rather than
-      // about zero — otherwise a trace offset from zero (accel Y at -9.8) walks
-      // out of view as you zoom in.
-      const rect = el.getBoundingClientRect()
-      const plotHeight = chartPlotHeight(rect.height)
-      if (plotHeight <= 0) return
-      const ratio = Math.min(1, Math.max(0, (e.clientY - rect.top - CHART_LAYOUT.marginTop) / plotHeight))
-      const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25
-      setZoomYRange((current) => {
-        const auto = autoBoundRef.current
-        const [min, max] = current ?? [-auto, auto]
-        const span = max - min
-        const nextSpan = span * factor
-        // Zooming back out past the automatic scale hands the axis back to it.
-        if (nextSpan >= auto * 2) return null
-        if (nextSpan < 1e-4) return current
-        const cursorValue = max - ratio * span
-        const nextMax = cursorValue + ratio * nextSpan
-        return [nextMax - nextSpan, nextMax]
-      })
-    }
-    // Non-passive: React's own onWheel cannot preventDefault the page scroll.
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-    // The chart only renders once the first sample lands, so this has to re-run
-    // when that happens — on mount the element does not exist yet.
-  }, [hasSamples])
-
-  const [yMin, yMax] = zoomYRange ?? [-axisBound, axisBound]
-  const ySpan = yMax - yMin
-  const yDigits = ySpan >= 2 ? 1 : ySpan >= 0.2 ? 2 : ySpan >= 0.02 ? 3 : 4
-
-  const windowStart = newestSampleTime - windowMs
-  const visibleData = useMemo(
-    () => chartData.filter((p) => p.t >= windowStart),
-    [chartData, windowStart],
-  )
-
-  useEffect(() => {
-    setAxisBound((current) => nextIMUAxisBound(visibleData, current, axisFloor))
-  }, [visibleData, axisFloor])
-  
   // Calculate magnitude
   const magnitude = latest 
     ? Math.sqrt(latest.x ** 2 + latest.y ** 2 + latest.z ** 2)
@@ -669,104 +574,8 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
             )}
             
             {/* Sample count */}
-            {/* Chart controls: per-series visibility, sample count, pause */}
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1">
-                {IMU_AXES.map(({ key, color }) => {
-                  const hidden = hiddenAxes[key]
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => setHiddenAxes((prev) => ({ ...prev, [key]: !prev[key] }))}
-                      title={`${hidden ? 'Show' : 'Hide'} ${key.toUpperCase()} series`}
-                      className="px-1.5 py-0.5 rounded border font-bold uppercase transition-colors"
-                      style={{
-                        borderColor: hidden ? '#29314a' : color,
-                        color: hidden ? '#626c82' : color,
-                      }}
-                    >
-                      {key}
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-rs-dim nums">{(windowMs / 1000).toFixed(1)} s</span>
-                {zoomYRange !== null && (
-                  <button
-                    onClick={() => setZoomYRange(null)}
-                    title="Reset Y axis to auto"
-                    className="px-1.5 py-0.5 rounded border border-rs-accent/40 text-rs-accent nums hover:bg-rs-accent/10 transition-colors"
-                  >
-                    {yMin.toFixed(yDigits)} … {yMax.toFixed(yDigits)}
-                  </button>
-                )}
-                <button
-                  onClick={() => setPausedSeries((prev) => (prev ? null : liveSeries))}
-                  title={chartPaused ? 'Resume chart' : 'Pause chart'}
-                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${
-                    chartPaused
-                      ? 'border-rs-warn/50 bg-rs-warn/10 text-rs-warn'
-                      : 'border-rs-border text-rs-muted hover:border-rs-dim hover:text-rs-text'
-                  }`}
-                >
-                  {chartPaused ? <Play className="w-3 h-3" fill="currentColor" /> : <Pause className="w-3 h-3" fill="currentColor" />}
-                  {chartPaused ? 'paused' : 'pause'}
-                </button>
-              </div>
-            </div>
-
-            {/* History chart, filling whatever height is left in the tile */}
-            <div ref={chartWrapRef} className="flex-1 min-h-[80px] mt-2" title="Scroll to scale the Y axis">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={visibleData}
-                  margin={{
-                    top: CHART_LAYOUT.marginTop,
-                    right: CHART_LAYOUT.marginRight,
-                    bottom: CHART_LAYOUT.marginBottom,
-                    left: 0,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#29314a" />
-                  <XAxis
-                    dataKey="t"
-                    type="number"
-                    domain={[windowStart, newestSampleTime]}
-                    allowDataOverflow
-                    tick={false}
-                    height={CHART_LAYOUT.axisHeight}
-                    stroke="#29314a"
-                  />
-                  <YAxis
-                    stroke="#8e97ab"
-                    fontSize={10}
-                    tickLine={false}
-                    width={52}
-                    domain={[yMin, yMax]}
-                    allowDataOverflow
-                    tickFormatter={(v: number) => v.toFixed(yDigits)}
-                  />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#151b2b', border: '1px solid #29314a', borderRadius: 6 }}
-                    labelStyle={{ color: '#8e97ab' }}
-                    labelFormatter={(t: number) => `${((t - newestSampleTime) / 1000).toFixed(2)} s`}
-                    isAnimationActive={false}
-                  />
-                  {IMU_AXES.map(({ key, color }) => (
-                    <Line
-                      key={key}
-                      type="monotone"
-                      dataKey={key}
-                      stroke={color}
-                      hide={!!hiddenAxes[key]}
-                      dot={false}
-                      strokeWidth={1}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="mt-2 text-xs text-rs-dim text-center nums">
+              {data.length} samples
             </div>
           </>
         )}

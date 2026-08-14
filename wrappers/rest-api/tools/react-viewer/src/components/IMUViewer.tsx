@@ -13,8 +13,13 @@ import { useAppStore } from '../store'
 import { toIMUChartSeries, type IMUChartPoint } from '../utils/imuChart'
 
 export function IMUViewer() {
-  const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isStreaming } =
+  const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isAnyDeviceStreaming } =
     useAppStore()
+
+  // Call the method rather than reading the store's `isStreaming` getter: zustand
+  // merges state with Object.assign, which snapshots an accessor's value, so that
+  // getter freezes at false after the first set().
+  const isStreaming = isAnyDeviceStreaming()
 
   const hasIMUData = imuHistory.accel.length > 0 || imuHistory.gyro.length > 0
 
@@ -57,7 +62,7 @@ export function IMUViewer() {
           </svg>
           <span className="font-semibold">IMU Data</span>
           {hasIMUData && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-rs-dim nums">
               ({imuHistory.accel.length} accel, {imuHistory.gyro.length} gyro samples)
             </span>
           )}
@@ -74,13 +79,13 @@ export function IMUViewer() {
 
       {/* Expanded Content */}
       {isIMUViewerExpanded && (
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-4 border-t border-rs-border">
           {!isStreaming ? (
-            <div className="text-center text-gray-500 py-8">
+            <div className="text-center text-rs-dim py-8">
               <p>Start streaming with IMU sensors enabled to see data</p>
             </div>
           ) : !hasIMUData ? (
-            <div className="text-center text-gray-500 py-8">
+            <div className="text-center text-rs-dim py-8">
               <p>No IMU data received</p>
               <p className="text-sm mt-1">Make sure accelerometer and gyroscope streams are enabled</p>
             </div>
@@ -89,84 +94,84 @@ export function IMUViewer() {
               {/* Current Values Display */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 {/* Accelerometer */}
-                <div className="bg-gray-800 rounded-lg p-3">
+                <div className="bg-rs-inset border border-rs-border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-orange-400">Accelerometer</h3>
-                    <span className="text-xs text-gray-500">m/s²</span>
+                    <h3 className="font-semibold text-rs-text">Accelerometer</h3>
+                    <span className="text-xs text-rs-muted">m/s²</span>
                   </div>
                   {latestAccel ? (
                     <>
                       <div className="grid grid-cols-3 gap-2 text-sm">
                         <div>
                           <span className="text-red-400">X:</span>{' '}
-                          <span className="font-mono">{latestAccel.x.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestAccel.x.toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="text-green-400">Y:</span>{' '}
-                          <span className="font-mono">{latestAccel.y.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestAccel.y.toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="text-blue-400">Z:</span>{' '}
-                          <span className="font-mono">{latestAccel.z.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestAccel.z.toFixed(3)}</span>
                         </div>
                       </div>
                       {accelNorm !== null && (
-                        <div className="mt-2 pt-2 border-t border-gray-700 text-sm">
-                          <span className="text-purple-400">‖a‖:</span>{' '}
-                          <span className="font-mono font-semibold">{accelNorm.toFixed(3)}</span>
-                          <span className="text-xs text-gray-500 ml-1">
+                        <div className="mt-2 pt-2 border-t border-rs-border text-sm">
+                          <span className="text-rs-accent">‖a‖:</span>{' '}
+                          <span className="font-mono font-semibold nums">{accelNorm.toFixed(3)}</span>
+                          <span className="text-xs text-rs-muted ml-1">
                             {Math.abs(accelNorm - 9.81) < 0.5 ? '(≈1g)' : ''}
                           </span>
                         </div>
                       )}
                     </>
                   ) : (
-                    <p className="text-gray-500 text-sm">No data</p>
+                    <p className="text-rs-dim text-sm">No data</p>
                   )}
                 </div>
 
                 {/* Gyroscope */}
-                <div className="bg-gray-800 rounded-lg p-3">
+                <div className="bg-rs-inset border border-rs-border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-red-400">Gyroscope</h3>
-                    <span className="text-xs text-gray-500">rad/s</span>
+                    <h3 className="font-semibold text-rs-text">Gyroscope</h3>
+                    <span className="text-xs text-rs-muted">rad/s</span>
                   </div>
                   {latestGyro ? (
                     <>
                       <div className="grid grid-cols-3 gap-2 text-sm">
                         <div>
                           <span className="text-red-400">X:</span>{' '}
-                          <span className="font-mono">{latestGyro.x.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestGyro.x.toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="text-green-400">Y:</span>{' '}
-                          <span className="font-mono">{latestGyro.y.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestGyro.y.toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="text-blue-400">Z:</span>{' '}
-                          <span className="font-mono">{latestGyro.z.toFixed(3)}</span>
+                          <span className="font-mono nums">{latestGyro.z.toFixed(3)}</span>
                         </div>
                       </div>
                       {gyroNorm !== null && (
-                        <div className="mt-2 pt-2 border-t border-gray-700 text-sm">
-                          <span className="text-purple-400">‖ω‖:</span>{' '}
-                          <span className="font-mono font-semibold">{gyroNorm.toFixed(3)}</span>
-                          <span className="text-xs text-gray-500 ml-1">
+                        <div className="mt-2 pt-2 border-t border-rs-border text-sm">
+                          <span className="text-rs-accent">‖ω‖:</span>{' '}
+                          <span className="font-mono font-semibold nums">{gyroNorm.toFixed(3)}</span>
+                          <span className="text-xs text-rs-muted ml-1">
                             ({(gyroNorm * 180 / Math.PI).toFixed(1)}°/s)
                           </span>
                         </div>
                       )}
                     </>
                   ) : (
-                    <p className="text-gray-500 text-sm">No data</p>
+                    <p className="text-rs-dim text-sm">No data</p>
                   )}
                 </div>
               </div>
 
               {/* Charts */}
               <div className="grid grid-cols-2 gap-4">
-                <IMUChart data={accelData} title="Accelerometer History" titleColor="text-orange-400" />
-                <IMUChart data={gyroData} title="Gyroscope History" titleColor="text-red-400" />
+                <IMUChart data={accelData} title="Accelerometer History" titleColor="text-rs-text" />
+                <IMUChart data={gyroData} title="Gyroscope History" titleColor="text-rs-text" />
               </div>
 
               {/* Actions */}

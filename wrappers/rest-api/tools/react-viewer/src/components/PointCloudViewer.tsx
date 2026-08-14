@@ -19,7 +19,8 @@ const circleSprite = (() => {
 })()
 
 export function PointCloudViewer() {
-  const { pointCloudVertices, pointCloudColors, isStreaming, viewMode } = useAppStore()
+  const { pointCloudVertices, pointCloudColors, isAnyDeviceStreaming, viewMode } = useAppStore()
+  const isStreaming = isAnyDeviceStreaming()
 
   return (
     <div className="h-full flex flex-col">
