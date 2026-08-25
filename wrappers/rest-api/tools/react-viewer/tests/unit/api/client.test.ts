@@ -66,18 +66,6 @@ describe('API Client', () => {
     })
   })
 
-  describe('getDevice', () => {
-    it('fetches a single device by ID', async () => {
-      const device = await apiClient.getDevice(mockDevice.device_id)
-      
-      expect(device).toEqual(mockDevice)
-    })
-
-    it('throws error for non-existent device', async () => {
-      await expect(apiClient.getDevice('non-existent-id')).rejects.toThrow()
-    })
-  })
-
   describe('getSensors', () => {
     it('fetches sensors for a device', async () => {
       const sensors = await apiClient.getSensors(mockDevice.device_id)

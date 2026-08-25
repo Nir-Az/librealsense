@@ -19,8 +19,7 @@ const circleSprite = (() => {
 })()
 
 export function PointCloudViewer() {
-  const { pointCloudVertices, pointCloudColors, isAnyDeviceStreaming, viewMode } = useAppStore()
-  const isStreaming = isAnyDeviceStreaming()
+  const { pointCloudVertices, pointCloudColors, viewMode } = useAppStore()
 
   return (
     <div className="h-full flex flex-col">
@@ -69,11 +68,7 @@ export function PointCloudViewer() {
                 />
               </svg>
               <p className="text-lg">3D Point Cloud View</p>
-              <p className="text-sm mt-1">
-                {isStreaming
-                  ? 'Waiting for point cloud data…'
-                  : 'Start streaming depth to see points'}
-              </p>
+              <p className="text-sm mt-1">Start streaming depth to see points</p>
             </div>
           </div>
         )}

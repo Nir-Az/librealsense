@@ -440,5 +440,20 @@ describe('AppStore', () => {
       const isAnyStreaming = Object.values(state.deviceStates).some(ds => ds.isStreaming)
       expect(isAnyStreaming).toBe(false)
     })
+
+    it('isAnyDeviceStreaming tracks deviceStates after a state update', () => {
+      const device = createMockDevice()
+
+      expect(useAppStore.getState().isAnyDeviceStreaming()).toBe(false)
+
+      useAppStore.setState({
+        devices: [device],
+        deviceStates: {
+          [device.device_id]: createMockDeviceState(device, { isActive: true, isStreaming: true }),
+        },
+      })
+
+      expect(useAppStore.getState().isAnyDeviceStreaming()).toBe(true)
+    })
   })
 })

@@ -93,11 +93,6 @@ class ApiClient {
     return response.data
   }
 
-  async getDevice(deviceId: string): Promise<DeviceInfo> {
-    const response = await this.client.get<DeviceInfo>(`/devices/${deviceId}/`)
-    return response.data
-  }
-
   /** The firmware version the online DB recommends for this device, if any. */
   async getRecommendedFirmware(deviceId: string): Promise<{ recommended?: string }> {
     const response = await this.client.get(`/devices/${deviceId}/firmware/`)
@@ -140,23 +135,11 @@ class ApiClient {
     return response.data
   }
 
-  async getSensor(deviceId: string, sensorId: string): Promise<SensorInfo> {
-    const response = await this.client.get<SensorInfo>(`/devices/${deviceId}/sensors/${sensorId}/`)
-    return response.data
-  }
-
   // ============ Options ============
 
   async getOptions(deviceId: string, sensorId: string): Promise<OptionInfo[]> {
     const response = await this.client.get<OptionInfo[]>(
       `/devices/${deviceId}/sensors/${sensorId}/options/`
-    )
-    return response.data
-  }
-
-  async getOption(deviceId: string, sensorId: string, optionId: string): Promise<OptionInfo> {
-    const response = await this.client.get<OptionInfo>(
-      `/devices/${deviceId}/sensors/${sensorId}/options/${optionId}/`
     )
     return response.data
   }
@@ -236,13 +219,6 @@ class ApiClient {
     return response.data
   }
 
-  async getSensorStatus(deviceId: string, sensorId: string): Promise<SensorStreamStatus> {
-    const response = await this.client.get<SensorStreamStatus>(
-      `/devices/${deviceId}/sensors/${sensorId}/status`
-    )
-    return response.data
-  }
-
   // ============ Point Cloud ============
 
   async enablePointCloud(deviceId: string): Promise<void> {
@@ -251,13 +227,6 @@ class ApiClient {
 
   async disablePointCloud(deviceId: string): Promise<void> {
     await this.client.post(`/devices/${deviceId}/point_cloud/deactivate/`)
-  }
-
-  async getPointCloudStatus(deviceId: string): Promise<{ enabled: boolean }> {
-    const response = await this.client.get<{ enabled: boolean }>(
-      `/devices/${deviceId}/point_cloud/status/`
-    )
-    return response.data
   }
 
   // ============ WebRTC ============
@@ -286,11 +255,6 @@ class ApiClient {
 
   async getICECandidates(sessionId: string): Promise<ICECandidate[]> {
     const response = await this.client.get<ICECandidate[]>(`/webrtc/sessions/${sessionId}/ice-candidates/`)
-    return response.data
-  }
-
-  async getWebRTCStatus(sessionId: string): Promise<{ status: string }> {
-    const response = await this.client.get<{ status: string }>(`/webrtc/sessions/${sessionId}/`)
     return response.data
   }
 
