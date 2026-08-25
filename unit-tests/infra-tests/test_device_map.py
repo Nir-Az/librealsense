@@ -11,6 +11,7 @@ unexpected-device reporting, run statuses, and the health.json/.txt output.
 """
 
 import json
+import types
 
 import pytest
 
@@ -22,26 +23,37 @@ from rspy import device_map, devices
 # =============================================================================
 
 class FakeHandle:
-    def __init__(self, in_recovery):
+    def __init__(self, in_recovery, fwid=None):
         self._in_recovery = in_recovery
+        self._fwid = fwid
 
     def is_in_recovery_mode(self):
         return self._in_recovery
 
+    def supports(self, info):
+        return self._fwid is not None
+
+    def get_info(self, info):
+        return self._fwid
+
 
 class FakeDevice:
     """Minimal stand-in for rspy.devices.Device."""
-    def __init__(self, sn, name, product_line, in_recovery=False):
+    def __init__(self, sn, name, product_line, in_recovery=False, fwid=None):
         self.serial_number = sn
         self.name = name
         self.product_line = product_line
-        self.handle = FakeHandle(in_recovery)
+        self.handle = FakeHandle(in_recovery, fwid)
         self.enabled = True
 
 
 def connect(monkeypatch, *fake_devices):
     """Install fake devices as the enumeration result (rspy.devices state)."""
     monkeypatch.setattr(devices, '_device_by_sn', {d.serial_number: d for d in fake_devices})
+    # observed_fwid() reads through devices.rs; a stub is enough (FakeHandle
+    # ignores which camera_info it is handed)
+    monkeypatch.setattr(devices, 'rs', types.SimpleNamespace(
+        camera_info=types.SimpleNamespace(firmware_update_id='firmware_update_id')), raising=False)
 
 
 MAP_YAML = """
@@ -288,3 +300,38 @@ class TestOutput:
 
         txt = (tmp_path / 'out' / 'health.txt').read_text()
         assert 'D585S MISSING' in txt
+
+
+# =============================================================================
+# firmware_update_id observation (fills in map entries that lack fwid)
+# =============================================================================
+
+class TestObservedFwid:
+
+    def test_observed_when_map_has_none(self, monkeypatch, map_file):
+        # bench2's D435 has no fwid in the map -- the run reports what the device says
+        d435 = FakeDevice('444', 'D435', 'D400', fwid='444-asic')
+        report = run_check(monkeypatch, map_file, 'bench2', None, d435)
+        camera = report['cameras'][0]
+        assert camera['fwid'] == '444-asic'
+        assert camera['fwid_source'] == 'observed'
+
+    def test_confirmed_when_map_matches(self, monkeypatch, map_file):
+        report = run_check(monkeypatch, map_file, 'bench1', None,
+                           D455(fwid='111f'), D585S(fwid='222f'), D555(fwid='333f'))
+        d455 = next(c for c in report['cameras'] if c['product'] == 'D455')
+        assert d455['fwid'] == '111f'
+        assert 'fwid_source' not in d455  # nothing to fix in the map
+
+    def test_mismatch_is_flagged(self, monkeypatch, map_file):
+        report = run_check(monkeypatch, map_file, 'bench1', None,
+                           D455(fwid='not-111f'), D585S(), D555())
+        d455 = next(c for c in report['cameras'] if c['product'] == 'D455')
+        assert d455['fwid'] == 'not-111f'
+        assert 'map says 111f' in d455['fwid_source']
+        assert report['status'] == device_map.STATUS_OK  # informational, not a failure
+
+    def test_absent_when_device_does_not_expose_it(self, monkeypatch, map_file):
+        report = run_check(monkeypatch, map_file, 'bench1', None, D455(), D585S(), D555())
+        d455 = next(c for c in report['cameras'] if c['product'] == 'D455')
+        assert 'fwid' not in d455

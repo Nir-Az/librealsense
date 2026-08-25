@@ -141,6 +141,47 @@ def spec_matches_camera( spec, camera ):
     return bool( spec ) and spec.upper() in product.upper()
 
 
+def _record_fwid( result, camera, device ):
+    """
+    Report the camera's firmware_update_id: confirm the one in the map, or
+    surface an observed one so a map entry missing it can be filled in.
+    """
+    observed = observed_fwid( device )
+    if not observed:
+        return
+    expected = camera.get( 'fwid' )
+    if not expected:
+        result['fwid'] = observed
+        result['fwid_source'] = 'observed'  # copy this into the inventory
+    elif expected != observed:
+        result['fwid'] = observed
+        result['fwid_source'] = f'observed, map says {expected}'
+        log.w( f"{camera.get( 'product' )} {camera.get( 'sn' )}: map fwid {expected} "
+               f"but device reports {observed}" )
+    else:
+        result['fwid'] = expected
+
+
+def observed_fwid( device ):
+    """
+    A device's firmware_update_id: the identity it enumerates under when in
+    DFU/recovery. Normal-mode devices expose it too (D400 registers its asic
+    serial, D500 its optical-module SN), so a healthy run can report the fwid
+    for cameras whose map entry doesn't have one yet.
+    """
+    from rspy import devices
+    rs = getattr( devices, 'rs', None )
+    if not rs or not device:
+        return None
+    try:
+        handle = device.handle
+        if handle.supports( rs.camera_info.firmware_update_id ):
+            return handle.get_info( rs.camera_info.firmware_update_id )
+    except Exception as e:
+        log.d( f'could not read firmware_update_id: {e}' )
+    return None
+
+
 def check( exclude_specs = None, node = None, runner = None, map_file = None ):
     """
     Classify this machine's expected cameras against what actually enumerated.
@@ -191,6 +232,7 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
         elif sn in enumerated and sn not in recovery_sns:
             result['state'] = OK
             matched.add( sn )
+            _record_fwid( result, camera, devices.get( sn ) )
         elif sn in recovery_sns or fwid in enumerated:
             # A device in DFU/recovery has no serial_number and enumerates under
             # its firmware_update_id (see devices.query())
