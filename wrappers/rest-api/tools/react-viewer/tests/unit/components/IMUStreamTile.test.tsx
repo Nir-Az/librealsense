@@ -50,13 +50,15 @@ const accelTiles = () =>
 const accelTile = () => accelTiles()[0]
 
 describe('IMUStreamTile', () => {
-  it('renders the numeric readout by default', () => {
+  it('renders the orientation view by default', () => {
     render(<StreamViewer />, { initialStoreState: oneDevice() })
 
     const tile = accelTile()
-    expect(within(tile).getByText('-9.800')).toBeInTheDocument()
-    // Magnitude row, not a chart.
-    expect(within(tile).getByText(/magnitude/i)).toBeInTheDocument()
+    // The wireframe labels the magnitude; ‖(0.1, -9.8, 0.2)‖ = 9.803.
+    expect(within(tile).getByRole('img', { name: /magnitude 9\.803 m\/s²/ })).toBeInTheDocument()
+    expect(within(tile).getByText('Y -9.800')).toBeInTheDocument()
+    // Accel at rest, so the 1g hint shows.
+    expect(within(tile).getByText('≈1g')).toBeInTheDocument()
     expect(within(tile).queryByTitle('Hide X')).not.toBeInTheDocument()
   })
 
@@ -73,7 +75,8 @@ describe('IMUStreamTile', () => {
     await within(tile).findByTitle('Hide X', {}, { timeout: 5000 })
     const close = within(tile).getByTitle('Close graph view')
     expect(close).toHaveAttribute('aria-pressed', 'true')
-    expect(within(tile).queryByText(/magnitude/i)).not.toBeInTheDocument()
+    // The orientation wireframe is gone while the graph is open.
+    expect(within(tile).queryByRole('img', { name: /magnitude/ })).not.toBeInTheDocument()
 
     fireEvent.click(close)
     expect(within(tile).getByTitle('Open graph view')).toBeInTheDocument()
@@ -116,10 +119,10 @@ describe('IMUStreamTile', () => {
     expect(within(first).getByText(/SN1/)).toBeInTheDocument()
     expect(within(second).getByText(/SN2/)).toBeInTheDocument()
 
-    expect(within(first).getByText('-9.800')).toBeInTheDocument()
-    expect(within(first).queryByText('7.700')).not.toBeInTheDocument()
-    expect(within(second).getByText('7.700')).toBeInTheDocument()
-    expect(within(second).queryByText('-9.800')).not.toBeInTheDocument()
+    expect(within(first).getByText('Y -9.800')).toBeInTheDocument()
+    expect(within(first).queryByText('Z 7.700')).not.toBeInTheDocument()
+    expect(within(second).getByText('Z 7.700')).toBeInTheDocument()
+    expect(within(second).queryByText('Y -9.800')).not.toBeInTheDocument()
   })
 
   it('shows a placeholder until the first sample arrives', () => {

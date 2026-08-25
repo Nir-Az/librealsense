@@ -32,6 +32,18 @@ const imuLastSampleAt: Record<string, number> = {}
 // reads a stable reference instead of a fresh object on every render.
 const EMPTY_IMU_HISTORY: DeviceIMUHistory = { accel: [], gyro: [] }
 
+// A window starts out full of zeros, back-dated at the sample cadence, the way the
+// C++ viewer's graph_model::clear() pre-fills its 300 slots. The plot then always
+// spans the same 15 s and the trace scrolls in from the right, instead of a short
+// history stretching across the full width and squeezing as samples accumulate.
+const seedIMUWindow = (endTimestamp: number) =>
+  Array.from({ length: IMU_HISTORY_SIZE }, (_, i) => ({
+    timestamp: endTimestamp - (IMU_HISTORY_SIZE - i) * IMU_SAMPLE_INTERVAL_MS,
+    x: 0,
+    y: 0,
+    z: 0,
+  }))
+
 // Enumerations are unordered across connections; only the newest response may be applied.
 let _fetchSeq = 0
 
@@ -929,7 +941,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
     set((state) => {
       const deviceHistory = state.imuHistory[deviceId] ?? EMPTY_IMU_HISTORY
-      const history = gap > IMU_STALE_GAP_MS ? [] : [...deviceHistory[type]]
+      const previous = deviceHistory[type]
+      const history =
+        previous.length === 0 || gap > IMU_STALE_GAP_MS ? seedIMUWindow(now) : [...previous]
       history.push({ timestamp: now, ...data })
       if (history.length > state.maxIMUHistoryLength) {
         history.shift()

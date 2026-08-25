@@ -14,6 +14,7 @@ import {
 import {
   IMU_AXES,
   IMU_CHART_LAYOUT,
+  IMU_CHART_REDRAW_MS,
   imuPlotHeight,
   nextIMUAxisBound,
   zoomIMUAxisRange,
@@ -31,11 +32,21 @@ interface IMUChartProps {
 // stream — while `data` only changes at the 50 ms sample cadence. Without this the
 // charts redraw a few hundred times a second and block the main thread long enough
 // for Socket.IO to drop the connection on a ping timeout.
-function IMUChart({ data, axisFloor }: IMUChartProps) {
+function IMUChart({ data: live, axisFloor }: IMUChartProps) {
   const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null)
   const [autoBound, setAutoBound] = useState(axisFloor)
   const plotRef = useRef<HTMLDivElement>(null)
+
+  // Redraw on a timer, not on every sample — see IMU_CHART_REDRAW_MS.
+  const liveRef = useRef(live)
+  liveRef.current = live
+  const [data, setData] = useState(live)
+  useEffect(() => {
+    const id = setInterval(() => setData(liveRef.current), IMU_CHART_REDRAW_MS)
+    return () => clearInterval(id)
+  }, [])
+
   const hasData = data.length > 0
 
   const visibleAxes = useMemo(
@@ -72,7 +83,7 @@ function IMUChart({ data, axisFloor }: IMUChartProps) {
 
   if (!hasData) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center text-xs text-rs-dim">
+      <div className="h-44 max-h-full flex items-center justify-center text-xs text-rs-dim">
         Waiting for data…
       </div>
     )
@@ -84,7 +95,10 @@ function IMUChart({ data, axisFloor }: IMUChartProps) {
   const yDigits = ySpan >= 2 ? 1 : ySpan >= 0.2 ? 2 : ySpan >= 0.02 ? 3 : 4
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    // Fixed height rather than filling the tile: the graph should occupy the same
+    // footprint as the numeric readout it replaces, not stretch to whatever room a
+    // sparsely populated stream grid happens to give the tile.
+    <div className="h-44 max-h-full flex flex-col">
       <div className="flex items-center justify-end gap-1 text-xs mb-1">
         {IMU_AXES.map(({ key, color }) => {
           const hidden = !!hiddenAxes[key]
@@ -149,7 +163,10 @@ function IMUChart({ data, axisFloor }: IMUChartProps) {
             {IMU_AXES.map(({ key, color }) => (
               <Line
                 key={key}
-                type="monotone"
+                // Straight segments, like ImPlot's PlotLine in the C++ viewer. A
+                // monotone spline over a 300-sample window costs far more to
+                // recompute, and at the sample cadence it saturates the main thread.
+                type="linear"
                 dataKey={key}
                 stroke={color}
                 hide={!!hiddenAxes[key]}

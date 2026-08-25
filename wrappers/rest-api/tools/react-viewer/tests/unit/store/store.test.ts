@@ -146,9 +146,9 @@ describe('AppStore', () => {
   })
 
   describe('IMU History', () => {
-    // The store keeps one sample per 50 ms, so tests drive the clock rather than
-    // calling addIMUData in a tight loop, where every call after the first is
-    // dropped and the assertions pass without ever exercising the buffer.
+    // The store keeps one sample per 50 ms in a window that is pre-filled with zeros,
+    // mirroring the C++ viewer's graph_model::clear(), so the buffer is always full
+    // and tests assert on the newest entries rather than on a growing length.
     beforeEach(() => {
       vi.useFakeTimers()
       vi.setSystemTime(1_700_000_000_000)
@@ -162,31 +162,45 @@ describe('AppStore', () => {
     const push = (deviceId: string, type: 'accel' | 'gyro', sample: { x: number; y: number; z: number }) =>
       useAppStore.getState().addIMUData(deviceId, type, { timestamp: Date.now(), ...sample })
 
-    it('adds accelerometer data under its device', () => {
+    const historyOf = (deviceId: string, type: 'accel' | 'gyro' = 'accel') =>
+      useAppStore.getState().imuHistory[deviceId][type]
+
+    const newest = (deviceId: string, type: 'accel' | 'gyro' = 'accel') => {
+      const history = historyOf(deviceId, type)
+      return history[history.length - 1]
+    }
+
+    const realSamples = (deviceId: string, type: 'accel' | 'gyro' = 'accel') =>
+      historyOf(deviceId, type).filter((s) => s.x !== 0 || s.y !== 0 || s.z !== 0)
+
+    it('opens a full window of zeros and appends the sample at the newest end', () => {
+      const maxLength = useAppStore.getState().maxIMUHistoryLength
       push('device-1', 'accel', { x: 0.1, y: 0.2, z: 9.8 })
 
-      const history = useAppStore.getState().imuHistory['device-1']
-      expect(history.accel).toHaveLength(1)
-      expect(history.accel[0]).toMatchObject({ x: 0.1, y: 0.2, z: 9.8 })
-      expect(history.gyro).toEqual([])
+      const accel = historyOf('device-1')
+      expect(accel).toHaveLength(maxLength)
+      expect(accel[accel.length - 1]).toMatchObject({ x: 0.1, y: 0.2, z: 9.8 })
+      // Everything before it is the zero pre-fill, spaced at the sample cadence.
+      expect(realSamples('device-1')).toHaveLength(1)
+      expect(accel[0]).toMatchObject({ x: 0, y: 0, z: 0 })
+      expect(accel[1].timestamp - accel[0].timestamp).toBe(50)
+
+      // The other stream stays untouched until its own first sample.
+      expect(historyOf('device-1', 'gyro')).toEqual([])
     })
 
     it('adds gyroscope data under its device', () => {
       push('device-1', 'gyro', { x: 0.01, y: 0.02, z: 0.03 })
 
-      const history = useAppStore.getState().imuHistory['device-1']
-      expect(history.gyro).toHaveLength(1)
-      expect(history.gyro[0]).toMatchObject({ x: 0.01, y: 0.02, z: 0.03 })
+      expect(newest('device-1', 'gyro')).toMatchObject({ x: 0.01, y: 0.02, z: 0.03 })
     })
 
     it('keeps devices apart', () => {
       push('device-1', 'accel', { x: 1, y: 1, z: 1 })
       push('device-2', 'accel', { x: 2, y: 2, z: 2 })
 
-      const { imuHistory } = useAppStore.getState()
-      expect(imuHistory['device-1'].accel).toHaveLength(1)
-      expect(imuHistory['device-1'].accel[0]).toMatchObject({ x: 1 })
-      expect(imuHistory['device-2'].accel[0]).toMatchObject({ x: 2 })
+      expect(newest('device-1')).toMatchObject({ x: 1 })
+      expect(newest('device-2')).toMatchObject({ x: 2 })
     })
 
     it('drops samples that arrive inside the cadence interval', () => {
@@ -194,27 +208,29 @@ describe('AppStore', () => {
       vi.advanceTimersByTime(10)
       push('device-1', 'accel', { x: 2, y: 2, z: 2 })
 
-      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(1)
+      expect(realSamples('device-1')).toHaveLength(1)
+      expect(newest('device-1')).toMatchObject({ x: 1 })
 
       vi.advanceTimersByTime(50)
       push('device-1', 'accel', { x: 3, y: 3, z: 3 })
 
-      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(2)
+      expect(realSamples('device-1')).toHaveLength(2)
+      expect(newest('device-1')).toMatchObject({ x: 3 })
     })
 
     it('starts a fresh window after a streaming gap', () => {
       push('device-1', 'accel', { x: 1, y: 1, z: 1 })
       vi.advanceTimersByTime(50)
       push('device-1', 'accel', { x: 2, y: 2, z: 2 })
-      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(2)
+      expect(realSamples('device-1')).toHaveLength(2)
 
       // Longer than IMU_STALE_GAP_MS: the stream stopped and restarted.
       vi.advanceTimersByTime(5_000)
       push('device-1', 'accel', { x: 3, y: 3, z: 3 })
 
-      const accel = useAppStore.getState().imuHistory['device-1'].accel
-      expect(accel).toHaveLength(1)
-      expect(accel[0]).toMatchObject({ x: 3 })
+      // The old samples are gone, so the window is zeros plus the new sample.
+      expect(realSamples('device-1')).toHaveLength(1)
+      expect(newest('device-1')).toMatchObject({ x: 3 })
     })
 
     it('clears one device without touching the other', () => {
@@ -223,23 +239,24 @@ describe('AppStore', () => {
 
       useAppStore.getState().clearIMUHistory('device-1')
 
-      const { imuHistory } = useAppStore.getState()
-      expect(imuHistory['device-1'].accel).toEqual([])
-      expect(imuHistory['device-2'].accel).toHaveLength(1)
+      expect(historyOf('device-1')).toEqual([])
+      expect(newest('device-2')).toMatchObject({ x: 2 })
     })
 
-    it('limits IMU history length', () => {
+    it('holds the window at its length while samples keep arriving', () => {
       const maxLength = useAppStore.getState().maxIMUHistoryLength
 
-      for (let i = 0; i < maxLength + 10; i++) {
+      for (let i = 1; i <= maxLength + 10; i++) {
         push('device-1', 'accel', { x: i, y: i, z: i })
         vi.advanceTimersByTime(50)
       }
 
-      const accel = useAppStore.getState().imuHistory['device-1'].accel
+      const accel = historyOf('device-1')
       expect(accel).toHaveLength(maxLength)
-      // The window slid: the oldest samples were dropped, not the newest.
-      expect(accel[accel.length - 1]).toMatchObject({ x: maxLength + 9 })
+      // The window slid: the oldest samples were dropped, not the newest, and the
+      // zero pre-fill has been pushed out entirely by now.
+      expect(accel[accel.length - 1]).toMatchObject({ x: maxLength + 10 })
+      expect(accel[0]).toMatchObject({ x: 11 })
     })
   })
 

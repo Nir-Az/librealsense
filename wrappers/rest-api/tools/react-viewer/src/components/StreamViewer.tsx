@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, type ReactNode } from 'react'
-import { useAppStore } from '../store'
+import { useAppStore, type DeviceIMUHistory } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
 import { imuMagnitude, toIMUChartSeries } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
+import IMUOrientation from './IMUOrientation'
+
 const IMUChart = lazy(() => import('./IMUChart'))
+
+const NO_SAMPLES: DeviceIMUHistory['accel'] = []
 
 // Muted hue per stream type, used only as an edge accent on the video stream label
 // so tiles stay identifiable without the panel turning into a rainbow. Motion
@@ -442,7 +446,9 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
   const isGyro = streamType.toLowerCase() === 'gyro'
   const isAccel = streamType.toLowerCase() === 'accel'
   
-  const data = isGyro ? deviceHistory?.gyro ?? [] : isAccel ? deviceHistory?.accel ?? [] : []
+  // NO_SAMPLES, not a fresh [], so the identity is stable while the device has no
+  // history yet and the memo below is not invalidated on every render.
+  const data = (isGyro ? deviceHistory?.gyro : isAccel ? deviceHistory?.accel : undefined) ?? NO_SAMPLES
   const latest = data[data.length - 1]
 
   const magnitude = latest ? imuMagnitude(latest) : null
@@ -451,14 +457,7 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
   const chartSeries = useMemo(() => (showGraph ? toIMUChartSeries(data) : []), [showGraph, data])
   // Resting noise floor per stream: gyro drift is milli-rad/s, accel carries 1g.
   const axisFloor = isGyro ? 0.5 : 10
-  
-  // Calculate bar widths based on value (normalized to max expected range)
-  const maxRange = isGyro ? 10 : 20  // rad/s for gyro, m/s² for accel
-  const getBarWidth = (value: number) => {
-    const normalized = Math.min(Math.abs(value) / maxRange, 1) * 100
-    return `${normalized}%`
-  }
-  
+
   return (
     <div className="relative rounded-lg overflow-hidden bg-rs-dark border border-rs-border flex flex-col">
       {/* Header */}
@@ -506,107 +505,30 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
           // opens the graph. Numeric-only sessions never download it.
           <Suspense
             fallback={
-              <div className="flex-1 min-h-0 flex items-center justify-center text-xs text-rs-dim">
+              <div className="h-44 max-h-full flex items-center justify-center text-xs text-rs-dim">
                 Loading graph…
               </div>
             }
           >
             <IMUChart data={chartSeries} axisFloor={axisFloor} />
           </Suspense>
-        ) : !latest ? (
-          /* Placeholder in the shape of the real readout, so an idle tile does
-             not read as a broken chart. */
-          <div className="my-auto space-y-3 opacity-40">
-            {['X', 'Y', 'Z'].map((axis) => (
-              <div key={axis} className="flex items-center gap-3">
-                <span className="w-4 font-bold text-rs-dim">{axis}</span>
-                <div className="flex-1 h-4 rounded bg-rs-darker/70 border border-rs-border/60" />
-              </div>
-            ))}
-            <p className="pt-2 text-center text-xs text-rs-dim">Waiting for data…</p>
-          </div>
         ) : (
           <>
-            {/* X/Y/Z Values with visual bars */}
-            <div className="space-y-3">
-              {/* X */}
-              <div className="flex items-center gap-3">
-                <span className="text-red-400 font-bold w-4">X</span>
-                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
-                  <div 
-                    className="absolute top-0 h-full bg-red-500/70 transition-all duration-75"
-                    style={{ 
-                      width: getBarWidth(latest.x),
-                      left: latest.x >= 0 ? '50%' : `calc(50% - ${getBarWidth(latest.x)})`,
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-mono text-white drop-shadow">
-                      {latest.x.toFixed(3)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Y */}
-              <div className="flex items-center gap-3">
-                <span className="text-green-400 font-bold w-4">Y</span>
-                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
-                  <div 
-                    className="absolute top-0 h-full bg-green-500/70 transition-all duration-75"
-                    style={{ 
-                      width: getBarWidth(latest.y),
-                      left: latest.y >= 0 ? '50%' : `calc(50% - ${getBarWidth(latest.y)})`,
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-mono text-white drop-shadow">
-                      {latest.y.toFixed(3)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Z */}
-              <div className="flex items-center gap-3">
-                <span className="text-blue-400 font-bold w-4">Z</span>
-                <div className="flex-1 h-4 bg-rs-darker/70 border border-rs-border/60 rounded overflow-hidden relative">
-                  <div 
-                    className="absolute top-0 h-full bg-blue-500/70 transition-all duration-75"
-                    style={{ 
-                      width: getBarWidth(latest.z),
-                      left: latest.z >= 0 ? '50%' : `calc(50% - ${getBarWidth(latest.z)})`,
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-mono text-white drop-shadow">
-                      {latest.z.toFixed(3)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Magnitude */}
-            {magnitude !== null && (
-              <div className="mt-4 pt-3 border-t border-rs-border flex items-center justify-between">
-                <span className="flex items-baseline gap-1.5">
-                  <span className="text-rs-accent font-semibold">‖{isGyro ? 'ω' : 'a'}‖</span>
-                  <span className="text-[10px] uppercase tracking-wide text-rs-dim">magnitude</span>
-                </span>
-                <span className="font-mono font-bold text-lg nums">
-                  {magnitude.toFixed(3)}
-                  <span className="text-xs text-rs-muted ml-1">{unit}</span>
-                </span>
-                {isAccel && Math.abs(magnitude - 9.81) < 0.5 && (
-                  <span className="text-xs text-rs-ok">(≈1g)</span>
-                )}
-              </div>
-            )}
-            
-            {/* Sample count */}
-            <div className="mt-2 text-xs text-rs-dim text-center nums">
-              {data.length} samples
+            <IMUOrientation sample={latest ?? null} unit={unit} />
+            {/* Exact per-axis values, which the wireframe alone cannot give. */}
+            <div className="mt-2 flex items-center justify-center gap-4 text-xs nums">
+              {latest ? (
+                <>
+                  <span className="text-red-400">X {latest.x.toFixed(3)}</span>
+                  <span className="text-green-400">Y {latest.y.toFixed(3)}</span>
+                  <span className="text-blue-400">Z {latest.z.toFixed(3)}</span>
+                  {isAccel && magnitude !== null && Math.abs(magnitude - 9.81) < 0.5 && (
+                    <span className="text-rs-ok">≈1g</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-rs-dim">Waiting for data…</span>
+              )}
             </div>
           </>
         )}

@@ -48,6 +48,12 @@ export const IMU_CHART_LAYOUT = {
   axisHeight: 12,
 } as const
 
+// The plot redraws on a timer rather than on every new sample. Re-rendering a
+// 300-point, four-series SVG at the sample cadence saturates the main thread, which
+// delays the Socket.IO callbacks that deliver the samples — the stream then looks
+// like it keeps stopping, because gaps beyond IMU_STALE_GAP_MS restart the window.
+export const IMU_CHART_REDRAW_MS = 100
+
 export const imuPlotHeight = (wrapperHeight: number) =>
   wrapperHeight -
   IMU_CHART_LAYOUT.marginTop -
