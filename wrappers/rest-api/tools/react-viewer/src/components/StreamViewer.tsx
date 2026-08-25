@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, type ReactNode } from 'react'
 import { useAppStore } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
+import { imuMagnitude, toIMUChartSeries } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
+
+const IMUChart = lazy(() => import('./IMUChart'))
 
 // Muted hue per stream type, used only as an edge accent on the video stream label
 // so tiles stay identifiable without the panel turning into a rainbow. Motion
@@ -105,6 +108,7 @@ export function StreamViewer() {
               return (
                 <IMUStreamTile
                   key={`${stream.deviceId}-${stream.config.sensor_id}-${stream.config.stream_type}`}
+                  deviceId={stream.deviceId}
                   streamType={stream.config.stream_type}
                   showDeviceName={activeDeviceCount > 1}
                   deviceName={stream.deviceName}
@@ -405,6 +409,7 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
 
 // IMU Stream Tile - specialized visualization for gyro/accel streams
 interface IMUStreamTileProps {
+  deviceId: string
   streamType: string
   showDeviceName?: boolean
   deviceName: string
@@ -412,8 +417,11 @@ interface IMUStreamTileProps {
   metadata?: StreamMetadata
 }
 
-function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, metadata }: IMUStreamTileProps) {
-  const { imuHistory } = useAppStore()
+function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, serialNumber, metadata }: IMUStreamTileProps) {
+  // Selector, not the whole store: this tile re-renders on every IMU sample, and no
+  // other consumer needs to follow along.
+  const deviceHistory = useAppStore((s) => s.imuHistory[deviceId])
+  const [showGraph, setShowGraph] = useState(false)
   const [fps, setFps] = useState(0)
   const [showMetadata, setShowMetadata] = useState(false)
   const lastFrameTime = useRef(0)
@@ -434,15 +442,15 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
   const isGyro = streamType.toLowerCase() === 'gyro'
   const isAccel = streamType.toLowerCase() === 'accel'
   
-  const data = isGyro ? imuHistory.gyro : isAccel ? imuHistory.accel : []
+  const data = isGyro ? deviceHistory?.gyro ?? [] : isAccel ? deviceHistory?.accel ?? [] : []
   const latest = data[data.length - 1]
 
-  // Calculate magnitude
-  const magnitude = latest 
-    ? Math.sqrt(latest.x ** 2 + latest.y ** 2 + latest.z ** 2)
-    : null
-  
+  const magnitude = latest ? imuMagnitude(latest) : null
+
   const unit = isGyro ? 'rad/s' : 'm/s²'
+  const chartSeries = useMemo(() => (showGraph ? toIMUChartSeries(data) : []), [showGraph, data])
+  // Resting noise floor per stream: gyro drift is milli-rad/s, accel carries 1g.
+  const axisFloor = isGyro ? 0.5 : 10
   
   // Calculate bar widths based on value (normalized to max expected range)
   const maxRange = isGyro ? 10 : 20  // rad/s for gyro, m/s² for accel
@@ -463,6 +471,18 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-rs-dim">{unit}</span>
+          {/* Numeric readout / graph switch, as in the C++ viewer's motion tiles. */}
+          <button
+            onClick={() => setShowGraph((v) => !v)}
+            aria-pressed={showGraph}
+            title={showGraph ? 'Close graph view' : 'Open graph view'}
+            className={`transition-colors ${showGraph ? 'text-rs-accent' : 'text-rs-dim hover:text-rs-text'}`}
+          >
+            <span className="sr-only">{showGraph ? 'Close graph view' : 'Open graph view'}</span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 15v3m5-9v9m5-13v13" />
+            </svg>
+          </button>
           <MetadataPanel
             metadata={metadata}
             streamType={streamType}
@@ -481,7 +501,19 @@ function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, m
       
       {/* Content */}
       <div className="flex-1 min-h-0 flex flex-col p-4">
-        {!latest ? (
+        {showGraph ? (
+          // Lazy: recharts is a 384 kB chunk, and a tile only needs it once the user
+          // opens the graph. Numeric-only sessions never download it.
+          <Suspense
+            fallback={
+              <div className="flex-1 min-h-0 flex items-center justify-center text-xs text-rs-dim">
+                Loading graph…
+              </div>
+            }
+          >
+            <IMUChart data={chartSeries} axisFloor={axisFloor} />
+          </Suspense>
+        ) : !latest ? (
           /* Placeholder in the shape of the real readout, so an idle tile does
              not read as a broken chart. */
           <div className="my-auto space-y-3 opacity-40">

@@ -1,0 +1,135 @@
+import { describe, it, expect } from 'vitest'
+import { screen, fireEvent, within } from '@testing-library/react'
+import { StreamViewer } from '@/components/StreamViewer'
+import { render, createMockDevice, createMockDeviceState } from '../../utils/test-utils'
+import type { StreamConfig } from '@/api/types'
+
+const NOW = 1_700_000_000_000
+
+function motionConfig(streamType: 'accel' | 'gyro'): StreamConfig {
+  return {
+    sensor_id: 'motion-sensor',
+    stream_type: streamType,
+    format: 'motion_xyz32f',
+    resolution: { width: 0, height: 0 },
+    framerate: 200,
+    enable: true,
+  }
+}
+
+function samples(x: number, y: number, z: number, count = 5) {
+  return Array.from({ length: count }, (_, i) => ({ timestamp: NOW + i * 50, x, y, z }))
+}
+
+// `render` resets the store, so state has to arrive via initialStoreState.
+function streamingDevice(deviceId: string, serial: string) {
+  const device = createMockDevice({ device_id: deviceId, serial_number: serial })
+  return createMockDeviceState(device, {
+    isActive: true,
+    isStreaming: true,
+    streamingMode: 'pipeline',
+    streamConfigs: [motionConfig('accel'), motionConfig('gyro')],
+    streamMetadata: {
+      accel: { frame_number: 1, timestamp: NOW, width: 0, height: 0 },
+      gyro: { frame_number: 1, timestamp: NOW, width: 0, height: 0 },
+    },
+  })
+}
+
+function oneDevice() {
+  return {
+    deviceStates: { 'device-1': streamingDevice('device-1', 'SN1') },
+    imuHistory: {
+      'device-1': { accel: samples(0.1, -9.8, 0.2), gyro: samples(0.001, -0.002, 0.003) },
+    },
+  }
+}
+
+const accelTiles = () =>
+  screen.getAllByText('ACCEL').map((label) => label.closest('div.relative') as HTMLElement)
+const accelTile = () => accelTiles()[0]
+
+describe('IMUStreamTile', () => {
+  it('renders the numeric readout by default', () => {
+    render(<StreamViewer />, { initialStoreState: oneDevice() })
+
+    const tile = accelTile()
+    expect(within(tile).getByText('-9.800')).toBeInTheDocument()
+    // Magnitude row, not a chart.
+    expect(within(tile).getByText(/magnitude/i)).toBeInTheDocument()
+    expect(within(tile).queryByTitle('Hide X')).not.toBeInTheDocument()
+  })
+
+  it('switches to the graph view and back', async () => {
+    render(<StreamViewer />, { initialStoreState: oneDevice() })
+
+    const tile = accelTile()
+    const toggle = within(tile).getByTitle('Open graph view')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(toggle)
+
+    // The chart is a lazy import, so wait for the chunk to resolve.
+    await within(tile).findByTitle('Hide X')
+    const close = within(tile).getByTitle('Close graph view')
+    expect(close).toHaveAttribute('aria-pressed', 'true')
+    expect(within(tile).queryByText(/magnitude/i)).not.toBeInTheDocument()
+
+    fireEvent.click(close)
+    expect(within(tile).getByTitle('Open graph view')).toBeInTheDocument()
+  })
+
+  it('plots the magnitude series alongside the three axes', async () => {
+    render(<StreamViewer />, { initialStoreState: oneDevice() })
+
+    const tile = accelTile()
+    fireEvent.click(within(tile).getByTitle('Open graph view'))
+    // The header toggle flips synchronously; the chart itself is a lazy chunk.
+    await within(tile).findByTitle('Hide X')
+
+    for (const axis of ['X', 'Y', 'Z', 'N']) {
+      expect(within(tile).getByTitle(`Hide ${axis}`)).toHaveAttribute('aria-pressed', 'true')
+    }
+
+    fireEvent.click(within(tile).getByTitle('Hide N'))
+    expect(within(tile).getByTitle('Show N')).toHaveAttribute('aria-pressed', 'false')
+    // The axes are unaffected by hiding the magnitude.
+    expect(within(tile).getByTitle('Hide X')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('keeps each device on its own history', () => {
+    render(<StreamViewer />, {
+      initialStoreState: {
+        deviceStates: {
+          'device-1': streamingDevice('device-1', 'SN1'),
+          'device-2': streamingDevice('device-2', 'SN2'),
+        },
+        imuHistory: {
+          'device-1': { accel: samples(0.1, -9.8, 0.2), gyro: [] },
+          'device-2': { accel: samples(1.5, -1.5, 7.7), gyro: [] },
+        },
+      },
+    })
+
+    const [first, second] = accelTiles()
+    // Two devices, so each tile names its own camera.
+    expect(within(first).getByText(/SN1/)).toBeInTheDocument()
+    expect(within(second).getByText(/SN2/)).toBeInTheDocument()
+
+    expect(within(first).getByText('-9.800')).toBeInTheDocument()
+    expect(within(first).queryByText('7.700')).not.toBeInTheDocument()
+    expect(within(second).getByText('7.700')).toBeInTheDocument()
+    expect(within(second).queryByText('-9.800')).not.toBeInTheDocument()
+  })
+
+  it('shows a placeholder until the first sample arrives', () => {
+    render(<StreamViewer />, {
+      initialStoreState: {
+        deviceStates: { 'device-1': streamingDevice('device-1', 'SN1') },
+        imuHistory: {},
+      },
+    })
+
+    expect(within(accelTile()).getByText(/Waiting for data/)).toBeInTheDocument()
+  })
+})

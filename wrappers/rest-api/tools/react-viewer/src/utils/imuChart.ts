@@ -13,21 +13,27 @@ export interface IMUChartPoint {
   x: number
   y: number
   z: number
+  n: number
 }
+
+export const imuMagnitude = (s: { x: number; y: number; z: number }) =>
+  Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2)
 
 // Plot against the sample timestamp rather than its array position: the history is
 // a sliding window, so an index-based x re-labels every point on each redraw and
 // the whole trace appears to jitter. On a time axis a sample keeps the same x, so
 // old data stays put and only the right edge advances.
 export function toIMUChartSeries(samples: IMUSample[]): IMUChartPoint[] {
-  return samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z }))
+  return samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z, n: imuMagnitude(s) }))
 }
 
-// The three plotted series, sharing the colors used for the X/Y/Z bars elsewhere.
+// The plotted series, matching the C++ viewer's graph (common/graph-model.cpp): the
+// three axes in the colors used for the X/Y/Z bars elsewhere, plus the magnitude.
 export const IMU_AXES = [
   { key: 'x', color: '#ef4444' },
   { key: 'y', color: '#22c55e' },
   { key: 'z', color: '#3b82f6' },
+  { key: 'n', color: '#e5e7eb' },
 ] as const
 
 export type IMUAxisKey = (typeof IMU_AXES)[number]['key']
@@ -61,10 +67,20 @@ const snapUp = (value: number) => AXIS_STEPS.find((step) => step >= value) ?? va
 // rescales on nearly every redraw and the chart looks like it is jumping. `floor`
 // is a dead zone: the smallest scale the axis will use, so a stationary camera
 // does not look like it is shaking.
-export function nextIMUAxisBound(points: IMUChartPoint[], current: number, floor: number): number {
+// `visible` keeps a hidden series out of the scale: the accel magnitude sits at ~9.8
+// even at rest, so leaving it in would hold the axis at ±10 and flatten X/Y/Z long
+// after the user switched that series off.
+export function nextIMUAxisBound(
+  points: IMUChartPoint[],
+  current: number,
+  floor: number,
+  visible: readonly IMUAxisKey[] = IMU_AXES.map((a) => a.key),
+): number {
   let peak = 0
   for (const p of points) {
-    peak = Math.max(peak, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z))
+    for (const key of visible) {
+      peak = Math.max(peak, Math.abs(p[key]))
+    }
   }
   // Headroom applies to the data, then the floor clamps. Scaling the floor itself
   // would push the resting scale a ladder step above the intended dead zone.

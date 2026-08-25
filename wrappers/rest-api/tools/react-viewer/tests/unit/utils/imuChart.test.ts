@@ -1,14 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
+  imuMagnitude,
   nextIMUAxisBound,
   toIMUChartSeries,
   zoomIMUAxisRange,
   imuPlotHeight,
+  IMU_AXES,
   IMU_CHART_LAYOUT,
   type IMUChartPoint,
 } from '@/utils/imuChart'
 
-const point = (t: number, x: number, y = 0, z = 0): IMUChartPoint => ({ t, x, y, z })
+const point = (t: number, x: number, y = 0, z = 0): IMUChartPoint =>
+  ({ t, x, y, z, n: imuMagnitude({ x, y, z }) })
 
 describe('toIMUChartSeries', () => {
   it('keys points on the sample timestamp, not the array index', () => {
@@ -17,8 +20,8 @@ describe('toIMUChartSeries', () => {
       { timestamp: 1_050, x: 4, y: 5, z: 6 },
     ])
     expect(series).toEqual([
-      { t: 1_000, x: 1, y: 2, z: 3 },
-      { t: 1_050, x: 4, y: 5, z: 6 },
+      { t: 1_000, x: 1, y: 2, z: 3, n: Math.sqrt(14) },
+      { t: 1_050, x: 4, y: 5, z: 6, n: Math.sqrt(77) },
     ])
   })
 
@@ -57,6 +60,25 @@ describe('nextIMUAxisBound', () => {
     // A wrong-unit or bad frame must still be fully visible.
     const bound = nextIMUAxisBound([point(0, 5_000)], 0.5, 0.5)
     expect(bound).toBeGreaterThanOrEqual(5_000)
+  })
+})
+
+describe('magnitude series', () => {
+  it('matches the N line in the C++ viewer: the norm of the three axes', () => {
+    expect(imuMagnitude({ x: 3, y: 4, z: 0 })).toBe(5)
+    expect(toIMUChartSeries([{ timestamp: 0, x: 0, y: -9.8, z: 0 }])[0].n).toBeCloseTo(9.8)
+  })
+
+  it('is plotted as a fourth series', () => {
+    expect(IMU_AXES.map((a) => a.key)).toEqual(['x', 'y', 'z', 'n'])
+  })
+
+  it('does not hold the axis open once the user hides it', () => {
+    // Accel at rest: the axes are small but the magnitude sits at ~1g, so leaving
+    // N in the scale would keep the axis at 10 and flatten X/Y/Z.
+    const resting = [point(0, 0.05, 0.05, 9.81)]
+    expect(nextIMUAxisBound(resting, 0.1, 0.1)).toBe(20)
+    expect(nextIMUAxisBound(resting, 0.1, 0.1, ['x', 'y'])).toBe(0.1)
   })
 })
 

@@ -26,7 +26,12 @@ const IMU_HISTORY_SIZE = 300
 // would leave the graph spanning minutes of wall clock with a flat stretch across
 // the gap, so start the window fresh instead.
 const IMU_STALE_GAP_MS = 1000
-const imuLastSampleAt: Record<'accel' | 'gyro', number> = { accel: 0, gyro: 0 }
+// Keyed "<deviceId>:<accel|gyro>", so one camera's cadence cannot throttle another's.
+const imuLastSampleAt: Record<string, number> = {}
+
+// Shared empty history, so a tile for a device that has not produced a sample yet
+// reads a stable reference instead of a fresh object on every render.
+const EMPTY_IMU_HISTORY: DeviceIMUHistory = { accel: [], gyro: [] }
 
 // Enumerations are unordered across connections; only the newest response may be applied.
 let _fetchSeq = 0
@@ -125,10 +130,13 @@ import {
 } from '../api/chat'
 import type { ProposedSettings } from '../utils/chatPrompt'
 
-interface IMUHistory {
+export interface DeviceIMUHistory {
   accel: { timestamp: number; x: number; y: number; z: number }[]
   gyro: { timestamp: number; x: number; y: number; z: number }[]
 }
+
+// Keyed by device id.
+type IMUHistory = Record<string, DeviceIMUHistory>
 
 interface AppState {
   // Connection state
@@ -183,11 +191,11 @@ interface AppState {
   // Metadata from Socket.IO
   updateMetadata: (metadata: MetadataUpdate) => void
 
-  // IMU data history for graphs (global for now)
+  // IMU sample history for the per-tile graphs, keyed by device id
   imuHistory: IMUHistory
   maxIMUHistoryLength: number
-  addIMUData: (type: 'accel' | 'gyro', data: IMUData) => void
-  clearIMUHistory: () => void
+  addIMUData: (deviceId: string, type: 'accel' | 'gyro', data: IMUData) => void
+  clearIMUHistory: (deviceId?: string) => void
 
   // Point cloud (per device)
   togglePointCloud: (deviceId?: string) => Promise<void>
@@ -196,8 +204,6 @@ interface AppState {
   // UI state
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => Promise<void>
-  isIMUViewerExpanded: boolean
-  toggleIMUViewer: () => void
 
   // Chat/AI Assistant state
   isChatOpen: boolean
@@ -935,9 +941,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
     for (const [streamType, streamData] of Object.entries(metadata.metadata_streams)) {
       if (streamData.motion_data) {
         if (streamType.toLowerCase().includes('accel')) {
-          get().addIMUData('accel', streamData.motion_data)
+          get().addIMUData(deviceId, 'accel', streamData.motion_data)
         } else if (streamType.toLowerCase().includes('gyro')) {
-          get().addIMUData('gyro', streamData.motion_data)
+          get().addIMUData(deviceId, 'gyro', streamData.motion_data)
         }
       }
 
@@ -965,22 +971,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
   },
 
-  // IMU history (global)
-  imuHistory: { accel: [], gyro: [] },
+  // IMU history, per device: two cameras streaming accel would otherwise interleave
+  // into one buffer and both tiles would draw the same mixed trace.
+  imuHistory: {},
   // 300 samples at one per 50 ms — a 15 s window, matching the C++ viewer's graph
   // (common/graph-model.h VECTOR_SIZE / _update_rate).
   maxIMUHistoryLength: IMU_HISTORY_SIZE,
-  addIMUData: (type, data) => {
+  addIMUData: (deviceId, type, data) => {
     // Motion frames arrive at up to 400 Hz; keep the graph cadence instead of
     // every frame, so the window spans seconds and the store isn't rewritten
     // hundreds of times a second.
     const now = Date.now()
-    const gap = now - imuLastSampleAt[type]
+    const key = `${deviceId}:${type}`
+    const gap = now - (imuLastSampleAt[key] ?? 0)
     if (gap < IMU_SAMPLE_INTERVAL_MS) return
-    imuLastSampleAt[type] = now
+    imuLastSampleAt[key] = now
 
     set((state) => {
-      const history = gap > IMU_STALE_GAP_MS ? [] : [...state.imuHistory[type]]
+      const deviceHistory = state.imuHistory[deviceId] ?? EMPTY_IMU_HISTORY
+      const history = gap > IMU_STALE_GAP_MS ? [] : [...deviceHistory[type]]
       history.push({ timestamp: now, ...data })
       if (history.length > state.maxIMUHistoryLength) {
         history.shift()
@@ -988,12 +997,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
       return {
         imuHistory: {
           ...state.imuHistory,
-          [type]: history,
+          [deviceId]: { ...deviceHistory, [type]: history },
         },
       }
     })
   },
-  clearIMUHistory: () => set({ imuHistory: { accel: [], gyro: [] } }),
+  clearIMUHistory: (deviceId) => {
+    // Drop the cadence marks too, so the next sample after a clear is taken at once
+    // instead of being thrown away as if it arrived mid-interval.
+    for (const key of Object.keys(imuLastSampleAt)) {
+      if (!deviceId || key.startsWith(`${deviceId}:`)) delete imuLastSampleAt[key]
+    }
+    set((state) =>
+      deviceId
+        ? { imuHistory: { ...state.imuHistory, [deviceId]: { accel: [], gyro: [] } } }
+        : { imuHistory: {} },
+    )
+  },
 
   togglePointCloud: async (deviceId?: string) => {
     const state = get()
@@ -1063,8 +1083,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
       })
     }
   },
-  isIMUViewerExpanded: false,
-  toggleIMUViewer: () => set((state) => ({ isIMUViewerExpanded: !state.isIMUViewerExpanded })),
 
   // Chat/AI Assistant state
   isChatOpen: false,

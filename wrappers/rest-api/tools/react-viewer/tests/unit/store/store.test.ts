@@ -74,8 +74,7 @@ describe('AppStore', () => {
     it('starts with empty IMU history', () => {
       const state = useAppStore.getState()
       
-      expect(state.imuHistory.accel).toEqual([])
-      expect(state.imuHistory.gyro).toEqual([])
+      expect(state.imuHistory).toEqual({})
     })
   })
 
@@ -147,59 +146,100 @@ describe('AppStore', () => {
   })
 
   describe('IMU History', () => {
-    it('adds accelerometer data', () => {
-      const accelData = { timestamp: 1234567890, x: 0.1, y: 0.2, z: 9.8 }
-      
-      useAppStore.getState().addIMUData('accel', accelData)
-      
-      const state = useAppStore.getState()
-      expect(state.imuHistory.accel).toHaveLength(1)
-      expect(state.imuHistory.accel[0]).toEqual(accelData)
-    })
-
-    it('adds gyroscope data', () => {
-      const gyroData = { timestamp: 1234567890, x: 0.01, y: 0.02, z: 0.03 }
-      
-      useAppStore.getState().addIMUData('gyro', gyroData)
-      
-      const state = useAppStore.getState()
-      expect(state.imuHistory.gyro).toHaveLength(1)
-      expect(state.imuHistory.gyro[0]).toEqual(gyroData)
-    })
-
-    it('clears IMU history', () => {
-      useAppStore.getState().addIMUData('accel', { timestamp: 1, x: 0, y: 0, z: 0 })
-      useAppStore.getState().addIMUData('gyro', { timestamp: 1, x: 0, y: 0, z: 0 })
-      
+    // The store keeps one sample per 50 ms, so tests drive the clock rather than
+    // calling addIMUData in a tight loop, where every call after the first is
+    // dropped and the assertions pass without ever exercising the buffer.
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_700_000_000_000)
       useAppStore.getState().clearIMUHistory()
-      
-      const state = useAppStore.getState()
-      expect(state.imuHistory.accel).toEqual([])
-      expect(state.imuHistory.gyro).toEqual([])
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const push = (deviceId: string, type: 'accel' | 'gyro', sample: { x: number; y: number; z: number }) =>
+      useAppStore.getState().addIMUData(deviceId, type, { timestamp: Date.now(), ...sample })
+
+    it('adds accelerometer data under its device', () => {
+      push('device-1', 'accel', { x: 0.1, y: 0.2, z: 9.8 })
+
+      const history = useAppStore.getState().imuHistory['device-1']
+      expect(history.accel).toHaveLength(1)
+      expect(history.accel[0]).toMatchObject({ x: 0.1, y: 0.2, z: 9.8 })
+      expect(history.gyro).toEqual([])
+    })
+
+    it('adds gyroscope data under its device', () => {
+      push('device-1', 'gyro', { x: 0.01, y: 0.02, z: 0.03 })
+
+      const history = useAppStore.getState().imuHistory['device-1']
+      expect(history.gyro).toHaveLength(1)
+      expect(history.gyro[0]).toMatchObject({ x: 0.01, y: 0.02, z: 0.03 })
+    })
+
+    it('keeps devices apart', () => {
+      push('device-1', 'accel', { x: 1, y: 1, z: 1 })
+      push('device-2', 'accel', { x: 2, y: 2, z: 2 })
+
+      const { imuHistory } = useAppStore.getState()
+      expect(imuHistory['device-1'].accel).toHaveLength(1)
+      expect(imuHistory['device-1'].accel[0]).toMatchObject({ x: 1 })
+      expect(imuHistory['device-2'].accel[0]).toMatchObject({ x: 2 })
+    })
+
+    it('drops samples that arrive inside the cadence interval', () => {
+      push('device-1', 'accel', { x: 1, y: 1, z: 1 })
+      vi.advanceTimersByTime(10)
+      push('device-1', 'accel', { x: 2, y: 2, z: 2 })
+
+      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(1)
+
+      vi.advanceTimersByTime(50)
+      push('device-1', 'accel', { x: 3, y: 3, z: 3 })
+
+      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(2)
+    })
+
+    it('starts a fresh window after a streaming gap', () => {
+      push('device-1', 'accel', { x: 1, y: 1, z: 1 })
+      vi.advanceTimersByTime(50)
+      push('device-1', 'accel', { x: 2, y: 2, z: 2 })
+      expect(useAppStore.getState().imuHistory['device-1'].accel).toHaveLength(2)
+
+      // Longer than IMU_STALE_GAP_MS: the stream stopped and restarted.
+      vi.advanceTimersByTime(5_000)
+      push('device-1', 'accel', { x: 3, y: 3, z: 3 })
+
+      const accel = useAppStore.getState().imuHistory['device-1'].accel
+      expect(accel).toHaveLength(1)
+      expect(accel[0]).toMatchObject({ x: 3 })
+    })
+
+    it('clears one device without touching the other', () => {
+      push('device-1', 'accel', { x: 1, y: 1, z: 1 })
+      push('device-2', 'accel', { x: 2, y: 2, z: 2 })
+
+      useAppStore.getState().clearIMUHistory('device-1')
+
+      const { imuHistory } = useAppStore.getState()
+      expect(imuHistory['device-1'].accel).toEqual([])
+      expect(imuHistory['device-2'].accel).toHaveLength(1)
     })
 
     it('limits IMU history length', () => {
       const maxLength = useAppStore.getState().maxIMUHistoryLength
-      
-      // Add more than max entries
-      for (let i = 0; i < maxLength + 10; i++) {
-        useAppStore.getState().addIMUData('accel', { timestamp: i, x: i, y: i, z: i })
-      }
-      
-      const state = useAppStore.getState()
-      expect(state.imuHistory.accel.length).toBeLessThanOrEqual(maxLength)
-    })
-  })
 
-  describe('IMU Viewer', () => {
-    it('toggles IMU viewer expanded state', () => {
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(false)
-      
-      useAppStore.getState().toggleIMUViewer()
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(true)
-      
-      useAppStore.getState().toggleIMUViewer()
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(false)
+      for (let i = 0; i < maxLength + 10; i++) {
+        push('device-1', 'accel', { x: i, y: i, z: i })
+        vi.advanceTimersByTime(50)
+      }
+
+      const accel = useAppStore.getState().imuHistory['device-1'].accel
+      expect(accel).toHaveLength(maxLength)
+      // The window slid: the oldest samples were dropped, not the newest.
+      expect(accel[accel.length - 1]).toMatchObject({ x: maxLength + 9 })
     })
   })
 
