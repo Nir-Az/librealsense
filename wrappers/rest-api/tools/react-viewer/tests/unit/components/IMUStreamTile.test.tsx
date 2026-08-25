@@ -69,8 +69,8 @@ describe('IMUStreamTile', () => {
 
     fireEvent.click(toggle)
 
-    // The chart is a lazy import, so wait for the chunk to resolve.
-    await within(tile).findByTitle('Hide X')
+    // The chart is a lazy import; the first test to open it pays the module load.
+    await within(tile).findByTitle('Hide X', {}, { timeout: 5000 })
     const close = within(tile).getByTitle('Close graph view')
     expect(close).toHaveAttribute('aria-pressed', 'true')
     expect(within(tile).queryByText(/magnitude/i)).not.toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('IMUStreamTile', () => {
     const tile = accelTile()
     fireEvent.click(within(tile).getByTitle('Open graph view'))
     // The header toggle flips synchronously; the chart itself is a lazy chunk.
-    await within(tile).findByTitle('Hide X')
+    await within(tile).findByTitle('Hide X', {}, { timeout: 5000 })
 
     for (const axis of ['X', 'Y', 'Z', 'N']) {
       expect(within(tile).getByTitle(`Hide ${axis}`)).toHaveAttribute('aria-pressed', 'true')

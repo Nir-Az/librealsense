@@ -77,7 +77,7 @@ describe('magnitude series', () => {
     // Accel at rest: the axes are small but the magnitude sits at ~1g, so leaving
     // N in the scale would keep the axis at 10 and flatten X/Y/Z.
     const resting = [point(0, 0.05, 0.05, 9.81)]
-    expect(nextIMUAxisBound(resting, 0.1, 0.1)).toBe(20)
+    expect(nextIMUAxisBound(resting, 0.1, 0.1)).toBe(15)
     expect(nextIMUAxisBound(resting, 0.1, 0.1, ['x', 'y'])).toBe(0.1)
   })
 })

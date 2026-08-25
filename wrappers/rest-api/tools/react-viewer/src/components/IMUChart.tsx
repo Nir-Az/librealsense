@@ -1,7 +1,7 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -27,7 +27,11 @@ interface IMUChartProps {
   axisFloor: number
 }
 
-export default function IMUChart({ data, axisFloor }: IMUChartProps) {
+// Memoised: the tile above re-renders on every metadata frame — 200 Hz per motion
+// stream — while `data` only changes at the 50 ms sample cadence. Without this the
+// charts redraw a few hundred times a second and block the main thread long enough
+// for Socket.IO to drop the connection on a ping timeout.
+function IMUChart({ data, axisFloor }: IMUChartProps) {
   const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null)
   const [autoBound, setAutoBound] = useState(axisFloor)
@@ -160,3 +164,5 @@ export default function IMUChart({ data, axisFloor }: IMUChartProps) {
     </div>
   )
 }
+
+export default memo(IMUChart)

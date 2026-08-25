@@ -56,7 +56,10 @@ export const imuPlotHeight = (wrapperHeight: number) =>
 
 // Axis bounds snap to these so the scale settles on round numbers instead of
 // tracking the peak exactly.
-const AXIS_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+// 15 and 150 are on the ladder so a resting accelerometer, whose magnitude sits at
+// ~9.8 and needs a bound just over 10, does not jump straight to 20 and leave half
+// the plot empty.
+const AXIS_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 20, 50, 100, 150, 200, 500, 1000]
 
 // Beyond the ladder, fall back to the value itself rather than the largest step: a
 // bad frame or wrong-unit stream should still be shown in full, not clipped.
