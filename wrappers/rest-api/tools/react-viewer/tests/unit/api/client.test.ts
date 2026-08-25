@@ -212,23 +212,16 @@ describe('API Client', () => {
   })
 
   describe('Firmware', () => {
-    it('fetches firmware status', async () => {
+    it('fetches the recommended version for a device', async () => {
       server.use(
-        http.get('/api/v1/devices/:deviceId/firmware/', () => {
-          return HttpResponse.json({
-            device_id: mockDevice.device_id,
-            current: '5.16.0.1',
-            recommended: '5.16.0.1',
-            status: 'up_to_date',
-            file_available: true,
-          })
-        })
+        http.get('/api/v1/devices/:deviceId/firmware/', () =>
+          HttpResponse.json({ recommended: '5.17.3.10' })
+        )
       )
 
-      const status = await apiClient.getFirmwareStatus(mockDevice.device_id)
-      
-      expect(status.status).toBe('up_to_date')
-      expect(status.current).toBe('5.16.0.1')
+      const { recommended } = await apiClient.getRecommendedFirmware(mockDevice.device_id)
+
+      expect(recommended).toBe('5.17.3.10')
     })
   })
 

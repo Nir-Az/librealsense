@@ -3,19 +3,45 @@
 
 #include "object-detection-frame.h"
 #include "librealsense-exception.h"
+#include <rsutils/number/crc32.h>
 #include <rsutils/string/from.h>
 #include <rsutils/easylogging/easyloggingpp.h>
+#include <utility>
 
 namespace librealsense
 {
 
+object_detection_frame::object_detection_frame( object_detection_frame && other )
+    : perception_frame( std::move( other ) )
+{
+}
+
+object_detection_frame & object_detection_frame::operator=( object_detection_frame && other )
+{
+    perception_frame::operator=( std::move( other ) );
+    _validated = false;
+    return *this;
+}
+
 bool object_detection_frame::validate() const
 {
-    if( data.size() < sizeof( object_detection_frame_header ) )
+    if( _validated )
+        return true;
+    if( ! validate_payload() )
+        return false;
+    _validated = true;
+    return true;
+}
+
+bool object_detection_frame::validate_payload() const
+{
+    if( data.size() < MIN_FRAME_SIZE )
         return false;
 
     const object_detection_payload * payload = reinterpret_cast< const object_detection_payload * >( data.data() );
 
+    // The firmware ABI excludes the fixed frame header from CRC coverage. Validate its fields
+    // independently; header.size never determines a memory-access or CRC bound.
     if( payload->header.magic_number != MAGIC_NUMBER )
         return false;
 
@@ -26,17 +52,31 @@ bool object_detection_frame::validate() const
     }
 
     uint16_t n = payload->number_of_detections;
-    size_t expected_data_size_no_detections = sizeof( object_detection_payload ) - sizeof( object_detection_entry );
-    size_t detections_size = sizeof( object_detection_entry ) * n;
-    size_t expected_data_size_with_detections = expected_data_size_no_detections + detections_size;
-    size_t expected_size_field = expected_data_size_with_detections - sizeof( object_detection_frame_header );
+    if( n > MAX_DETECTIONS )
+    {
+        LOG_WARNING( "Object Detection count exceeds ABI maximum: " << n << " > " << MAX_DETECTIONS );
+        return false;
+    }
 
-    // data.size() may exceed the payload: the UVC transport delivers fixed-size frames, so the buffer
-    // can carry trailing padding after the detections. The valid length is given by the header.
+    size_t detections_size = ENTRY_SIZE * n;
+    size_t expected_size_field = PAYLOAD_HEADER_SIZE + detections_size;
+    size_t expected_data_size_with_detections = FRAME_HEADER_SIZE + expected_size_field;
+
+    // data.size() may exceed the logical payload if the transport adds trailing padding. The header
+    // declares the valid length, and the bounded detection count keeps every read within the buffer.
     if( data.size() < expected_data_size_with_detections || payload->header.size != expected_size_field )
     {
         LOG_WARNING( "Object Detection frame size mismatch: got " << data.size() << ", expected at least " << expected_data_size_with_detections <<
                      ", header size field: " << payload->header.size << ", expected size field: " << expected_size_field );
+        return false;
+    }
+
+    auto const payload_data = data.data() + FRAME_HEADER_SIZE;
+    auto const computed_crc32 = rsutils::number::calc_crc32( payload_data, expected_size_field );
+    if( payload->header.crc32 != computed_crc32 )
+    {
+        LOG_WARNING( "Object Detection CRC mismatch: got " << payload->header.crc32
+                     << ", expected " << computed_crc32 );
         return false;
     }
 
