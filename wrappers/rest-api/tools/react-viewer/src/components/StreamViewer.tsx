@@ -3,7 +3,7 @@ import { useAppStore, type DeviceIMUHistory } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
-import { imuMagnitude, toIMUChartSeries } from '../utils/imuChart'
+import { toIMUChartSeries } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
 import IMUOrientation from './IMUOrientation'
@@ -451,8 +451,6 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
   const data = (isGyro ? deviceHistory?.gyro : isAccel ? deviceHistory?.accel : undefined) ?? NO_SAMPLES
   const latest = data[data.length - 1]
 
-  const magnitude = latest ? imuMagnitude(latest) : null
-
   const unit = isGyro ? 'rad/s' : 'm/s²'
   const chartSeries = useMemo(() => (showGraph ? toIMUChartSeries(data) : []), [showGraph, data])
   // Resting noise floor per stream: gyro drift is milli-rad/s, accel carries 1g.
@@ -469,7 +467,6 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
           <span className="w-1.5 h-1.5 bg-rs-ok rounded-full animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-rs-dim">{unit}</span>
           {/* Numeric readout / graph switch, as in the C++ viewer's motion tiles. */}
           <button
             onClick={() => setShowGraph((v) => !v)}
@@ -498,8 +495,9 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
         </div>
       )}
       
-      {/* Content */}
-      <div className="flex-1 min-h-0 flex flex-col p-4">
+      {/* Content, centred: the wireframe and the graph are both a fixed height, so
+          in a sparse stream grid the tile is taller than they are. */}
+      <div className="flex-1 min-h-0 flex flex-col justify-center p-4">
         {showGraph ? (
           // Lazy: recharts is a 384 kB chunk, and a tile only needs it once the user
           // opens the graph. Numeric-only sessions never download it.
@@ -519,12 +517,15 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
             <div className="mt-2 flex items-center justify-center gap-4 text-xs nums">
               {latest ? (
                 <>
-                  <span className="text-red-400">X {latest.x.toFixed(3)}</span>
-                  <span className="text-green-400">Y {latest.y.toFixed(3)}</span>
-                  <span className="text-blue-400">Z {latest.z.toFixed(3)}</span>
-                  {isAccel && magnitude !== null && Math.abs(magnitude - 9.81) < 0.5 && (
-                    <span className="text-rs-ok">≈1g</span>
-                  )}
+                  <span className="text-red-400">
+                    X {latest.x.toFixed(3)} <span className="text-rs-dim">{unit}</span>
+                  </span>
+                  <span className="text-green-400">
+                    Y {latest.y.toFixed(3)} <span className="text-rs-dim">{unit}</span>
+                  </span>
+                  <span className="text-blue-400">
+                    Z {latest.z.toFixed(3)} <span className="text-rs-dim">{unit}</span>
+                  </span>
                 </>
               ) : (
                 <span className="text-rs-dim">Waiting for data…</span>

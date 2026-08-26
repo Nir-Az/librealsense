@@ -56,9 +56,9 @@ describe('IMUStreamTile', () => {
     const tile = accelTile()
     // The wireframe labels the magnitude; ‖(0.1, -9.8, 0.2)‖ = 9.803.
     expect(within(tile).getByRole('img', { name: /magnitude 9\.803 m\/s²/ })).toBeInTheDocument()
-    expect(within(tile).getByText('Y -9.800')).toBeInTheDocument()
-    // Accel at rest, so the 1g hint shows.
-    expect(within(tile).getByText('≈1g')).toBeInTheDocument()
+    // Each axis carries its unit, and nothing does in the header.
+    expect(within(tile).getByText(/Y -9\.800/)).toHaveTextContent('Y -9.800 m/s²')
+    expect(within(tile).getAllByText('m/s²')).toHaveLength(3)
     expect(within(tile).queryByTitle('Hide X')).not.toBeInTheDocument()
   })
 
@@ -119,10 +119,10 @@ describe('IMUStreamTile', () => {
     expect(within(first).getByText(/SN1/)).toBeInTheDocument()
     expect(within(second).getByText(/SN2/)).toBeInTheDocument()
 
-    expect(within(first).getByText('Y -9.800')).toBeInTheDocument()
-    expect(within(first).queryByText('Z 7.700')).not.toBeInTheDocument()
-    expect(within(second).getByText('Z 7.700')).toBeInTheDocument()
-    expect(within(second).queryByText('Y -9.800')).not.toBeInTheDocument()
+    expect(within(first).getByText(/Y -9\.800/)).toBeInTheDocument()
+    expect(within(first).queryByText(/Z 7\.700/)).not.toBeInTheDocument()
+    expect(within(second).getByText(/Z 7\.700/)).toBeInTheDocument()
+    expect(within(second).queryByText(/Y -9\.800/)).not.toBeInTheDocument()
   })
 
   it('shows a placeholder until the first sample arrives', () => {
