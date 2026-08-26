@@ -75,20 +75,6 @@ export interface StreamConfig {
   enable: boolean
 }
 
-export interface StreamStartRequest {
-  configs: StreamConfig[]
-  align_to?: string
-  apply_filters: boolean
-  reuse_cache?: boolean
-}
-
-export interface StreamStatus {
-  device_id?: string
-  is_streaming: boolean
-  active_streams: string[]
-  stopping?: boolean
-}
-
 export interface WebRTCOffer {
   device_id: string
   stream_types: string[]
@@ -174,12 +160,10 @@ export interface DeviceState {
   streamConfigs: StreamConfig[]
   sensorConfigs: Record<string, SensorConfig> // Per-sensor resolution/FPS, keyed by sensor_id
   isStreaming: boolean
-  isStopping?: boolean
   isActive: boolean // whether this device is shown in viewer
   isLoading: boolean // loading sensors/options
   streamMetadata: Record<string, StreamMetadata> // keyed by stream_type
   // Per-sensor streaming state (sensor API)
-  streamingMode: 'idle' | 'pipeline' | 'sensor' // which API is being used
   sensorStreamingStatus: Record<string, SensorStreamStatus> // keyed by sensor_id
 }
 

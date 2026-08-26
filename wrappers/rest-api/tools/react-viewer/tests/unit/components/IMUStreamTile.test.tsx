@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { screen, fireEvent, within } from '@testing-library/react'
 import { StreamViewer } from '@/components/StreamViewer'
 import { render, createMockDevice, createMockDeviceState } from '../../utils/test-utils'
@@ -27,7 +27,10 @@ function streamingDevice(deviceId: string, serial: string) {
   return createMockDeviceState(device, {
     isActive: true,
     isStreaming: true,
-    streamingMode: 'pipeline',
+    // A stream is shown only when its sensor reports it running; pipeline mode is gone.
+    sensorStreamingStatus: {
+      'motion-sensor': { is_streaming: true, stream_types: ['accel', 'gyro'] },
+    },
     streamConfigs: [motionConfig('accel'), motionConfig('gyro')],
     streamMetadata: {
       accel: { frame_number: 1, timestamp: NOW, width: 0, height: 0 },
@@ -50,6 +53,12 @@ const accelTiles = () =>
 const accelTile = () => accelTiles()[0]
 
 describe('IMUStreamTile', () => {
+  // The chart is a lazy import. Resolve it once up front so the first test to open
+  // the graph does not race the module load.
+  beforeAll(async () => {
+    await import('@/components/IMUChart')
+  })
+
   it('renders the orientation view by default', () => {
     render(<StreamViewer />, { initialStoreState: oneDevice() })
 
@@ -72,7 +81,7 @@ describe('IMUStreamTile', () => {
     fireEvent.click(toggle)
 
     // The chart is a lazy import; the first test to open it pays the module load.
-    await within(tile).findByTitle('Hide X', {}, { timeout: 5000 })
+    await within(tile).findByTitle('Hide X')
     const close = within(tile).getByTitle('Close graph view')
     expect(close).toHaveAttribute('aria-pressed', 'true')
     // The orientation wireframe is gone while the graph is open.
@@ -88,7 +97,7 @@ describe('IMUStreamTile', () => {
     const tile = accelTile()
     fireEvent.click(within(tile).getByTitle('Open graph view'))
     // The header toggle flips synchronously; the chart itself is a lazy chunk.
-    await within(tile).findByTitle('Hide X', {}, { timeout: 5000 })
+    await within(tile).findByTitle('Hide X')
 
     for (const axis of ['X', 'Y', 'Z', 'N']) {
       expect(within(tile).getByTitle(`Hide ${axis}`)).toHaveAttribute('aria-pressed', 'true')

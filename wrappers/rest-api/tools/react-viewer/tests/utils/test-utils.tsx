@@ -51,7 +51,6 @@ export function createMockDeviceState(device: DeviceInfo, overrides: Partial<Dev
     sensorConfigs: {},
     isActive: false,
     isStreaming: false,
-    streamingMode: 'idle',
     sensorStreamingStatus: {},
     isPointCloudEnabled: false,
     pointCloudVertices: null,

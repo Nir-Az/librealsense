@@ -55,42 +55,6 @@ export const handlers = [
     return HttpResponse.json({ success: true, value: body.value })
   }),
 
-  // Start streaming (pipeline mode)
-  http.post(`${API_BASE}/devices/:deviceId/stream/start`, () => {
-    return HttpResponse.json({
-      is_streaming: true,
-      active_streams: ['depth'],
-      timings: {
-        refresh_devices: 0.0,
-        device_lookup: 0.001,
-        pipeline_config_init: 0.2,
-        stream_enable: 0.001,
-        pipeline_start: 0.5,
-        post_start_setup: 0.001,
-        thread_start: 0.001,
-        total: 0.7,
-      },
-    })
-  }),
-
-  // Stop streaming (pipeline mode)
-  http.post(`${API_BASE}/devices/:deviceId/stream/stop`, () => {
-    return HttpResponse.json({
-      is_streaming: false,
-      active_streams: [],
-      stopping: false,
-    })
-  }),
-
-  // Get stream status
-  http.get(`${API_BASE}/devices/:deviceId/stream/status`, () => {
-    return HttpResponse.json({
-      is_streaming: false,
-      active_streams: [],
-      stopping: false,
-    })
-  }),
-
   // Get depth range
   http.get(`${API_BASE}/devices/:deviceId/stream/depth-range`, () => {
     return HttpResponse.json({

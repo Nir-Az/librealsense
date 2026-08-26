@@ -407,7 +407,6 @@ function DeviceCard({
   const options = deviceState?.options || {}
   const streamConfigs = deviceState?.streamConfigs || []
   const sensorConfigs = deviceState?.sensorConfigs || {}
-  const streamingMode = deviceState?.streamingMode || 'idle'
   const sensorStreamingStatus = deviceState?.sensorStreamingStatus || {}
 
   // Group stream configs by sensor
@@ -594,27 +593,12 @@ function DeviceCard({
         <div className="border-t border-rs-border">
           {/* Stream Configuration */}
           <div className="p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h4 className="section-label">Streams</h4>
-                {/* Streaming mode indicator */}
-                {streamingMode !== 'idle' && (
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded border ${
-                    streamingMode === 'pipeline'
-                      ? 'border-rs-blue/40 bg-rs-blue/15 text-rs-accent'
-                      : 'border-rs-border bg-rs-border/40 text-rs-muted'
-                  }`}>
-                    {streamingMode === 'pipeline' ? 'All' : 'Per-sensor'}
-                  </span>
-                )}
-              </div>
-            </div>
+            <h4 className="section-label mb-2">Streams</h4>
             
             {/* Stream configs grouped by sensor */}
             <SensorStreamControls
               sensors={sensors}
               streamsBySensor={streamsBySensor}
-              streamingMode={streamingMode}
               sensorStreamingStatus={sensorStreamingStatus}
               sensorConfigs={sensorConfigs}
               onUpdateStreamConfig={onUpdateStreamConfig}
@@ -675,7 +659,6 @@ function DeviceCard({
 interface SensorStreamControlsProps {
   sensors: SensorInfo[]
   streamsBySensor: Record<string, StreamConfig[]>
-  streamingMode: string
   sensorStreamingStatus: Record<string, { is_streaming: boolean; pendingOp?: string | null; error?: string | null }>
   sensorConfigs: Record<string, SensorConfig>
   onUpdateStreamConfig: (config: StreamConfig) => void
@@ -687,7 +670,6 @@ interface SensorStreamControlsProps {
 function SensorStreamControls({
   sensors,
   streamsBySensor,
-  streamingMode,
   sensorStreamingStatus,
   sensorConfigs,
   onUpdateStreamConfig,
@@ -716,7 +698,7 @@ function SensorStreamControls({
         const hasEnabledSensorStreams = sensorStreamConfigs.some(c => c.enable)
         const sensorConfig = sensorConfigs[sensor.sensor_id]
 
-        const canStartSensor = hasEnabledSensorStreams && streamingMode !== 'pipeline'
+        const canStartSensor = hasEnabledSensorStreams
         const isExpanded = expandedSensors.has(sensor.sensor_id)
 
         const computeCommonOptions = () => {
@@ -770,7 +752,7 @@ function SensorStreamControls({
                 }
                 disabled={isSensorPending || (!canStartSensor && !isSensorStreaming)}
                 data-testid={isSensorStreaming ? "stop-streaming" : "start-streaming"}
-                title={streamingMode === 'pipeline' ? 'Stop all streams first' : isSensorPending ? 'Stopping...' : isSensorStreaming ? 'Stop' : 'Start'}
+                title={isSensorPending ? 'Stopping...' : isSensorStreaming ? 'Stop' : 'Start'}
                 className="group flex items-center gap-1.5 disabled:cursor-not-allowed"
               >
                 <span className="sr-only">{isSensorStreaming ? 'Stop' : 'Start'}</span>
@@ -825,7 +807,7 @@ function SensorStreamControls({
                       const [width, height] = e.target.value.split('x').map(Number)
                       onUpdateSensorConfig(sensor.sensor_id, { resolution: { width, height } })
                     }}
-                    disabled={streamingMode === 'pipeline' || isSensorStreaming}
+                    disabled={isSensorStreaming}
                     className="select-rs text-xs py-0.5"
                   >
                     {availableResolutions.map(([w, h]) => (
@@ -840,7 +822,7 @@ function SensorStreamControls({
                   <select
                     value={sensorConfig.framerate}
                     onChange={(e) => onUpdateSensorConfig(sensor.sensor_id, { framerate: Number(e.target.value) })}
-                    disabled={streamingMode === 'pipeline' || isSensorStreaming}
+                    disabled={isSensorStreaming}
                     className="select-rs text-xs py-0.5"
                   >
                     {availableFps.map((fps) => (
@@ -860,7 +842,7 @@ function SensorStreamControls({
                   config={config}
                   sensors={sensors}
                   onUpdate={onUpdateStreamConfig}
-                  disabled={streamingMode === 'pipeline' || isSensorStreaming}
+                  disabled={isSensorStreaming}
                   isMotionSensor={sensorConfig?.isMotionSensor ?? false}
                 />
               ))}

@@ -4,8 +4,6 @@ import type {
   DeviceInfo,
   SensorInfo,
   OptionInfo,
-  StreamStartRequest,
-  StreamStatus,
   WebRTCOffer,
   WebRTCSession,
   ICECandidate,
@@ -154,22 +152,6 @@ class ApiClient {
       `/devices/${deviceId}/sensors/${sensorId}/options/${optionId}/`,
       { value }
     )
-    return response.data
-  }
-
-  // ============ Streams ============
-
-  async startStreaming(deviceId: string, request: StreamStartRequest): Promise<void> {
-    await this.client.post(`/devices/${deviceId}/stream/start/`, request)
-  }
-
-  async stopStreaming(deviceId: string): Promise<StreamStatus> {
-    const response = await this.client.post<StreamStatus>(`/devices/${deviceId}/stream/stop/`)
-    return response.data
-  }
-
-  async getStreamStatus(deviceId: string): Promise<StreamStatus> {
-    const response = await this.client.get<StreamStatus>(`/devices/${deviceId}/stream/status/`)
     return response.data
   }
 

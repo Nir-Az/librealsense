@@ -252,7 +252,6 @@ describe('AppStore', () => {
         deviceStates: {
           'device-1': createMockDeviceState(device, {
             isActive: true,
-            streamingMode: 'sensor',
             sensorConfigs: {
               'motion-sensor': { resolution: { width: 0, height: 0 }, framerate: 200, isMotionSensor: true },
             },

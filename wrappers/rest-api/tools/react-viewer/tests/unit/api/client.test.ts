@@ -125,31 +125,6 @@ describe('API Client', () => {
     })
   })
 
-  describe('startStreaming', () => {
-    it('starts streaming for a device', async () => {
-      await expect(apiClient.startStreaming(mockDevice.device_id, {
-        streams: [{ stream_type: 'depth', width: 640, height: 480, format: 'Z16', fps: 30 }],
-      })).resolves.not.toThrow()
-    })
-  })
-
-  describe('stopStreaming', () => {
-    it('stops streaming for a device', async () => {
-      const status = await apiClient.stopStreaming(mockDevice.device_id)
-      
-      expect(status.is_streaming).toBe(false)
-      expect(status.active_streams).toEqual([])
-    })
-  })
-
-  describe('getStreamStatus', () => {
-    it('returns stream status', async () => {
-      const status = await apiClient.getStreamStatus(mockDevice.device_id)
-      
-      expect(status).toHaveProperty('is_streaming')
-      expect(status).toHaveProperty('active_streams')
-    })
-  })
 
   describe('getDepthRange', () => {
     it('returns depth range for a device', async () => {

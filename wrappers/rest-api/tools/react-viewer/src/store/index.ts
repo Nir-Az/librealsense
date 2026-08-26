@@ -186,10 +186,6 @@ interface AppState {
   updateStreamConfig: (deviceId: string, config: StreamConfig) => void
   updateSensorConfig: (deviceId: string, sensorId: string, config: Partial<SensorConfig>) => void
 
-  // Per-device streaming
-  startDeviceStreaming: (deviceId: string) => Promise<void>
-  stopDeviceStreaming: (deviceId: string) => Promise<void>
-
   // Per-sensor streaming (sensor API)
   startSensorStreaming: (deviceId: string, sensorId: string) => Promise<void>
   stopSensorStreaming: (deviceId: string, sensorId: string) => Promise<void>
@@ -346,8 +342,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
     
     if (existing?.isActive) {
       // Deactivate: stop streaming if active, then remove
-      if (existing.isStreaming) {
-        await get().stopDeviceStreaming(device.device_id)
+      for (const [sensorId, status] of Object.entries(existing.sensorStreamingStatus)) {
+        if (status.is_streaming) await get().stopSensorStreaming(device.device_id, sensorId)
       }
       set((s) => {
         const newStates = { ...s.deviceStates }
@@ -364,11 +360,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
         streamConfigs: [],
         sensorConfigs: {},
         isStreaming: false,
-        isStopping: false,
         isActive: true,
         isLoading: true,
         streamMetadata: {},
-        streamingMode: 'idle',
         sensorStreamingStatus: {},
       }
       set((s) => ({
@@ -533,129 +527,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
     })
   },
 
-  // Per-device streaming
-  startDeviceStreaming: async (deviceId) => {
-    const state = get()
-    const deviceState = state.deviceStates[deviceId]
-    if (!deviceState) return
-
-    // If a stop is still in progress, wait briefly until it finishes
-    if (deviceState.isStopping) {
-      for (let i = 0; i < 20; i++) {
-        try {
-          const status = await apiClient.getStreamStatus(deviceId)
-          if (!status.stopping) break
-        } catch (e) {
-          // ignore and retry
-        }
-        await new Promise((resolve) => setTimeout(resolve, 150))
-      }
-    }
-
-    const enabledStreamConfigs = deviceState.streamConfigs.filter((c) => c.enable)
-    if (enabledStreamConfigs.length === 0) {
-      set({ error: 'Please enable at least one stream' })
-      return
-    }
-
-    // Apply sensor-level resolution/FPS to each enabled stream config
-    const configsWithSensorSettings = enabledStreamConfigs.map(c => {
-      const sensorConfig = deviceState.sensorConfigs[c.sensor_id]
-      if (sensorConfig) {
-        return {
-          ...c,
-          resolution: sensorConfig.resolution,
-          framerate: sensorConfig.framerate,
-        }
-      }
-      return c
-    })
-
-    try {
-      await apiClient.startStreaming(deviceId, {
-        configs: configsWithSensorSettings,
-        apply_filters: false,
-        reuse_cache: true,
-      })
-      set((s) => ({
-        deviceStates: {
-          ...s.deviceStates,
-          [deviceId]: {
-            ...s.deviceStates[deviceId],
-            isStreaming: true,
-            isStopping: false,
-            streamingMode: 'pipeline',
-          },
-        },
-        error: null,
-      }))
-    } catch (error) {
-      // Extract error message - axios errors have response.data.detail
-      let errorMessage = 'Unknown error'
-      if (error && typeof error === 'object') {
-        const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
-        if (axiosError.response?.data?.detail) {
-          errorMessage = axiosError.response.data.detail
-        } else if (axiosError.message) {
-          errorMessage = axiosError.message
-        }
-      }
-      set({
-        error: `Failed to start streaming: ${errorMessage}`,
-      })
-    }
-  },
-
-  stopDeviceStreaming: async (deviceId) => {
-    // Optimistically mark stopping and hide stream immediately. Also drop the
-    // last point cloud so the 3D canvas doesn't show a frozen last frame after
-    // stop. If another device is still streaming its next frame will repopulate.
-    set((state) => ({
-      pointCloudVertices: null,
-      pointCloudColors: null,
-      deviceStates: {
-        ...state.deviceStates,
-        [deviceId]: {
-          ...state.deviceStates[deviceId],
-          isStopping: true,
-          isStreaming: false,
-          streamMetadata: {},
-        },
-      },
-    }))
-
-    try {
-      const status = await apiClient.stopStreaming(deviceId)
-      set((state) => ({
-        deviceStates: {
-          ...state.deviceStates,
-          [deviceId]: {
-            ...state.deviceStates[deviceId],
-            isStopping: !!status?.stopping,
-            isStreaming: status?.is_streaming ?? false,
-            streamingMode: 'idle',
-            sensorStreamingStatus: {},
-            streamMetadata: status?.stopping ? state.deviceStates[deviceId].streamMetadata : {},
-          },
-        },
-      }))
-    } catch (error) {
-      set({
-        error: `Failed to stop streaming: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      })
-      // Roll back stopping flag on error
-      set((state) => ({
-        deviceStates: {
-          ...state.deviceStates,
-          [deviceId]: {
-            ...state.deviceStates[deviceId],
-            isStopping: false,
-          },
-        },
-      }))
-    }
-  },
-
   // Per-sensor streaming (sensor API)
   startSensorStreaming: async (deviceId, sensorId) => {
     // Wait for any pending stop operation to complete before starting
@@ -668,12 +539,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get()
     const deviceState = state.deviceStates[deviceId]
     if (!deviceState) return
-
-    // Check mode - can't use sensor API if pipeline is active
-    if (deviceState.streamingMode === 'pipeline') {
-      set({ error: 'Stop all streams before using per-sensor control' })
-      return
-    }
 
     // Find ALL enabled stream configs for this sensor (not just first)
     const enabledStreamConfigs = deviceState.streamConfigs.filter(
@@ -715,7 +580,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
           ...s.deviceStates,
           [deviceId]: {
             ...s.deviceStates[deviceId],
-            streamingMode: 'sensor',
             isStreaming: true,
             sensorStreamingStatus: {
               ...s.deviceStates[deviceId].sensorStreamingStatus,
@@ -795,7 +659,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
           ...s.deviceStates,
           [deviceId]: {
             ...deviceState,
-            streamingMode: anyStreaming ? 'sensor' : 'idle',
             isStreaming: anyStreaming,
             sensorStreamingStatus: newSensorStatus,
           },
@@ -826,7 +689,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
               ...s.deviceStates,
               [deviceId]: {
                 ...deviceState,
-                streamingMode: anyStreaming ? 'sensor' : 'idle',
                 isStreaming: anyStreaming,
                 sensorStreamingStatus: newSensorStatus,
               },
@@ -847,7 +709,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
               ...s.deviceStates,
               [deviceId]: {
                 ...deviceState,
-                streamingMode: 'sensor',
                 isStreaming: true,
                 sensorStreamingStatus: {
                   ...deviceState.sensorStreamingStatus,
@@ -1110,7 +971,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
                 enable: proposedConfig.enable,
               }
             }
-            return existingConfig
+            return { ...existingConfig, enable: false }
           })
           
           return {
@@ -1150,9 +1011,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
         if (enabledConfigs.length === 0) {
           throw new Error('No streams enabled. Please configure at least one stream before starting.')
         }
-        await get().startDeviceStreaming(deviceId)
+        for (const sensorId of new Set(enabledConfigs.map(c => c.sensor_id))) {
+          await get().startSensorStreaming(deviceId, sensorId)
+        }
       } else if (settings.streamAction === 'stop') {
-        await get().stopDeviceStreaming(deviceId)
+        const status = get().deviceStates[deviceId]?.sensorStreamingStatus || {}
+        for (const [sensorId, ss] of Object.entries(status)) {
+          if (ss.is_streaming) await get().stopSensorStreaming(deviceId, sensorId)
+        }
       }
       
       // Clear pending settings

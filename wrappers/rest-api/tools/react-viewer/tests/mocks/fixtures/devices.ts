@@ -99,11 +99,9 @@ export const mockDeviceState: DeviceState = {
   streamConfigs: mockStreamConfigs,
   sensorConfigs: mockSensorConfigs,
   isStreaming: false,
-  isStopping: false,
   isActive: true,
   isLoading: false,
   streamMetadata: {},
-  streamingMode: 'idle',
   sensorStreamingStatus: {},
 }
 
@@ -115,7 +113,6 @@ export const mockDeviceStateInactive: DeviceState = {
 export const mockDeviceStateStreaming: DeviceState = {
   ...mockDeviceState,
   isStreaming: true,
-  streamingMode: 'pipeline',
   streamMetadata: {
     depth: {
       stream_type: 'depth',
