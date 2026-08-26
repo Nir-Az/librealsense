@@ -243,6 +243,47 @@ describe('AppStore', () => {
       expect(newest('device-2')).toMatchObject({ x: 2 })
     })
 
+    // Regression: the restart reset keyed imuLastSampleAt on the bare stream type
+    // while addIMUData keys it "<deviceId>:<type>", so the reset wrote an entry
+    // nothing read and a fast stop/start kept appending to the pre-stop window.
+    it('starts a new window when a sensor restarts inside the stale-gap window', async () => {
+      const device = createMockDevice({ device_id: 'device-1', serial_number: 'device-1' })
+      useAppStore.setState({
+        deviceStates: {
+          'device-1': createMockDeviceState(device, {
+            isActive: true,
+            streamingMode: 'sensor',
+            sensorConfigs: {
+              'motion-sensor': { resolution: { width: 0, height: 0 }, framerate: 200, isMotionSensor: true },
+            },
+            streamConfigs: [
+              {
+                sensor_id: 'motion-sensor',
+                stream_type: 'accel',
+                format: 'motion_xyz32f',
+                resolution: { width: 0, height: 0 },
+                framerate: 200,
+                enable: true,
+              },
+            ],
+          }),
+        },
+      })
+
+      push('device-1', 'accel', { x: 1, y: 1, z: 1 })
+      vi.advanceTimersByTime(50)
+      push('device-1', 'accel', { x: 2, y: 2, z: 2 })
+      expect(realSamples('device-1')).toHaveLength(2)
+
+      // Restart well inside IMU_STALE_GAP_MS, so only the reset can start a new window.
+      vi.advanceTimersByTime(100)
+      await useAppStore.getState().startSensorStreaming('device-1', 'motion-sensor')
+      push('device-1', 'accel', { x: 3, y: 3, z: 3 })
+
+      expect(realSamples('device-1')).toHaveLength(1)
+      expect(newest('device-1')).toMatchObject({ x: 3 })
+    })
+
     it('holds the window at its length while samples keep arriving', () => {
       const maxLength = useAppStore.getState().maxIMUHistoryLength
 

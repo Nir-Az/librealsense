@@ -688,7 +688,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     // IMU_STALE_GAP_MS would not trip the stale-gap check when samples resume.
     for (const config of enabledStreamConfigs) {
       const type = config.stream_type.toLowerCase()
-      if (type === 'accel' || type === 'gyro') imuLastSampleAt[type] = 0
+      if (type === 'accel' || type === 'gyro') imuLastSampleAt[`${deviceId}:${type}`] = 0
     }
 
     // Get sensor-level resolution/FPS (shared across all streams from this sensor)
