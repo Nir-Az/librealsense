@@ -15,6 +15,7 @@
 #include "usb/usb-enumerator.h"
 #include "../types.h"
 #include <mfapi.h>
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <set>
@@ -196,6 +197,49 @@ namespace librealsense
             return std::vector<mipi_device_info>();
         }
 
+        // A device interface path ("\\?\USB#VID_x&PID_y&MI_00#inst#{guid}") and the
+        // WM_DEVICECHANGE broadcast for the same interface carry different interface
+        // GUIDs, so they only compare equal on the device-instance part. Lowercased
+        // because Windows is not consistent about case.
+        static std::string instance_id_key( LPCWSTR device_path )
+        {
+            std::string key = utf8_from_wchar( instance_id_from_device_path( device_path ).c_str() );
+            std::transform( key.begin(), key.end(), key.begin(),
+                            []( unsigned char c ) { return (char)std::tolower( c ); } );
+            return key;
+        }
+
+        static std::string instance_id_key( std::string const & device_path )
+        {
+            std::wstring wide( device_path.begin(), device_path.end() );
+            return instance_id_key( wide.c_str() );
+        }
+
+        // Drops every entry whose interface Windows reported as removed. Returns true if
+        // anything was dropped.
+        static bool drop_removed_interfaces( platform::backend_device_group & group,
+                                             std::set< std::string > const & removed_instance_ids )
+        {
+            bool dropped = false;
+            auto drop_from = [&]( auto & devices )
+            {
+                auto keep_end = std::remove_if( devices.begin(), devices.end(),
+                                                [&]( auto const & device )
+                                                {
+                                                    return removed_instance_ids.count(
+                                                        instance_id_key( device.device_path ) ) > 0;
+                                                } );
+                if( keep_end != devices.end() )
+                {
+                    devices.erase( keep_end, devices.end() );
+                    dropped = true;
+                }
+            };
+            drop_from( group.uvc_devices );
+            drop_from( group.hid_devices );
+            return dropped;
+        }
+
         // Returns the unique_ids of USB composites whose enumeration is still in
         // progress: the OS device tree lists camera or HID interfaces for them that
         // Media Foundation / the Sensor API haven't surfaced yet. That happens
@@ -291,6 +335,7 @@ namespace librealsense
                 _data._stopped = false;
                 _data._changed = false;
                 _data._incomplete_since.clear();
+                _data._removed_instance_ids.clear();
                 _callback = std::move(callback);
                 _last = backend_device_group( _backend->query_uvc_devices(),
                                               _backend->query_usb_devices(),
@@ -327,6 +372,9 @@ namespace librealsense
                 // composite that never finishes binding is waited on once, not forever
                 // (see incomplete_composites).
                 std::map< std::string, std::chrono::steady_clock::time_point > _incomplete_since;
+                // Device interfaces Windows reported removed since the last callback. Only
+                // touched from the watcher thread, which is also the one pumping messages.
+                std::set< std::string > _removed_instance_ids;
 
                 bool _stopped = true;
                 bool _changed = false;
@@ -362,9 +410,15 @@ namespace librealsense
                     {
                         if( _data._changed && _data._timer.has_expired() )
                         {
-                            platform::backend_device_group curr( _backend->query_uvc_devices(),
-                                                                 _backend->query_usb_devices(),
-                                                                 _backend->query_hid_devices() );
+                            // Queried in explicit statements, not as constructor arguments:
+                            // argument evaluation order is unspecified, and MSVC picks
+                            // right-to-left, which left the UVC list - the one carrying
+                            // device identity - enumerated last, after the several seconds
+                            // query_hid_devices() takes while a camera is missing.
+                            auto uvc_devices = _backend->query_uvc_devices();
+                            auto usb_devices = _backend->query_usb_devices();
+                            auto hid_devices = _backend->query_hid_devices();
+                            platform::backend_device_group curr( uvc_devices, usb_devices, hid_devices );
 
                             // A composite still growing camera/HID interfaces is not
                             // ready to be published - re-arm the debounce and look
@@ -396,14 +450,35 @@ namespace librealsense
                             }
                             else
                             {
-                                if( list_changed( _last.uvc_devices, curr.uvc_devices )
-                                    || list_changed( _last.usb_devices, curr.usb_devices )
-                                    || list_changed( _last.hid_devices, curr.hid_devices ) )
+                                auto changed = []( platform::backend_device_group const & from,
+                                                   platform::backend_device_group const & to )
+                                {
+                                    return list_changed( from.uvc_devices, to.uvc_devices )
+                                        || list_changed( from.usb_devices, to.usb_devices )
+                                        || list_changed( from.hid_devices, to.hid_devices );
+                                };
+
+                                // A camera that reboots - after a firmware update, a hardware
+                                // reset - comes back on the same device paths, so comparing
+                                // snapshots cannot tell it apart from one that never left. Use
+                                // what Windows told us: an interface it reported removed is
+                                // gone, and reporting that before the arrival is what lets the
+                                // application drop a device whose handles are now stale.
+                                platform::backend_device_group without_removed = curr;
+                                if( drop_removed_interfaces( without_removed, _data._removed_instance_ids )
+                                    && changed( _last, without_removed ) )
+                                {
+                                    _callback( _last, without_removed );
+                                    _last = without_removed;
+                                }
+
+                                if( changed( _last, curr ) )
                                 {
                                     _callback( _last, curr );
                                     _last = curr;
                                 }
                                 _data._changed = false;
+                                _data._removed_instance_ids.clear();
                             }
                         }
                         // Yield CPU resources, as this is required for connect/disconnect events only
@@ -458,6 +533,10 @@ namespace librealsense
                         if( p_hdr->dbch_devicetype != DBT_DEVTYP_DEVICEINTERFACE )
                             break;
                         auto data = reinterpret_cast<extra_data*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+                        auto p_iface = reinterpret_cast< DEV_BROADCAST_DEVICEINTERFACE const * >( lParam );
+                        auto instance_id = instance_id_key( p_iface->dbcc_name );
+                        if( ! instance_id.empty() )
+                            data->_removed_instance_ids.insert( std::move( instance_id ) );
                         data->_changed = true;
                         data->_timer.start();
                     }
