@@ -103,9 +103,4 @@ def test_hw_reset_sanity( test_device ):
     # before all its interfaces are up surfaces here as a missing sensor - typically
     # the Motion Module, leaving the application with a camera that has no IMU.
     log.info( "Sensors after reset: %s", added_sensors )
-    if added_sensors != expected_sensors and platform.system() != "Windows":
-        # The Linux watcher has no readiness gate yet, so a re-enumerating device is
-        # published before all of its interfaces are up - measured 1 in 6 resets on a
-        # D585. Tracked in RSDSO-21796; enforce on Windows meanwhile.
-        pytest.xfail( f"RSDSO-21796: re-enumerated with {added_sensors}" )
     assert added_sensors == expected_sensors, f"device re-enumerated with {added_sensors}, expected {expected_sensors}"
