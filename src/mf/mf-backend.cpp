@@ -216,13 +216,16 @@ namespace librealsense
         }
 
         // Drops the composites whose camera interfaces Windows reported as removed,
-        // taking all of their entries - UVC and HID alike - with them. Returns true if
-        // anything was dropped.
+        // taking their UVC and HID entries with them. Returns true if anything was
+        // dropped.
         //
         // Composite granularity on purpose: a camera that goes away always takes its
         // camera interfaces with it, so those are the reliable signal. Acting on a lone
         // HID removal instead would drop just the IMU and republish the very partial
         // device this watcher exists to avoid.
+        //
+        // USB entries are deliberately left alone here - see the caller, which re-reads
+        // them instead of trying to match them by id.
         static bool drop_removed_composites( platform::backend_device_group & group,
                                              std::set< std::string > const & removed_instance_ids )
         {
@@ -245,18 +248,10 @@ namespace librealsense
             return true;
         }
 
-        // Returns the unique_ids of USB composites whose enumeration is still in
-        // progress: the OS device tree lists camera or HID interfaces for them that
-        // Media Foundation / the Sensor API haven't surfaced yet. That happens
-        // routinely - HID especially binds noticeably after the UVC interfaces of the
-        // same composite - and a device published in that state comes up missing
-        // sensors ("No HID info provided, IMU is disabled", a depth-only D585, ...)
-        // until a later event supersedes it.
-        //
-        // The composite's children in the device tree are created from its USB
-        // configuration descriptor, so they are the authoritative "expected" set. Only
-        // camera- and HID-class children are waited on; everything else (serial ports,
-        // vendor interfaces) never surfaces here. Nothing depends on PID lists.
+        // Returns the unique_ids of USB composites still mid-enumeration, so an arrival
+        // can wait rather than publish a device that comes up missing sensors. The
+        // composite's device-tree children come from its USB configuration descriptor,
+        // which makes them the authoritative set to expect.
         static std::set< std::string > incomplete_composites( platform::backend_device_group const & curr )
         {
             std::set< std::string > sensor_api_uids;
@@ -459,6 +454,16 @@ namespace librealsense
                                 platform::backend_device_group without_removed = _last;
                                 if( drop_removed_composites( without_removed, _data._removed_instance_ids ) )
                                 {
+                                    // The USB list is re-read rather than filtered. A composite
+                                    // contributes USB entries under two different ids - its MI_xx
+                                    // interfaces share the instance token the UVC entries use,
+                                    // while its own entry is parsed from a path with no MI_ part
+                                    // and carries an unrelated id - so matching them by id leaves
+                                    // some behind, and a leftover would show up as a change on the
+                                    // next tick and fire a second, spurious callback. Unlike the
+                                    // HID query, this one costs about a millisecond even while a
+                                    // camera is missing, so asking the OS is cheaper than guessing.
+                                    without_removed.usb_devices = _backend->query_usb_devices();
                                     _callback( _last, without_removed );
                                     _last = without_removed;
                                 }
