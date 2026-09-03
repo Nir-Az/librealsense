@@ -215,29 +215,34 @@ namespace librealsense
             return instance_id_key( wide.c_str() );
         }
 
-        // Drops every entry whose interface Windows reported as removed. Returns true if
+        // Drops the composites whose camera interfaces Windows reported as removed,
+        // taking all of their entries - UVC and HID alike - with them. Returns true if
         // anything was dropped.
-        static bool drop_removed_interfaces( platform::backend_device_group & group,
+        //
+        // Composite granularity on purpose: a camera that goes away always takes its
+        // camera interfaces with it, so those are the reliable signal. Acting on a lone
+        // HID removal instead would drop just the IMU and republish the very partial
+        // device this watcher exists to avoid.
+        static bool drop_removed_composites( platform::backend_device_group & group,
                                              std::set< std::string > const & removed_instance_ids )
         {
-            bool dropped = false;
+            std::set< std::string > gone_uids;
+            for( auto && uvc : group.uvc_devices )
+                if( removed_instance_ids.count( instance_id_key( uvc.device_path ) ) )
+                    gone_uids.insert( uvc.unique_id );
+            if( gone_uids.empty() )
+                return false;
+
             auto drop_from = [&]( auto & devices )
             {
-                auto keep_end = std::remove_if( devices.begin(), devices.end(),
-                                                [&]( auto const & device )
-                                                {
-                                                    return removed_instance_ids.count(
-                                                        instance_id_key( device.device_path ) ) > 0;
-                                                } );
-                if( keep_end != devices.end() )
-                {
-                    devices.erase( keep_end, devices.end() );
-                    dropped = true;
-                }
+                devices.erase( std::remove_if( devices.begin(), devices.end(),
+                                               [&]( auto const & device )
+                                               { return gone_uids.count( device.unique_id ) > 0; } ),
+                               devices.end() );
             };
             drop_from( group.uvc_devices );
             drop_from( group.hid_devices );
-            return dropped;
+            return true;
         }
 
         // Returns the unique_ids of USB composites whose enumeration is still in
@@ -301,10 +306,29 @@ namespace librealsense
                     }
                     else if( device_class == "HIDClass" )
                     {
-                        // No grandchild means no HID device-instance is attached yet; a
-                        // missing Sensor API entry means we're between "device tree
-                        // ready" and "Sensor API ready".
-                        if( ! child.get_child().valid() || ! sensor_api_uids.count( info.unique_id ) )
+                        cm_node hid_instance = child.get_child();
+                        if( ! hid_instance.valid() )
+                        {
+                            // Nothing attached under the HID interface yet - the OS is
+                            // still binding a driver to it.
+                            incomplete.insert( info.unique_id );
+                            break;
+                        }
+                        // Only a HID Sensor Collection surfaces through the Sensor API,
+                        // and Windows gives it its own "Sensor" device class. Other HID
+                        // interfaces - vendor-defined controls on unrelated cameras, for
+                        // instance - never appear there, so waiting on them would defer
+                        // every device on the machine.
+                        bool is_sensor_collection = false;
+                        for( cm_node node = hid_instance; node.valid(); node = node.get_sibling() )
+                        {
+                            if( node.get_property( DEVPKEY_Device_Class ) == "Sensor" )
+                            {
+                                is_sensor_collection = true;
+                                break;
+                            }
+                        }
+                        if( is_sensor_collection && ! sensor_api_uids.count( info.unique_id ) )
                         {
                             incomplete.insert( info.unique_id );
                             break;
@@ -410,22 +434,52 @@ namespace librealsense
                     {
                         if( _data._changed && _data._timer.has_expired() )
                         {
-                            // Queried in explicit statements, not as constructor arguments:
-                            // argument evaluation order is unspecified, and MSVC picks
-                            // right-to-left, which left the UVC list - the one carrying
-                            // device identity - enumerated last, after the several seconds
-                            // query_hid_devices() takes while a camera is missing.
+                            auto changed = []( platform::backend_device_group const & from,
+                                               platform::backend_device_group const & to )
+                            {
+                                return list_changed( from.uvc_devices, to.uvc_devices )
+                                    || list_changed( from.usb_devices, to.usb_devices )
+                                    || list_changed( from.hid_devices, to.hid_devices );
+                            };
+
+                            // Removals first, computed from what we already know: the
+                            // notification names the interface and _last says which device
+                            // owned it, so no enumeration is needed. That matters - a full
+                            // enumeration costs several seconds while a camera is missing,
+                            // because the Sensor API stalls on the device that just left, and
+                            // the application should not keep a device with dead handles for
+                            // that long.
+                            //
+                            // It is also the only way to notice a camera that reboots - after
+                            // a firmware update or a hardware reset it returns on the same
+                            // device paths, so comparing snapshots cannot tell it apart from
+                            // one that never left.
+                            if( ! _data._removed_instance_ids.empty() )
+                            {
+                                platform::backend_device_group without_removed = _last;
+                                if( drop_removed_composites( without_removed, _data._removed_instance_ids ) )
+                                {
+                                    _callback( _last, without_removed );
+                                    _last = without_removed;
+                                }
+                                _data._removed_instance_ids.clear();
+                            }
+
+                            // Arrivals do need a snapshot. Queried in explicit statements,
+                            // not as constructor arguments: argument evaluation order is
+                            // unspecified and MSVC picks right-to-left, which left the UVC
+                            // list - the one carrying device identity - enumerated last.
                             auto uvc_devices = _backend->query_uvc_devices();
                             auto usb_devices = _backend->query_usb_devices();
                             auto hid_devices = _backend->query_hid_devices();
                             platform::backend_device_group curr( uvc_devices, usb_devices, hid_devices );
 
-                            // A composite still growing camera/HID interfaces is not
-                            // ready to be published - re-arm the debounce and look
-                            // again on the next tick. Each composite gets its own
-                            // MAX_DEFERRAL budget, so one that advertises an interface
-                            // it never binds delays us once instead of blocking every
-                            // later event on the machine.
+                            // Arrivals, on the other hand, wait: a composite still growing
+                            // camera/HID interfaces is not ready to be published, so re-arm
+                            // the debounce and look again on the next tick. Each composite
+                            // gets its own MAX_DEFERRAL budget, so one that advertises an
+                            // interface it never binds delays us once instead of blocking
+                            // every later event on the machine.
                             static constexpr auto MAX_DEFERRAL = std::chrono::seconds( 15 );
                             auto const now = std::chrono::steady_clock::now();
                             auto const incomplete = incomplete_composites( curr );
@@ -446,39 +500,16 @@ namespace librealsense
                             if( may_defer )
                             {
                                 _data._timer.start();
-                                // Don't fire yet; fall through to sleep.
+                                // Don't publish yet; fall through to sleep.
                             }
                             else
                             {
-                                auto changed = []( platform::backend_device_group const & from,
-                                                   platform::backend_device_group const & to )
-                                {
-                                    return list_changed( from.uvc_devices, to.uvc_devices )
-                                        || list_changed( from.usb_devices, to.usb_devices )
-                                        || list_changed( from.hid_devices, to.hid_devices );
-                                };
-
-                                // A camera that reboots - after a firmware update, a hardware
-                                // reset - comes back on the same device paths, so comparing
-                                // snapshots cannot tell it apart from one that never left. Use
-                                // what Windows told us: an interface it reported removed is
-                                // gone, and reporting that before the arrival is what lets the
-                                // application drop a device whose handles are now stale.
-                                platform::backend_device_group without_removed = curr;
-                                if( drop_removed_interfaces( without_removed, _data._removed_instance_ids )
-                                    && changed( _last, without_removed ) )
-                                {
-                                    _callback( _last, without_removed );
-                                    _last = without_removed;
-                                }
-
                                 if( changed( _last, curr ) )
                                 {
                                     _callback( _last, curr );
                                     _last = curr;
                                 }
                                 _data._changed = false;
-                                _data._removed_instance_ids.clear();
                             }
                         }
                         // Yield CPU resources, as this is required for connect/disconnect events only
