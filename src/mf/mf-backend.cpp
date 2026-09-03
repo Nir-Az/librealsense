@@ -482,10 +482,17 @@ namespace librealsense
                             // Arrivals, on the other hand, wait: a composite still growing
                             // camera/HID interfaces is not ready to be published, so re-arm
                             // the debounce and look again on the next tick. Each composite
-                            // gets its own MAX_DEFERRAL budget, so one that advertises an
-                            // interface it never binds delays us once instead of blocking
-                            // every later event on the machine.
-                            static constexpr auto MAX_DEFERRAL = std::chrono::seconds( 15 );
+                            // gets its own budget, so one that advertises an interface it
+                            // never binds delays us once instead of blocking every later
+                            // event on the machine - and once the budget is spent we publish
+                            // whatever exists, which is what lets a genuinely partial device
+                            // through.
+                            //
+                            // 8s covers the widest interface spread measured on a D585 (4.6s
+                            // cold plug, 6.5s from a premature publish to the complete one
+                            // after a firmware update) without making a real partial device
+                            // wait any longer than it has to.
+                            static constexpr auto MAX_DEFERRAL = std::chrono::seconds( 8 );
                             auto const now = std::chrono::steady_clock::now();
                             auto const incomplete = incomplete_composites( curr );
                             for( auto it = _data._incomplete_since.begin(); it != _data._incomplete_since.end(); )
