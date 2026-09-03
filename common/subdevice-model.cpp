@@ -94,6 +94,12 @@ namespace rs2
         return ss.str();
     }
 
+    bool device_has_depth_mapping(const device& dev)
+    {
+        return dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE)
+            && std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE)) == "D500";
+    }
+
     void subdevice_model::populate_options( const std::string & opt_base_label,
                                             bool * options_invalidated,
                                             std::string & error_message )
@@ -2370,9 +2376,8 @@ namespace rs2
 
     void subdevice_model::set_extrinsics_from_depth_if_needed()
     {
-        std::string pid = dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID);
         std::string sensor_name = s->get_info(RS2_CAMERA_INFO_NAME);
-        if (pid == "0B6B" && sensor_name == "Depth Mapping Camera")
+        if (device_has_depth_mapping(dev) && sensor_name == "Depth Mapping Camera")
         {
             //_labeled_point_cloud_to_depth_extrinsics
             stream_profile depth_profile;

@@ -142,8 +142,13 @@ rum_collector::rum_collector()
 
 rum_collector & rum_collector::instance()
 {
-    static rum_collector inst;
-    return inst;
+    // Never destroyed on purpose: on_context_closed() flushes through this from ~context, which can
+    // run during process exit, when the destruction order of this singleton vs. the context is
+    // unspecified (different translation units) - a normally-destroyed static would be a
+    // use-after-free. The single allocation is reclaimed by the OS at exit (it stays "still
+    // reachable" via this pointer, so it is not reported as a leak by Valgrind or LeakSanitizer).
+    static rum_collector * const inst = new rum_collector();
+    return *inst;
 }
 
 

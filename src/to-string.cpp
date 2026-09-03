@@ -598,6 +598,7 @@ std::string const & get_string_( rs2_option value )
         CASE( READOUT_SHAPING )
         CASE( DETECTION_DISTANCE )
         CASE( SENSORS_CONFIG_MODE )
+        CASE( DUAL_RGB_RECTIFICATION )
 #undef CASE
         return arr;
     }();
@@ -701,6 +702,7 @@ const char * get_string( rs2_format value )
     CASE( Y16I )
     CASE( M420 )
     CASE( NV12 )
+    CASE( H264 )
     default:
         assert( ! is_valid( value ) );
         return UNKNOWN_VALUE;

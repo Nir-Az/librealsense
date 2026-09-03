@@ -45,6 +45,9 @@ namespace rs2
 
     std::string get_post_processing_device_sensor_name(subdevice_model* sub);
 
+    // True for D500 devices with a wired-up depth-mapping sensor (occupancy grid / labeled point cloud).
+    bool device_has_depth_mapping(const device& dev);
+
     class frame_queues
     {
     public:

@@ -398,7 +398,7 @@ namespace librealsense
     {
         // Signal background loops (polling_error_handler) so they exit cleanly on the
         // next tick instead of firing one more failing FW query before being joined.
-        _device_alive->store( false );
+        _is_alive->store( false );
     }
 
     void d500_device::init(std::shared_ptr<context> ctx,
@@ -617,7 +617,7 @@ namespace librealsense
             _polling_error_handler = std::make_shared< polling_error_handler >(
                 1000,
                 error_control,
-                std::weak_ptr<std::atomic<bool>>( _device_alive ),
+                std::weak_ptr<std::atomic<bool>>( _is_alive ),
                 raw_depth_sensor->get_notifications_processor(),
                 std::make_shared< ds_notification_decoder >( d500_fw_error_report ) );
 

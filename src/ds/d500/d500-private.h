@@ -119,6 +119,7 @@ namespace librealsense
         // D500-only HWM opcodes. Shared opcodes are in ds::fw_cmd (ds/ds-private.h).
         enum d500_fw_cmd : uint8_t
         {
+            CUSTOM_CMD               = 0x80, // Custom FW command, sub-command given in param1
             HKR_THERMAL_COMPENSATION = 0x84, // Control HKR thermal compensation
             SAFETY_PRESET_READ       = 0x94, // Read safety preset from given index
             SAFETY_PRESET_WRITE      = 0x95, // Write safety preset to given index
@@ -137,6 +138,7 @@ namespace librealsense
         {
             switch (state)
             {
+                ENUM2STR(CUSTOM_CMD);
                 ENUM2STR(HKR_THERMAL_COMPENSATION);
                 ENUM2STR(SAFETY_PRESET_READ);
                 ENUM2STR(SAFETY_PRESET_WRITE);

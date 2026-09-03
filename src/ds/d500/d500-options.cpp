@@ -137,6 +137,34 @@ namespace librealsense
         }
     }
 
+    dual_rgb_rectification_option::dual_rgb_rectification_option( std::shared_ptr< hw_monitor > hwm,
+                                                                  const std::weak_ptr< sensor_base > & ep )
+        : bool_option( false )
+        , _hwm( hwm )
+        , _sensor( ep )
+    {
+    }
+
+    void dual_rgb_rectification_option::set( float value )
+    {
+        auto strong_sensor = _sensor.lock();
+        if( ! strong_sensor )
+            throw invalid_value_exception( "Cannot set option as sensor is not alive" );
+
+        if( strong_sensor->is_streaming() )
+            throw std::runtime_error( "Cannot change dual RGB rectification while streaming!" );
+
+        // Validate before reaching FW, so a rejected value never changes the device state
+        if( ! is_valid( value ) )
+            throw invalid_value_exception( rsutils::string::from()
+                                           << "set(...) failed! " << value << " is not a valid value" );
+
+        command cmd( ds::d500_fw_cmd::CUSTOM_CMD, DUAL_RGB_RECTIFY_SUB_CMD, static_cast< uint32_t >( value ) );
+        _hwm->send( cmd );
+
+        bool_option::set( value );
+    }
+
     power_line_freq_option::power_line_freq_option(const std::weak_ptr< uvc_sensor >& ep, rs2_option id,
         const std::map< float, std::string >& description_per_value) :
         uvc_pu_option(ep, id, description_per_value) {}

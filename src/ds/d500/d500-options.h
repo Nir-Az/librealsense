@@ -139,6 +139,27 @@ namespace librealsense
         std::weak_ptr< hw_monitor > _hwm;
     };
     
+    // Dual-RGB rectification toggle, sent over the HWM CUSTOM_CMD with the DUAL_RGB_RECTIFY sub-command.
+    // Temporary until FW exposes a dedicated XU: there is no matching read command, so query() returns
+    // the last value set.
+    class dual_rgb_rectification_option : public bool_option
+    {
+    public:
+        dual_rgb_rectification_option( std::shared_ptr< hw_monitor > hwm, const std::weak_ptr< sensor_base > & ep );
+
+        void set( float value ) override;
+        const char * get_description() const override
+        {
+            return "Dual RGB rectification enabling ON (1) / OFF (0). Can only be set before streaming";
+        }
+
+        static uint32_t const DUAL_RGB_RECTIFY_SUB_CMD = 0x29;
+
+    private:
+        std::shared_ptr< hw_monitor > _hwm;
+        std::weak_ptr< sensor_base > _sensor;
+    };
+
     class power_line_freq_option : public uvc_pu_option
     {
     public:
