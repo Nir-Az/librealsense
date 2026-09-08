@@ -50,6 +50,18 @@ Flags are registered in `conftest.py`: `--live`, `--not-live`, `--device`, `--ex
 `--context`, `--tag`, `--repeat`, `--reruns`, `--debug`, `--rslog`, `--test-dir`. Note that `-s`
 disables the per-test log files. See `.github/skills/pytest-infra.md` for fixtures and markers.
 
+Two legacy flags are bridged to pytest equivalents by `consume_legacy_flags()`
+(`py/rspy/pytest/cli.py`), so they work here even though they are not pytest's own:
+
+| Legacy flag | Maps to | Notes |
+|---|---|---|
+| `-r` / `--regex <pattern>` | `-k <pattern>` | pytest parses `-r` as its own report-chars flag before `conftest.py` loads, so the translated `-k` is re-applied in `pytest_configure` via `apply_pending_flags()`. An explicit `-k` wins over `-r`. |
+| `--tag <name>` | `-m <name>` | marker selection |
+
+This matters for CI: `LRS_libci_pipeline`'s `UNIT_TESTS_ARGS` is passed verbatim to
+`python -m pytest unit-tests/ -v ${arguments}`, so `-r <pattern> --repeat <n>` is the way to
+target a repeat run at a subset of pytest tests.
+
 ## Running the C++ Tests (legacy runner)
 
 Navigate to the `unit-tests/` directory and run:
@@ -78,8 +90,8 @@ python3 run-unit-tests.py --help
 
 ## Running Specific C++ Tests
 
-The flags below belong to `run-unit-tests.py`, so they select among the C++ tests.
-For pytest use `-k`, `-m` and the flags listed above.
+The flags below select among the C++ tests when given to `run-unit-tests.py`. `-r`/`--regex` and
+`--tag` also work under pytest, where they are bridged to `-k` and `-m` — see the table above.
 
 ### By Name (Regex)
 
@@ -185,7 +197,13 @@ python3 run-unit-tests.py --retry 2        # retry failed tests up to 2 times
 
 python3 -m pytest --repeat 3               # pytest: repeat each file's tests 3 times
 python3 -m pytest --reruns 2               # pytest: retry a failed test up to 2 times
+
+python3 -m pytest -r emitter --repeat 10   # pytest: repeat only the emitter tests 10 times
 ```
+
+`--repeat` re-runs each test unconditionally and is the tool for characterising flakiness;
+`--reruns` only re-runs a test that already failed, so it hides intermittency rather than
+measuring it.
 
 ## Recording and Playback (Mock Hardware)
 
