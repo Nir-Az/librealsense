@@ -41,7 +41,6 @@ import cv2
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
-    pytest.mark.skip(reason="Disabling until error will be fixed"),
 ]
 
 # Cache calibration result (contrast_threshold, contrast_diff) per device per module,
