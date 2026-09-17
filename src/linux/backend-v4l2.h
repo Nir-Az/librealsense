@@ -6,6 +6,7 @@
 #include "backend.h"
 #include "camera-identifier-v4l.h"
 #include "v4l-ioctl.h"
+#include "v4l-enumerator.h"
 #include "v4l-frame-drop-monitor.h"
 #include "v4l-kernel-buffers.h"
 #include "v4l-video-md-syncer.h"
@@ -72,16 +73,9 @@ namespace librealsense
             virtual void acquire_metadata(buffers_mgr & buf_mgr,fd_set &fds, bool compressed_format) = 0;
         };
 
-        // A V4L2 enumeration node: the resolved device info plus its /dev/video* path.
-        typedef std::pair< uvc_device_info, std::string > node_info;
-
         class v4l_uvc_device : public uvc_device, public v4l_uvc_interface
         {
         public:
-            static void foreach_uvc_device( std::function<void(const uvc_device_info&, const std::string&)> action);
-
-            static std::vector<std::string> get_mipi_dfu_paths();
-
             v4l_uvc_device(const uvc_device_info& info, bool use_memory_map = false);
 
             virtual ~v4l_uvc_device() override;
@@ -157,39 +151,6 @@ namespace librealsense
             virtual inline std::shared_ptr<buffer> get_video_buffer(__u32 index) const {return _buffers[index];}
             virtual inline std::shared_ptr<buffer> get_md_buffer(__u32 index) const {return nullptr;}
 
-            struct identifier
-            {
-                unsigned int major;
-                unsigned int minor;
-
-                bool operator== (const identifier& other) const { return major == other.major && minor == other.minor;}
-            };
-
-            struct path_and_identifier
-            {
-                std::string path;
-                identifier key;
-            };
-
-            static std::vector<path_and_identifier> collect_v4l_video_path_and_identifier();
-            static bool get_identifier_from_v4l_video_path(const std::string& v4l_video_path, identifier& key);
-            static bool get_devname_from_v4l_video_path(const std::string& v4l_video_path, std::string& devname,
-                                                    const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
-            static bool get_devname_from_mipi_dfu_path(const path_and_identifier& dfu_path, std::string& dev_name);
-
-            static std::vector<std::pair <std::string, std::string>> generate_v4l_to_dev_video_paths(const std::vector<path_and_identifier>& v4l_videos,
-                                                                                                     const std::vector<path_and_identifier>& dev_videos);
-            static std::vector<node_info> collect_uvc_nodes(const std::vector<path_and_identifier>& v4l_videos,
-                                                            const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
-            static std::vector<node_info> match_video_with_metadata_nodes(const std::vector<node_info>& uvc_nodes);
-            static void sort_nodes_by_streaming_interface(std::vector<node_info>& nodes);
-            static bool get_info_from_v4l_video_path(const std::string& v4l_video_path, const std::string& dev_name, uvc_device_info& info, bool is_mipi_rs_enum_nodes_empty,
-                                                 camera_identifier_v4l_mipi& mipi_id);
-            static std::vector<node_info> get_mipi_rs_enum_nodes();
-            static uvc_device_info get_info_from_mipi_device_path(const std::string& video_path, const std::string& name,
-                                                                  camera_identifier_v4l_mipi& mipi_id);
-            static uvc_device_info get_info_from_usb_device_path(const std::string& video_path, const std::string& dev_name, const std::string& name);
-            static std::vector<path_and_identifier> collect_dev_video_path_and_identifier();
 
             power_state _state = D3;
             std::string _name = "";
