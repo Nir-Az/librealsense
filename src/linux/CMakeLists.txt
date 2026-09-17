@@ -8,6 +8,8 @@ include(${CMAKE_CURRENT_LIST_DIR}/find_udev.cmake)
 set(LRS_V4L2_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/backend-v4l2.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/backend-hid.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/v4l-ioctl.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/v4l-named-mutex.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/camera-identifier-v4l.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/v4l-mipi-logic.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/v4l-usb-logic.cpp"
@@ -15,6 +17,8 @@ set(LRS_V4L2_SOURCES
 set(LRS_V4L2_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/backend-v4l2.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend-hid.h"
+    "${CMAKE_CURRENT_LIST_DIR}/v4l-ioctl.h"
+    "${CMAKE_CURRENT_LIST_DIR}/v4l-named-mutex.h"
     "${CMAKE_CURRENT_LIST_DIR}/camera-identifier-v4l.h"
     "${CMAKE_CURRENT_LIST_DIR}/v4l-mipi-logic.h"
     "${CMAKE_CURRENT_LIST_DIR}/v4l-usb-logic.h"

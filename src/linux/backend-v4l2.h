@@ -5,6 +5,8 @@
 
 #include "backend.h"
 #include "camera-identifier-v4l.h"
+#include "v4l-ioctl.h"
+#include "v4l-named-mutex.h"
 #include <src/platform/uvc-device.h>
 #include <src/metadata.h>
 #include "types.h"
@@ -42,82 +44,11 @@
 #include <regex>
 #include <list>
 
-// Metadata streaming nodes are available with kernels 4.16+
-#ifdef V4L2_META_FMT_UVC
-constexpr bool metadata_node = true;
-#else
-#pragma message ( "\nLibrealsense notification: V4L2_META_FMT_UVC was not defined, adding metadata constructs")
-
-constexpr bool metadata_node = false;
-
-// Providing missing parts from videodev2.h
-// V4L2_META_FMT_UVC >> V4L2_CAP_META_CAPTURE is also defined, but the opposite does not hold
-#define V4L2_META_FMT_UVC    v4l2_fourcc('U', 'V', 'C', 'H') /* UVC Payload Header */
-
-#ifndef V4L2_CAP_META_CAPTURE
-#define V4L2_CAP_META_CAPTURE    0x00800000  /* Specified in kernel header v4.16 */
-#endif // V4L2_CAP_META_CAPTURE
-
-#endif // V4L2_META_FMT_UVC
-
-#ifndef V4L2_META_FMT_D4XX
-#define V4L2_META_FMT_D4XX      v4l2_fourcc('D', '4', 'X', 'X') /* D400 Payload Header metadata */
-#endif
-
-#undef DEBUG_V4L
-#ifdef DEBUG_V4L
-#define LOG_DEBUG_V4L(...)   do { CLOG(DEBUG   ,LIBREALSENSE_ELPP_ID) << __VA_ARGS__; } while(false)
-#else
-#define LOG_DEBUG_V4L(...)
-#endif //DEBUG_V4L
-
-// Use local definition of buf type to resolve for kernel versions
-constexpr auto LOCAL_V4L2_BUF_TYPE_META_CAPTURE = (v4l2_buf_type)(13);
-
-#pragma pack(push, 1)
-// The struct definition is identical to uvc_meta_buf defined uvcvideo.h/ kernel 4.16 headers, and is provided to allow for cross-kernel compilation
-struct uvc_meta_buffer {
-    __u64 ns;               // system timestamp of the payload in nanoseconds
-    __u16 sof;              // USB Frame Number
-    __u8 length;            // length of the payload metadata header
-    __u8 flags;             // payload header flags
-    __u8* buf;              //device-specific metadata payload data
-};
-#pragma pack(pop)
-
 
 namespace librealsense
 {
     namespace platform
     {
-        class named_mutex
-        {
-        public:
-            named_mutex(const std::string& device_path, unsigned timeout);
-
-            named_mutex(const named_mutex&) = delete;
-
-            ~named_mutex();
-
-            void lock();
-
-            void unlock();
-
-            bool try_lock();
-
-        private:
-            void ensure_fd_open();
-            void close_fd();
-
-            std::string _device_path;
-            uint32_t _timeout;
-            int _fildes;
-            std::atomic< int > _lock_counter;
-        };
-
-        // Low-level V4L2 ioctl wrapper (retries on EINTR). Used by low level types (buffer, kernel_buf_guard)
-        int xioctl( int fh, unsigned long request, void * arg );
-
         class buffer
         {
         public:
@@ -327,9 +258,6 @@ namespace librealsense
 
             static std::vector<std::string> get_mipi_dfu_paths();
 
-            // Retrieve device video capabilities to discriminate video capturing and metadata nodes.
-            static v4l2_capability get_dev_capabilities( const std::string dev_name );
-
             v4l_uvc_device(const uvc_device_info& info, bool use_memory_map = false);
 
             virtual ~v4l_uvc_device() override;
@@ -343,8 +271,6 @@ namespace librealsense
             void stop_callbacks() override;
 
             void close(stream_profile) override;
-
-            std::string fourcc_to_string(uint32_t id) const;
 
             void signal_stop();
 

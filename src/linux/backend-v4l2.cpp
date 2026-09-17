@@ -73,57 +73,6 @@ const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
 constexpr std::chrono::milliseconds DISCONNECT_RETRY_DELAY( 100 );
 
 
-#ifdef ANDROID
-
-// https://android.googlesource.com/platform/bionic/+/master/libc/include/bits/lockf.h
-#define F_ULOCK 0
-#define F_LOCK 1
-#define F_TLOCK 2
-#define F_TEST 3
-
-// https://android.googlesource.com/platform/bionic/+/master/libc/bionic/lockf.cpp
-int lockf64(int fd, int cmd, off64_t length)
-{
-    // Translate POSIX lockf into fcntl.
-    struct flock64 fl;
-    memset(&fl, 0, sizeof(fl));
-    fl.l_whence = SEEK_CUR;
-    fl.l_start = 0;
-    fl.l_len = length;
-
-    if (cmd == F_ULOCK) {
-        fl.l_type = F_UNLCK;
-        cmd = F_SETLK64;
-        return fcntl(fd, F_SETLK64, &fl);
-    }
-
-    if (cmd == F_LOCK) {
-        fl.l_type = F_WRLCK;
-        return fcntl(fd, F_SETLKW64, &fl);
-    }
-
-    if (cmd == F_TLOCK) {
-        fl.l_type = F_WRLCK;
-        return fcntl(fd, F_SETLK64, &fl);
-    }
-    if (cmd == F_TEST) {
-        fl.l_type = F_RDLCK;
-        if (fcntl(fd, F_GETLK64, &fl) == -1) return -1;
-        if (fl.l_type == F_UNLCK || fl.l_pid == getpid()) return 0;
-        errno = EACCES;
-        return -1;
-    }
-
-    errno = EINVAL;
-    return -1;
-}
-
-int lockf(int fd, int cmd, off_t length)
-{
-    return lockf64(fd, cmd, length);
-}
-#endif
-
 namespace librealsense
 {
     // D5xx product line. The D400 and D500 families share this backend and the d4xx kernel driver,
@@ -148,188 +97,6 @@ namespace librealsense
 
     namespace platform
     {
-        named_mutex::named_mutex(const std::string& device_path, unsigned timeout)
-            : _device_path(device_path),
-              _timeout(timeout), // TODO: try to lock with timeout
-              _fildes(-1),
-              _lock_counter(0)
-        {
-            // File descriptor will be opened lazily when lock() is called
-            // This prevents holding open file descriptors across hardware resets
-        }
-
-        named_mutex::~named_mutex()
-        {
-            try
-            {
-                // OFD lock will automatically release if locked only when file description closes (not file descriptor)
-                // If process was forked or cloned and unlock() was not properly called after a lock() then file will
-                // remain locked for the child process
-                close_fd();
-            }
-            catch(...)
-            {
-                LOG_DEBUG( "Error while unlocking mutex" );
-            }
-        }
-
-        void named_mutex::ensure_fd_open()
-        {
-            if (_fildes < 0)
-            {
-                _fildes = open(_device_path.c_str(), O_RDWR, 0);
-                if (_fildes < 0)
-                {
-                    throw linux_backend_exception( rsutils::string::from() << "named_mutex: Cannot open '" << _device_path << "'" );
-                }
-            }
-        }
-
-        void named_mutex::close_fd()
-        {
-            // Close file descriptor if it was opened
-            if (_fildes >= 0)
-            {
-                close( _fildes );
-                _fildes = -1;
-            }
-        }
-
-        void named_mutex::lock()
-        {
-            if( _lock_counter.fetch_add( 1 ) == 0 )
-            {
-                try
-                {
-                    // Open file descriptor only when first lock is acquired
-                    ensure_fd_open();
-
-                    // Using OFD locks to synchronize both interprocess and interthread.
-                    // flock() is not good if we have multiple instances of the same device. i.e.
-                    //     auto devs = context.query_devices();
-                    //     auto dev1 = devs[0];
-                    //     auto dev2 = devs[0];
-                    // Closing file descriptor for one instance will unlock file for other instances.
-                    // Note - OFD locks are linux standart not POSIX.
-                    struct flock fl;
-                    memset( &fl, 0, sizeof( fl ) );
-                    fl.l_whence = SEEK_SET;
-                    fl.l_start = 0;
-                    fl.l_len = 0; // Lock the entire file
-                    fl.l_type = F_WRLCK;
-                    auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
-                    if( 0 != ret )
-                    {
-                        // Close file descriptor since we failed to acquire lock
-                        close_fd();
-                        
-                        throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": locking failed" );
-                    }
-                }
-                catch(...)
-                {
-                    _lock_counter.fetch_add( -1 );
-                    
-                    // Close file descriptor if it was opened
-                    close_fd();
-                    
-                    throw;
-                }
-            }
-        }
-
-        void named_mutex::unlock()
-        {
-            if( _lock_counter.fetch_add( -1 ) == 1 )
-            {
-                struct flock fl;
-                memset( &fl, 0, sizeof( fl ) );
-                fl.l_whence = SEEK_SET;
-                fl.l_start = 0;
-                fl.l_len = 0;
-                fl.l_type = F_UNLCK;
-                auto ret = fcntl( _fildes, F_OFD_SETLKW, &fl );
-                if( 0 != ret )
-                    throw linux_backend_exception( rsutils::string::from() << __FUNCTION__ << ": unlocking failed" );
-
-                // Close file descriptor when last lock is released
-                close_fd();
-            }
-        }
-
-        bool named_mutex::try_lock()
-        {
-            if( _lock_counter.fetch_add( 1 ) == 0 )
-            {
-                try
-                {
-                    // Open file descriptor only when first lock is acquired
-                    ensure_fd_open();
-
-                    struct flock fl;
-                    memset( &fl, 0, sizeof( fl ) );
-                    fl.l_whence = SEEK_SET;
-                    fl.l_start = 0;
-                    fl.l_len = 0; // Lock the entire file
-                    fl.l_type = F_WRLCK;
-                    auto ret = fcntl( _fildes, F_OFD_SETLK, &fl );
-                    if( 0 != ret )
-                    {
-                        // fcntl failed - need to clean up
-                        // Close file descriptor since we failed to acquire lock
-                        close_fd();
-                        
-                        // Return false instead of throwing, but still need to decrement counter
-                        _lock_counter.fetch_add( -1 );
-                        return false;
-                    }
-                }
-                catch(...)
-                {
-                    _lock_counter.fetch_add( -1 );
-                    
-                    // Close file descriptor if it was opened
-                    close_fd();
-                    
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        int xioctl(int fh, unsigned long request, void *arg)
-        {
-            int r = 0;
-            do {
-                r = ioctl(fh, request, arg);
-            } while (r < 0 && errno == EINTR);
-            return r;
-        }
-
-        // Retrieve device video capabilities to discriminate video capturing and metadata nodes
-        v4l2_capability v4l_uvc_device::get_dev_capabilities(const std::string dev_name)
-        {
-            // RAII to handle exceptions
-            std::unique_ptr<int, std::function<void(int*)> > fd(
-                        new int (open(dev_name.c_str(), O_RDWR | O_NONBLOCK, 0)),
-                        [](int* d){ if (d && (*d)) {::close(*d); } delete d; });
-
-            if(*fd < 0)
-                throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << dev_name);
-
-            v4l2_capability cap = {};
-            if(xioctl(*fd, VIDIOC_QUERYCAP, &cap) < 0)
-            {
-                if(errno == EINVAL)
-                    throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << " " << dev_name << " is no V4L2 device");
-                else
-                    throw linux_backend_exception(rsutils::string::from() <<__FUNCTION__ << " xioctl(VIDIOC_QUERYCAP) failed");
-            }
-
-            return cap;
-        }
-
         buffer::buffer(int fd, v4l2_buf_type type, bool use_memory_map, uint32_t index)
             : _type(type), _use_memory_map(use_memory_map), _index(index)
         {
@@ -558,34 +325,6 @@ namespace librealsense
         bool  buffers_mgr::md_node_present() const
         {
             return (buffers[e_metadata_buf]._file_desc > 0);
-        }
-
-        void stream_ctl_on(int fd, v4l2_buf_type type=V4L2_BUF_TYPE_VIDEO_CAPTURE)
-        {
-            if(xioctl(fd, VIDIOC_STREAMON, &type) < 0)
-                throw linux_backend_exception(rsutils::string::from() << "xioctl(VIDIOC_STREAMON) failed for buf_type=" << type);
-        }
-
-        void stream_off(int fd, v4l2_buf_type type=V4L2_BUF_TYPE_VIDEO_CAPTURE)
-        {
-            if(xioctl(fd, VIDIOC_STREAMOFF, &type) < 0)
-                throw linux_backend_exception(rsutils::string::from() << "xioctl(VIDIOC_STREAMOFF) failed for buf_type=" << type);
-        }
-
-        void req_io_buff(int fd, uint32_t count, std::string dev_name,
-                        v4l2_memory mem_type, v4l2_buf_type type)
-        {
-            struct v4l2_requestbuffers req = { count, type, mem_type, {}};
-
-            if(xioctl(fd, VIDIOC_REQBUFS, &req) < 0)
-            {
-                if(errno == EINVAL)
-                    LOG_ERROR(dev_name + " does not support memory mapping");
-                else
-                    return;
-                    //D457 - fails on close (when num = 0)
-                    //throw linux_backend_exception("xioctl(VIDIOC_REQBUFS) failed");
-            }
         }
 
         std::vector<v4l_uvc_device::path_and_identifier> v4l_uvc_device::collect_dev_video_path_and_identifier()
@@ -1545,15 +1284,6 @@ namespace librealsense
             }
         }
 
-        std::string v4l_uvc_device::fourcc_to_string(uint32_t id) const
-        {
-            uint32_t device_fourcc = id;
-            char fourcc_buff[sizeof(device_fourcc)+1];
-            std::memcpy( fourcc_buff, &device_fourcc, sizeof( device_fourcc ) );
-            fourcc_buff[sizeof(device_fourcc)] = 0;
-            return fourcc_buff;
-        }
-
         void v4l_uvc_device::signal_stop()
         {
             _video_md_syncer.stop();;
@@ -2426,21 +2156,6 @@ namespace librealsense
                 }
                 _buffers.resize(0);
             }
-        }
-
-        static int open_v4l_node( const std::string & name )
-        {
-            auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds( 5 );
-            int fd, open_errno = 0;
-            // /run/udev/queue exists while udev still has events pending, so a node it has not reached yet
-            // is not really ours to give up on.
-            while( ( fd = open( name.c_str(), O_RDWR | O_NONBLOCK, 0 ) ) < 0  &&  ( open_errno = errno ) == EACCES
-                   &&  ! access( "/run/udev/queue", F_OK )
-                   &&  std::chrono::steady_clock::now() < deadline )
-                std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
-            if( fd < 0 )
-                errno = open_errno;  // access() above may have overwritten what the caller reports
-            return fd;
         }
 
         void v4l_uvc_device::map_device_descriptor()
