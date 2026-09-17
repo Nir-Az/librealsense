@@ -6,7 +6,9 @@
 #include "backend.h"
 #include "camera-identifier-v4l.h"
 #include "v4l-ioctl.h"
+#include "v4l-frame-drop-monitor.h"
 #include "v4l-kernel-buffers.h"
+#include "v4l-video-md-syncer.h"
 #include "v4l-named-mutex.h"
 #include <src/platform/uvc-device.h>
 #include <src/metadata.h>
@@ -68,69 +70,6 @@ namespace librealsense
             virtual void prepare_capture_buffers() = 0;
             virtual void stop_data_capture() = 0;
             virtual void acquire_metadata(buffers_mgr & buf_mgr,fd_set &fds, bool compressed_format) = 0;
-        };
-
-        class v4l2_video_md_syncer
-        {
-        public:
-            v4l2_video_md_syncer() : _is_ready(false){}
-
-            struct sync_buffer
-            {
-                std::shared_ptr<v4l2_buffer> _v4l2_buf;
-                int _fd;
-                __u32 _buffer_index;
-            };
-
-            // pushing video buffer to the video queue
-            void push_video(const sync_buffer& video_buffer);
-            // pushing metadata buffer to the metadata queue
-            void push_metadata(const sync_buffer& md_buffer);
-
-            // pulling synced data
-            // if returned value is true - the data could have been pulled
-            // if returned value is false - no data is returned via the inout params because data could not be synced
-            bool pull_video_with_metadata(std::shared_ptr<v4l2_buffer>& video_buffer, std::shared_ptr<v4l2_buffer>& md_buffer, int& video_fd, int& md_fd);
-
-            inline void start() {_is_ready = true;}
-            void stop();
-
-            // true if a buffer discarded via QBUF revealed the device was physically removed (ENODEV).
-            // Consumed (and reset) once by the owning device's poll(), so a real disconnect is reported exactly once.
-            inline bool consume_device_disconnected() { return _qbuf_device_disconnected.exchange(false); }
-
-        private:
-            void enqueue_buffer_before_throwing_it(const sync_buffer& sb);
-            void enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue);
-            void flush_queues();
-            // Call immediately after a failed QBUF, before anything else touches errno.
-            void report_qbuf_failure(int fd);
-
-            std::mutex _syncer_mutex;
-            std::queue<sync_buffer> _video_queue;
-            std::queue<sync_buffer> _md_queue;
-            bool _is_ready;
-            std::atomic<bool> _qbuf_device_disconnected{ false };
-        };
-
-        // The aim of the frame_drop_monitor is to check the frames drops kpi - which requires
-        // that no more than some percentage of the frames are dropped
-        // It is checked using the fps, and the previous corrupted frames, on the last 30 seconds
-        // for example, for frame rate of 30 fps, and kpi of 5%, the criteria will be:
-        // if at least 45 frames (= 30[fps] * 5%[kpi]* 30[sec]) drops have occured in the previous 30 seconds,
-        // then the kpi is violated
-        class frame_drop_monitor
-        {
-        public:
-            frame_drop_monitor(double kpi_frames_drops_percentage) : _kpi_frames_drops_pct(kpi_frames_drops_percentage) {}
-            // update_and_check_kpi method returns whether the kpi has been violated
-            // it should be called each time a partial frame is caught
-            bool update_and_check_kpi(const stream_profile& profile, const timeval& timestamp); 
-
-        private:
-            // container used to store the latest timestamps of the partial frames, per profile
-            std::vector<std::pair<stream_profile, std::deque<long int>>> drops_per_stream;
-            double _kpi_frames_drops_pct;
         };
 
         // A V4L2 enumeration node: the resolved device info plus its /dev/video* path.
