@@ -2,6 +2,7 @@
 // Copyright(c) 2015-2024 RealSense, Inc. All Rights Reserved.
 
 #include "backend-v4l2.h"
+#include "v4l-enumerator-mipi.h"  // foreach_mipi_device(), for query_mipi_devices()
 #include "v4l-mipi-logic.h"
 #include "v4l-usb-logic.h"
 #include <src/platform/command-transfer.h>
