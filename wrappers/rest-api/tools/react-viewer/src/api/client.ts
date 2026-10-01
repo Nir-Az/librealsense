@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { socketService } from './socket'
+import { DESKTOP_BACKEND_URL, isDesktopApp } from './backend'
 import { visibleOptions } from './types'
 import type {
   AdvancedControls,
@@ -15,14 +16,10 @@ import type {
   SensorStreamStatus,
 } from './types'
 
-// Detect if running in Tauri desktop app
-const isDesktopApp = typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined
-
 // Determine API base URL based on environment
 const getApiBase = () => {
   if (isDesktopApp) {
-    // Desktop app: API server runs on localhost:8000
-    return 'http://localhost:8000/api/v1'
+    return `${DESKTOP_BACKEND_URL}/api/v1`
   }
   // Browser: use relative path (proxied by Vite in dev, served by backend in prod)
   return '/api/v1'

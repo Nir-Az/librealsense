@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 import type { MetadataUpdate } from './types'
 import { useAppStore } from '../store'
+import { DESKTOP_BACKEND_URL, isDesktopApp } from './backend'
 
 class SocketService {
   private socket: Socket | null = null
@@ -13,10 +14,10 @@ class SocketService {
 
     this.isConnecting = true
 
-    // Connect directly to the backend server in development
-    const serverUrl = import.meta.env.DEV 
-      ? 'http://localhost:8000' 
-      : window.location.origin
+    // Dev and the desktop app reach the backend directly; a served build is same-origin.
+    const serverUrl = import.meta.env.DEV
+      ? 'http://localhost:8000'
+      : isDesktopApp ? DESKTOP_BACKEND_URL : window.location.origin
 
     this.socket = io(serverUrl, {
       path: '/socket',

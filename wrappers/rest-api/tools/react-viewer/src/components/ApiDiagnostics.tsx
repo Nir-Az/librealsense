@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/tauri'
+import { isDesktopApp } from '../api/backend'
 
 interface BackendStatus {
   is_running: boolean
@@ -7,9 +8,6 @@ interface BackendStatus {
   log_count: number
   last_logs: string[]
 }
-
-// Detect if running in Tauri desktop app
-const isDesktopApp = typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined;
 
 export function ApiDiagnostics() {
   const [status, setStatus] = useState<'checking' | 'connected' | 'error'>('checking')
