@@ -100,17 +100,25 @@ def resolve_node( nodes, name = None ):
     """
     :return: this machine's map entry, or None if it has none
     """
+    key = resolve_node_key( nodes, name )
+    return nodes[key] if key is not None else None
+
+
+def resolve_node_key( nodes, name = None ):
+    """
+    :return: the map key for this machine (the inventory's spelling of its name), or None
+    """
     if not nodes:
         return None
     name = name or node_name()
     if name in nodes:
-        return nodes[name]
+        return name
     # Map keys may differ from the hostname in case, and one side may be an FQDN
     # while the other is the short name (Jenkins node names vs socket.gethostname())
     short = name.split( '.' )[0].lower()
     for key in nodes:
         if key.split( '.' )[0].lower() == short:
-            return nodes[key]
+            return key
     return None
 
 
@@ -199,7 +207,11 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
     from rspy import devices
 
     name = node or node_name()
-    entry = resolve_node( load_map( map_file ), name )
+    nodes = load_map( map_file )
+    key = resolve_node_key( nodes, name )
+    entry = nodes[key] if key is not None else None
+    if key is not None:
+        name = key  # report under the inventory's spelling, not the FQDN the OS returns
     report = {
         'schema': SCHEMA_VERSION,
         'node': name,

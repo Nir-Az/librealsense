@@ -130,6 +130,10 @@ class TestLoadAndResolve:
         nodes = device_map.load_map(map_file)
         assert device_map.resolve_node(nodes, 'bench1.realsenseai.com') is nodes['bench1']
 
+    def test_resolve_key_is_the_map_spelling(self, map_file):
+        nodes = device_map.load_map(map_file)
+        assert device_map.resolve_node_key(nodes, 'BENCH1.realsenseai.com') == 'bench1'
+
     def test_resolve_unknown_returns_none(self, map_file):
         nodes = device_map.load_map(map_file)
         assert device_map.resolve_node(nodes, 'stranger') is None
@@ -175,6 +179,11 @@ class TestCheck:
         report = run_check(monkeypatch, str(tmp_path / 'nope.yaml'), 'bench1', None, D455())
         assert report['status'] == device_map.STATUS_NO_MAP
         assert report['cameras'] == []
+
+    def test_report_node_uses_map_spelling(self, monkeypatch, map_file):
+        report = run_check(monkeypatch, map_file, 'bench1.realsenseai.com', None, D455(), D585S(), D555())
+        assert report['node'] == 'bench1'
+        assert device_map.render_line(report).startswith('bench1: ')
 
     def test_unknown_node(self, monkeypatch, map_file):
         report = run_check(monkeypatch, map_file, 'stranger', None, D455())
