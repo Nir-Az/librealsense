@@ -78,6 +78,7 @@ nodes:
     cameras:
       - product: L515    # unknown product line, no fwid: the heuristic must not apply
         sn: "555"
+  bench4:                # nothing under it: parses as None, must not crash load_map
 """
 
 
@@ -120,6 +121,10 @@ class TestLoadAndResolve:
         nodes = device_map.load_map(map_file)
         d555 = nodes['bench1']['cameras'][2]
         assert d555['sn'] == '333'  # was an unquoted int in the YAML
+
+    def test_empty_node_entry_loads(self, map_file):
+        nodes = device_map.load_map(map_file)
+        assert 'bench4' in nodes and nodes['bench4'] is None
 
     def test_resolve_exact(self, map_file):
         nodes = device_map.load_map(map_file)
@@ -188,6 +193,10 @@ class TestCheck:
         report = run_check(monkeypatch, map_file, 'bench1.realsenseai.com', None, D455(), D585S(), D555())
         assert report['node'] == 'bench1'
         assert device_map.render_line(report).startswith('bench1: ')
+
+    def test_empty_node_entry_is_no_map(self, monkeypatch, map_file):
+        report = run_check(monkeypatch, map_file, 'bench4', None, D455())
+        assert report['status'] == device_map.STATUS_NO_MAP
 
     def test_unknown_node(self, monkeypatch, map_file):
         report = run_check(monkeypatch, map_file, 'stranger', None, D455())

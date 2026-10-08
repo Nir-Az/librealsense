@@ -85,6 +85,8 @@ def load_map( path = None ):
     # YAML parses unquoted serial numbers as integers; everything downstream
     # compares strings
     for entry in nodes.values():
+        if not isinstance( entry, dict ):
+            continue  # a node with nothing under it parses as None
         for camera in entry.get( 'cameras' ) or []:
             for key in ('sn', 'fwid'):
                 if camera.get( key ) is not None:
@@ -210,6 +212,8 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
     nodes = load_map( map_file )
     key = resolve_node_key( nodes, name )
     entry = nodes[key] if key is not None else None
+    if not isinstance( entry, dict ):
+        entry = None  # an empty node entry is the same as no entry
     if key is not None:
         name = key  # report under the inventory's spelling, not the FQDN the OS returns
     report = {
