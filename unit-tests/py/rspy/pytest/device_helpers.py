@@ -147,7 +147,7 @@ def _pattern_excluded(pattern, cli_excludes):
         spec = spec.upper()
         if spec.endswith('*'):
             prefix = spec[:-1]
-            if pattern.startswith(prefix) or _product_line_of(pattern) == prefix or pattern == spec:
+            if pattern.startswith(prefix) or _product_line_of(pattern) == prefix:
                 return True
         elif spec == pattern:
             return True
