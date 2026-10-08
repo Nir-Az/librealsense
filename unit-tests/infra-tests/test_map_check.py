@@ -83,6 +83,25 @@ class TestReports:
         assert 'D435 MISSING' in (tmp_path / 'health.txt').read_text()
         assert (tmp_path / 'health-exclude.txt').read_text() == 'D435,D555'
 
+    def test_html_line_colours_per_camera(self):
+        html = map_check.render_html(report(device_map.STATUS_DEGRADED, OK, MISSING, DEGRADED, RECOVERY, PRE_EXCLUDED))
+        assert html.startswith('bench1: ')
+        assert '<span style="color:Green">D455 ok</span>' in html
+        assert '<span style="color:Red"><b>D435 MISSING</b></span>' in html
+        assert '<span style="color:Red"><b>D555 DEGRADED (100Mbps)</b></span>' in html
+        assert '<span style="color:DarkOrange">D585S in-recovery</span>' in html
+        assert '<span style="color:Gray">D401 pre-excluded</span>' in html
+        assert html.count(' | ') == 4
+
+    def test_html_total_failure_and_no_map(self):
+        assert 'NO DEVICES ENUMERATED' in map_check.render_html(report(device_map.STATUS_TOTAL_ENUMERATION_FAILURE, OK))
+        assert map_check.render_html(report(device_map.STATUS_NO_MAP)) == 'bench1: no device map'
+
+    def test_write_reports_includes_html(self, tmp_path):
+        map_check.write_reports(report(device_map.STATUS_DEGRADED, OK, MISSING), str(tmp_path))
+        html = (tmp_path / 'health.html').read_text()
+        assert 'color:Green">D455 ok' in html and 'color:Red"><b>D435 MISSING' in html
+
     def test_exclude_file_empty_when_healthy(self, tmp_path):
         map_check.write_reports(report(device_map.STATUS_OK, OK), str(tmp_path))
         assert (tmp_path / 'health-exclude.txt').read_text() == ''

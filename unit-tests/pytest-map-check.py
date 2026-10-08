@@ -35,6 +35,17 @@ pytestmark = [
 
 HEALTH_JSON = 'health.json'
 EXCLUDE_FILE = 'health-exclude.txt'
+HTML_FILE = 'health.html'
+
+# Per-camera colour in the HTML line (Jenkins report / build description)
+_COLOR = {
+    device_map.OK: 'Green',
+    device_map.MISSING: 'Red',
+    device_map.DEGRADED: 'Red',
+    device_map.IN_RECOVERY: 'DarkOrange',
+    device_map.PRE_EXCLUDED: 'Gray',
+    device_map.UNEXPECTED: 'Gray',
+}
 
 
 def unusable_products( report ):
@@ -67,10 +78,35 @@ def verdict( report ):
            '. Excluded from this run; the remaining results are valid'
 
 
+def render_html( report ):
+    """
+    The health line as HTML, one coloured span per camera:
+    <machine>: <green>D455 ok</green> | <red>D435 MISSING</red> | ...
+    """
+    node = report['node']
+    status = report['status']
+    if status == device_map.STATUS_NO_MAP:
+        return f'{node}: no device map'
+    if status == device_map.STATUS_TOTAL_ENUMERATION_FAILURE:
+        return f'{node}: <span style="color:Red"><b>NO DEVICES ENUMERATED</b></span> (expected {len( report["cameras"] )})'
+    parts = []
+    for c in report['cameras']:
+        state = c['state']
+        bad = state in (device_map.MISSING, device_map.DEGRADED)
+        text = f'{c["product"]} {state.upper() if bad else state}'
+        if state == device_map.DEGRADED and c.get( 'detail' ):
+            text += f' ({c["detail"]})'
+        span = f'<span style="color:{_COLOR.get( state, "Black" )}">' + (f'<b>{text}</b>' if bad else text) + '</span>'
+        parts.append( span )
+    return f'{node}: ' + ' | '.join( parts )
+
+
 def write_reports( report, logdir ):
     device_map.write_health_json( report, os.path.join( logdir, HEALTH_JSON ) )
     with open( os.path.join( logdir, EXCLUDE_FILE ), 'w' ) as f:
         f.write( ','.join( unusable_products( report ) ) )
+    with open( os.path.join( logdir, HTML_FILE ), 'w' ) as f:
+        f.write( render_html( report ) + '\n' )
 
 
 def test_map_check( request ):
