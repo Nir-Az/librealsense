@@ -304,7 +304,8 @@ def missing_serials( report = None ):
 
 def render_line( report = None ):
     """One-line human summary, e.g. for a Jenkins build description:
-    <machine>: D455 ok · D585S MISSING · D555 in-recovery
+    <machine>: D455 ok | D585S MISSING | D555 in-recovery
+    (ASCII only: Jenkins agents read the file with their platform charset)
     """
     report = report or _report
     if not report:
@@ -322,7 +323,7 @@ def render_line( report = None ):
         elif state == DEGRADED:
             state = 'DEGRADED(' + camera.get( 'detail', '?' ) + ')'
         parts.append( f'{camera["product"]} {state}' )
-    return f'{prefix}: ' + ' · '.join( parts )
+    return f'{prefix}: ' + ' | '.join( parts )
 
 
 def write_health_json( report = None, path = None ):
