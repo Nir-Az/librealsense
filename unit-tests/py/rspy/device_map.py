@@ -245,7 +245,7 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
             result['state'] = OK
             matched.add( sn )
             _record_fwid( result, camera, devices.get( sn ) )
-        elif sn in recovery_sns or fwid in enumerated:
+        elif sn in recovery_sns or (fwid and fwid in enumerated):
             # A device in DFU/recovery has no serial_number and enumerates under
             # its firmware_update_id (see devices.query())
             result['state'] = IN_RECOVERY
@@ -262,6 +262,8 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
         if camera.get( 'fwid' ):
             continue  # had an exact DFU identity to match against; missing is missing
         line = _product_line_of( camera.get( 'product' ) )
+        if line is None:
+            continue  # unknown product line: nothing to match a recovery device against
         for rec_sn in sorted( unmatched_recovery ):
             device = devices.get( rec_sn )
             if device and device.product_line == line:
@@ -272,7 +274,7 @@ def check( exclude_specs = None, node = None, runner = None, map_file = None ):
                 break
 
     # Extra connected devices not in the map: report for drift visibility, never fail
-    known = matched | { c.get( 'sn' ) for c in expected } | { c.get( 'fwid' ) for c in expected }
+    known = matched           | { c['sn'] for c in expected if c.get( 'sn' ) }           | { c['fwid'] for c in expected if c.get( 'fwid' ) }
     for sn in sorted( enumerated - known ):
         device = devices.get( sn )
         report['cameras'].append( {

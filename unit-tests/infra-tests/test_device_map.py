@@ -74,6 +74,10 @@ nodes:
     cameras:
       - product: D435
         sn: "444"        # no fwid on purpose: exercises the recovery heuristic
+  bench3:
+    cameras:
+      - product: L515    # unknown product line, no fwid: the heuristic must not apply
+        sn: "555"
 """
 
 
@@ -241,6 +245,14 @@ class TestCheck:
         assert d435['state'] == device_map.IN_RECOVERY
         assert 'unconfirmed' in d435['note']
         assert report['status'] == device_map.STATUS_OK
+
+    def test_no_heuristic_for_unknown_product_line(self, monkeypatch, map_file):
+        # bench3's L515 has no product line we know; an unknown-line recovery device
+        # must not be matched to it (None == None), it stays missing
+        dfu = FakeDevice('weird-fwid', 'Unknown Recovery', None, in_recovery=True)
+        report = run_check(monkeypatch, map_file, 'bench3', None, dfu)
+        assert states_by_product(report)['L515'] == device_map.MISSING
+        assert report['status'] == device_map.STATUS_DEGRADED
 
     def test_no_heuristic_when_fwid_known(self, monkeypatch, map_file):
         # bench1 cameras all have fwid: an unrelated recovery device must NOT
