@@ -39,6 +39,19 @@ std::string selected_serial_number;
 rs2::device new_device;
 rs2::update_device new_fw_update_device;
 
+// The globals above are the last owners of the context once main() returns, so without this the
+// context (and its device-watcher thread) would be torn down during static destruction, after the
+// logger it uses is gone: a udev event for the freshly updated camera arriving at that moment
+// crashed the tool. Releasing them inside main() keeps the teardown ahead of static destruction.
+struct release_devices_on_exit
+{
+    ~release_devices_on_exit()
+    {
+        new_device = rs2::device();
+        new_fw_update_device = rs2::update_device();
+    }
+};
+
 bool done = false;
 
 std::vector<uint8_t> read_fw_file(std::string file_path)
@@ -383,6 +396,7 @@ try
     cmd.add(backup_arg);
 
     auto settings = cmd.process(argc, argv);
+    release_devices_on_exit release_devices;  // declared before ctx: runs after it is released
     rs2::context ctx(settings.dump());
 
     if (!list_devices_arg.isSet() && !recover_arg.isSet() && !unsigned_arg.isSet() &&
