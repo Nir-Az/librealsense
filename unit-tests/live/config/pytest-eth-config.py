@@ -202,9 +202,11 @@ def test_python_wrapper_functionality(_test_setup_teardown):
     check.is_true(updated_link_timeout == new_link_timeout)
 
     orig_ip, orig_actual_ip = eth_device.get_ip_address()
-    eth_device.set_ip_address(rs.ip_address(127, 0, 0, 1))
+    # Any valid unicast address; FW rejects loopback. The module teardown restores the original
+    ip_to_set = rs.ip_address(192, 168, 11, 123)
+    eth_device.set_ip_address(ip_to_set)
     new_ip, new_actual_ip = eth_device.get_ip_address()
-    check.is_true(new_ip == rs.ip_address(127, 0, 0, 1))
+    check.is_true(new_ip == ip_to_set)
 
     orig_link_priority = eth_device.get_link_priority()
     priority_to_set = rs.link_priority.usb_first if orig_link_priority != rs.link_priority.usb_first else rs.link_priority.eth_first
