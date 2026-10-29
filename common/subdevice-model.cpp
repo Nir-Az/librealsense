@@ -1857,6 +1857,11 @@ namespace rs2
         return it->second.value_as_float() <= 0.f;
     }
 
+    float subdevice_model::panel_extra_width() const
+    {
+        return viewer.panel_extra_width();
+    }
+
     bool subdevice_model::is_depth_calibration_profile() const
     {
         // Check if D555 at depth resolution of 1280x800
@@ -2175,6 +2180,12 @@ namespace rs2
         }
         if (local.valid())
             local.get();
+    }
+
+    bool subdevice_model::is_stopping()
+    {
+        std::lock_guard< std::mutex > lock( _stop_mutex );
+        return _stop_future.valid() && _stop_future.wait_for( std::chrono::seconds( 0 ) ) != std::future_status::ready;
     }
 
     void subdevice_model::stop(std::shared_ptr<notifications_model> not_model)

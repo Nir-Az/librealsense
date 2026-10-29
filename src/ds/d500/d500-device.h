@@ -173,6 +173,10 @@ namespace librealsense
         // Registers the HDR mode on ep, the sensor carrying the affected streams.
         void register_hdr_mode_option( synthetic_sensor & ep );
         void set_imu_type( const std::vector< uint8_t > & gvd_buf, ds::d500_gvd_parsed_fields * parsed_fields );
+        static bool is_xu_published( const std::shared_ptr< uvc_sensor > & ep, const platform::extension_unit & xu,
+                                     uint8_t control, int size, rs2_option id );
+        static bool is_pu_published( const std::shared_ptr< uvc_sensor > & ep, const platform::processing_unit & pu,
+                                     rs2_option id );
         friend class d500_depth_sensor;
 
         std::shared_ptr<hw_monitor_extended_buffers> _hw_monitor;

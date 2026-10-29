@@ -127,6 +127,7 @@ namespace rs2
         void pause();
         void resume();
         void wait_for_stop();
+        bool is_stopping();
 
         void update_ui(std::vector<stream_profile> profiles_vec);
         void get_sorted_profiles(std::vector<stream_profile>& profiles);
@@ -168,6 +169,9 @@ namespace rs2
         bool is_depth_calibration_profile() const;
 
         void repopulate_options();
+
+        // How much wider than the default the control pane is; option rows widen by this much
+        float panel_extra_width() const;
 
         viewer_model& viewer;
         std::function<void()> on_frame = [] {};

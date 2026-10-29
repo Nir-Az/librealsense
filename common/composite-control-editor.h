@@ -45,6 +45,9 @@ namespace rs2
         // progress: 0 = just touched, 1 = about to commit. False when nothing is pending.
         bool try_get_progress( float & progress ) const;
 
+        // How much wider than the default the control pane is; the rows widen by this much, like option_model's
+        float extra_width = 0.f;
+
         // Label row + "?" help + pencil + slider (or InputText in edit mode). value is the wire integer;
         // scale > 1 shows it as value/scale on a float slider (e.g. 1000 -> 0.000..1.000).
         bool draw_scalar_field( const char * name, const char * description, const char * id,
@@ -148,18 +151,19 @@ namespace rs2
         }
 
         // Draws the pending-commit highlight for [frame_min, frame_max] and sends `value` once the
-        // debounce timer lapses.
+        // debounce timer lapses - or, while `hold_commit`, on the first frame after it clears.
         void end_frame_and_maybe_commit( const std::shared_ptr< rs2::embedded_filter > & filter,
                                          rs2_composite_option_id id,
                                          std::string & error_message,
                                          const ImVec2 & frame_min,
                                          const ImVec2 & frame_max,
                                          bool any_field_active_this_frame,
+                                         bool hold_commit,
                                          const std::function< void( T & ) > & before_commit = nullptr )
         {
             draw_pending_highlight( frame_min, frame_max );
             collapse_deadline_on_focus_loss( any_field_active_this_frame );
-            if( ! commit_due() )
+            if( hold_commit || ! commit_due() )
                 return;
             try
             {
@@ -170,6 +174,7 @@ namespace rs2
             catch( const std::exception & e )
             {
                 error_message = e.what();
+                initialized = false;   // re-read what the device kept instead of showing the rejected value
             }
             clear_dirty();
         }

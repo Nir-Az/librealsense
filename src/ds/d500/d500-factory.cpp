@@ -476,7 +476,7 @@ namespace librealsense
             if( d500_device::_fw_version >= firmware_version( "7.58.45911.14188" ) )
             {
                 register_feature( std::make_shared< hdrd_filter_feature >(
-                    dynamic_cast< d500_depth_sensor & >( depth_sensor ), _is_mipi_device ) );
+                    *this, dynamic_cast< d500_depth_sensor & >( depth_sensor ), _is_mipi_device ) );
             }
         }
 
