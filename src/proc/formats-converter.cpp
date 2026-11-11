@@ -524,3 +524,11 @@ std::shared_ptr< stream_profile_interface > formats_converter::find_cached_profi
 }
 
 } // namespace librealsense
+
+namespace librealsense {
+size_t clang_tidy_pr_test( std::vector< int > v )
+{
+    auto w = std::move( v );
+    return v.size() + w.size();
+}
+}
