@@ -529,6 +529,6 @@ namespace librealsense {
 size_t clang_tidy_pr_test( std::vector< int > v )
 {
     auto w = std::move( v );
-    return v.size() + w.size();
+    return w.size();
 }
 }
